@@ -1,2 +1,2 @@
 # reai-IDA-plugin
-IDA-plugin in RevEng.AI
+IDA-plugin for RevEng.AI
