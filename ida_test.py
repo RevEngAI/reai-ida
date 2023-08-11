@@ -2,6 +2,8 @@ import idautils
 import ida_funcs
 import idc
 
+idc.auto_wait()
+
 for func in idautils.Functions():
     function_name = idc.get_func_name(func)
     function_address = idc.get_func_attr(func, idc.FUNCATTR_START)
