@@ -1,46 +1,101 @@
-import sys
-from PyQt5 import QtWidgets
+from PyQt5 import QtWidgets, QtGui, QtCore
+from idaapi import PluginForm
+import urllib.request
+import webbrowser
 
 
-class LoginWindow(QtWidgets.QWidget):
+class LoginDialog(QtWidgets.QDialog):
     def __init__(self):
         super().__init__()
 
-        self.initUI()
+        self.setWindowTitle("Revenge.AI for IDA Pro")  # Set window title
 
-    def initUI(self):
         layout = QtWidgets.QVBoxLayout()
 
-        # Username Field
-        self.username_label = QtWidgets.QLabel('API Key:')
-        self.username_field = QtWidgets.QLineEdit()
-        layout.addWidget(self.username_label)
-        layout.addWidget(self.username_field)
+        # Logo
+        logo_url = 'https://portal.reveng.ai/_next/image?url=%2Ficon.png&w=64&q=75'
+        data = urllib.request.urlopen(logo_url).read()
+        pixmap = QtGui.QPixmap()
+        pixmap.loadFromData(data)
+        logo_label = QtWidgets.QLabel()
+        logo_label.setPixmap(pixmap)
+        logo_label.setAlignment(QtCore.Qt.AlignCenter)  # Center the logo
+        layout.addWidget(logo_label)
 
-        # Password Field
-        self.password_label = QtWidgets.QLabel('Model Name:')
-        self.password_field = QtWidgets.QLineEdit()
-        self.password_field.setEchoMode(QtWidgets.QLineEdit.Password)
-        layout.addWidget(self.password_label)
-        layout.addWidget(self.password_field)
+        # Title
+        title_label = QtWidgets.QLabel('Input your user info')
+        font = title_label.font()
+        font.setBold(True)  # Set font to bold
+        title_label.setFont(font)
+        title_label.setAlignment(QtCore.Qt.AlignCenter)  # Center the title
+        layout.addWidget(title_label)
 
-        # Login Button
-        self.login_button = QtWidgets.QPushButton('Save')
-        self.login_button.clicked.connect(self.on_login_click)
-        layout.addWidget(self.login_button)
+        # API Key Field
+        self.api_key_label = QtWidgets.QLabel('API Key:')
+        self.api_key_field = QtWidgets.QLineEdit()
+        layout.addWidget(self.api_key_label)
+        layout.addWidget(self.api_key_field)
+
+        # Model Name Field
+        self.model_name_label = QtWidgets.QLabel('Model Name:')
+        self.model_name_field = QtWidgets.QLineEdit()
+        layout.addWidget(self.model_name_label)
+        layout.addWidget(self.model_name_field)
+
+        # Add some space between the last input box and the buttons
+        layout.addSpacing(20)
+
+        # Create a horizontal layout for the buttons
+        button_layout = QtWidgets.QHBoxLayout()
+
+        # Save Button
+        self.save_button = QtWidgets.QPushButton('Save')
+        self.save_button.clicked.connect(self.on_save_click)
+        button_layout.addWidget(self.save_button)
+
+        # "Don't know your API Key?" Button
+        self.api_key_help_button = QtWidgets.QPushButton("Don't know your API Key?")
+        self.api_key_help_button.clicked.connect(self.on_api_key_help_click)
+        button_layout.addWidget(self.api_key_help_button)
+
+        # Set spacing between the buttons
+        button_layout.setSpacing(10)
+
+        # Add the button layout to the main layout
+        layout.addLayout(button_layout)
 
         self.setLayout(layout)
 
-    def on_login_click(self):
-        username = self.username_field.text()
-        password = self.password_field.text()
+        self.setMinimumWidth(400)  # Set the minimum width of the window
 
-        # Here you would typically authenticate the user using the provided
-        # username and password.
-        print(f'User Info Saved: {username}, {password}')
+    def on_save_click(self):
+        api_key = self.api_key_field.text()
+        model_name = self.model_name_field.text()
+
+        # File path for the hidden file in the home directory
+        file_path = os.path.expanduser('~/.read.test')
+
+        # Writing to the file
+        with open(file_path, 'w') as file:
+            file.write(f'apikey = "{api_key}"\n')
+            file.write('host = "https://api.reveng.ai"\n')
+            file.write(f'model = "{model_name}"\n')
+
+        print(f'User Info Saved: API Key - {api_key}, Model Name - {model_name}')
+        self.accept()
+
+    def on_api_key_help_click(self):
+        webbrowser.open('https://portal.reveng.ai')
 
 
-app = QtWidgets.QApplication(sys.argv)
-window = LoginWindow()
-window.show()
-sys.exit(app.exec_())
+class LoginPlugin(PluginForm):
+    def OnCreate(self, form):
+        login_dialog = LoginDialog()
+        login_dialog.exec_()
+
+    def OnClose(self, form):
+        pass
+
+
+plg = LoginPlugin()
+plg.Show("Login Window")
