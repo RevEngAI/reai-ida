@@ -1,5 +1,6 @@
+import os
 from PyQt5 import QtWidgets, QtGui, QtCore
-from idaapi import PluginForm, get_input_file_path
+import idaapi
 import urllib.request
 import webbrowser
 import requests
@@ -178,7 +179,8 @@ class LoginDialog(QtWidgets.QDialog):
         model_name = self.model_name_field.text()
 
         # File path for the hidden file in the home directory
-        file_path = os.path.expanduser('~/.read.test')
+        home_path = os.path.expanduser("~")
+        file_path = os.path.join(home_path, '.reait.toml')
 
         # Writing to the file
         with open(file_path, 'w') as file:
@@ -198,14 +200,37 @@ class LoginDialog(QtWidgets.QDialog):
         webbrowser.open('https://portal.reveng.ai')
 
 
-class LoginPlugin(PluginForm):
-    def OnCreate(self, form):
-        login_dialog = LoginDialog()
-        login_dialog.exec_()
+class LoginPlugin(idaapi.plugin_t):
+    flags = 0  # Do not use PLUGIN_FIX
+    comment = ("This is a Revenge.AI plugin")
+    help = "Please go to help.reveng.ai for more information"
+    wanted_name = "Revenge.AI for IDA Pro"
+    wanted_hotkey = "Ctrl-Shift-A"
 
-    def OnClose(self, form):
+    def init(self):
+        # This is executed when the plugin is loaded
+        return idaapi.PLUGIN_OK
+
+    def run(self, arg):
+        # This method can be called if you register a hotkey or menu item.
+        # Here, we'll just re-show the login dialog.
+        self.show_login_dialog()
+
+    def term(self):
+        # Called when the plugin is unloaded
         pass
 
+    def show_login_dialog(self):
+        home_path = os.path.expanduser("~")
+        config_file_path = os.path.join(home_path, '.reait.toml')
+        if os.path.exists(config_file_path):
+            # If the config file exists, show the SampleSubmitDialog
+            dialog = SampleSubmitDialog()
+        else:
+            # Otherwise, show the LoginDialog
+            dialog = LoginDialog()
+        dialog.exec_()  # This will block until the dialog is closed
 
-plg = LoginPlugin()
-plg.Show("Login Window")
+
+def PLUGIN_ENTRY():
+    return LoginPlugin()
