@@ -220,10 +220,12 @@ class BinStatusDialog(QtWidgets.QDialog):
         self.status_label = QtWidgets.QLabel("Checking Embeddings Status...")
         self.layout.addWidget(self.status_label)
 
-        # List Widget to display embeddings
+        # List Widget to display embeddings (initially hidden)
         self.embeddings_list = QtWidgets.QListWidget()
+        self.embeddings_list.setVisible(False)  # Hide it initially
         self.layout.addWidget(self.embeddings_list)
 
+        self.setMinimumWidth(400)
         self.setLayout(self.layout)
 
         # Timer setup
@@ -242,15 +244,9 @@ class BinStatusDialog(QtWidgets.QDialog):
 
             # Populate the list widget
             self.embeddings_list.clear()  # Clear any previous entries
+            # todo
             for embedding in res_json:
                 self.embeddings_list.addItem(str(embedding))
-
-            # else:
-            #     self.counter += 1
-            #     if self.counter > 10:
-            #         self.status_label.setText("Busy, please come back later.")
-            #         self.timer.stop()
-            #         QtCore.QTimer.singleShot(3000, self.close)
 
         except requests.exceptions.HTTPError as e:
             self.counter += 1
