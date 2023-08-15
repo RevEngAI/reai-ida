@@ -1,3 +1,4 @@
+import json
 import os
 from PyQt5 import QtWidgets, QtGui, QtCore
 import idaapi
@@ -83,31 +84,51 @@ class SampleSubmitDialog(QtWidgets.QDialog):
         if sample_path:
             self.sample_path_field.setText(sample_path)
 
+    def on_msg_box_closed(self):
+        self.new_window = WaitingWindow()
+        self.new_window.show()
+
     def submit_sample(self):
         if os.path.exists(self.sample_path):
-            # Assuming RE_analysis takes the file path as an argument
             result = reait_api.RE_analyse(self.sample_path, "binnet-0.1")
+
             # Check the type of the result and format accordingly
-            if isinstance(result, str):
-                message = result
-            elif isinstance(result, requests.Response):
-                if result.status_code == 200:
-                    message = "[+] Successfully submitted binary for analysis."
-                else:
+            if result.status_code == 200:
+                message = "[+] Successfully submitted binary for analysis."
+            elif result.status_code == 400:
+                response = json.loads(result.text)
+                print(response)
+                if 'error' in response.keys():
                     # Handle other status codes or extract more information from the response if needed
-                    message = f"[-] Error: {result.text}"
+                    message = f"[-] Error {response['error']}"
             else:
                 # Format other types of results, if any.
                 # For this example, if the result is a dictionary, convert it to a readable string.
-                message = '\n'.join(f"{k}: {v}" for k, v in result.items())
+                message = result.status_code
 
             # Show the result in a message box
             msg_box = QtWidgets.QMessageBox()
             msg_box.setWindowTitle("Submit Result")
             msg_box.setText(message)
+            msg_box.accepted.connect(self.on_msg_box_closed)
             msg_box.exec_()
         else:
             QtWidgets.QMessageBox.warning(self, 'Error', 'Invalid file path.')
+
+
+class WaitingWindow(QtWidgets.QWidget):
+    def __init__(self):
+        super().__init__()
+        layout = QtWidgets.QVBoxLayout()
+        self.label = QtWidgets.QLabel("Please wait for 10 seconds...")
+        layout.addWidget(self.label)
+        self.setLayout(layout)
+
+        # Set a timer for 10 seconds
+        QtCore.QTimer.singleShot(10000, self.close_window)
+
+    def close_window(self):
+        self.close()  # or you can do other tasks here
 
 
 class LoginDialog(QtWidgets.QDialog):
