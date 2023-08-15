@@ -202,9 +202,9 @@ class LoginDialog(QtWidgets.QDialog):
 
 class LoginPlugin(idaapi.plugin_t):
     flags = 0  # Do not use PLUGIN_FIX
-    comment = ("This is a Revenge.AI plugin")
+    comment = ("This is a RevEng.AI plugin")
     help = "Please go to help.reveng.ai for more information"
-    wanted_name = "Revenge.AI for IDA Pro"
+    wanted_name = "RevEng.AI for IDA Pro"
     wanted_hotkey = "Ctrl-Shift-A"
 
     def init(self):
