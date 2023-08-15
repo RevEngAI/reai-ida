@@ -12,6 +12,7 @@ class SampleSubmitDialog(QtWidgets.QDialog):
     def __init__(self):
         super().__init__()
 
+        self.bin_dialog = None
         self.setWindowTitle("RevEng.AI for IDA Pro")
 
         layout = QtWidgets.QVBoxLayout()
@@ -85,8 +86,8 @@ class SampleSubmitDialog(QtWidgets.QDialog):
             self.sample_path_field.setText(sample_path)
 
     def on_msg_box_closed(self):
-        self.new_window = WaitingWindow()
-        self.new_window.show()
+        self.bin_dialog = BinStatusDialog(self.sample_path, "binnet-0.1")
+        self.bin_dialog.exec_()
 
     def submit_sample(self):
         if os.path.exists(self.sample_path):
@@ -114,21 +115,6 @@ class SampleSubmitDialog(QtWidgets.QDialog):
             msg_box.exec_()
         else:
             QtWidgets.QMessageBox.warning(self, 'Error', 'Invalid file path.')
-
-
-class WaitingWindow(QtWidgets.QWidget):
-    def __init__(self):
-        super().__init__()
-        layout = QtWidgets.QVBoxLayout()
-        self.label = QtWidgets.QLabel("Please wait for 10 seconds...")
-        layout.addWidget(self.label)
-        self.setLayout(layout)
-
-        # Set a timer for 10 seconds
-        QtCore.QTimer.singleShot(10000, self.close_window)
-
-    def close_window(self):
-        self.close()  # or you can do other tasks here
 
 
 class LoginDialog(QtWidgets.QDialog):
@@ -221,6 +207,59 @@ class LoginDialog(QtWidgets.QDialog):
         webbrowser.open('https://portal.reveng.ai')
 
 
+class BinStatusDialog(QtWidgets.QDialog):
+    def __init__(self, fpath, model_name):
+        super().__init__()
+
+        self.fpath = fpath
+        self.model_name = model_name
+
+        self.setWindowTitle("RevEng.AI for IDA Pro")
+
+        self.layout = QtWidgets.QVBoxLayout()
+        self.status_label = QtWidgets.QLabel("Checking Embeddings Status...")
+        self.layout.addWidget(self.status_label)
+
+        # List Widget to display embeddings
+        self.embeddings_list = QtWidgets.QListWidget()
+        self.layout.addWidget(self.embeddings_list)
+
+        self.setLayout(self.layout)
+
+        # Timer setup
+        self.timer = QtCore.QTimer(self)
+        self.timer.timeout.connect(self.check_status)
+        self.timer.start(3000)  # Call check_status every 10 seconds
+
+        self.counter = 0
+
+    def check_status(self):
+        try:
+            res_json = reait_api.RE_embeddings(self.fpath, self.model_name)
+
+            self.timer.stop()
+            self.status_label.setText("Embeddings successfully fetched!")
+
+            # Populate the list widget
+            self.embeddings_list.clear()  # Clear any previous entries
+            for embedding in res_json:
+                self.embeddings_list.addItem(str(embedding))
+
+            # else:
+            #     self.counter += 1
+            #     if self.counter > 10:
+            #         self.status_label.setText("Busy, please come back later.")
+            #         self.timer.stop()
+            #         QtCore.QTimer.singleShot(3000, self.close)
+
+        except requests.exceptions.HTTPError as e:
+            self.counter += 1
+            if self.counter > 10:
+                self.status_label.setText("Error fetching embeddings. Please try again later.")
+                self.timer.stop()
+                QtCore.QTimer.singleShot(3000, self.close)
+
+
 class LoginPlugin(idaapi.plugin_t):
     flags = 0  # Do not use PLUGIN_FIX
     comment = ("This is a RevEng.AI plugin")
@@ -244,12 +283,12 @@ class LoginPlugin(idaapi.plugin_t):
     def show_login_dialog(self):
         home_path = os.path.expanduser("~")
         config_file_path = os.path.join(home_path, '.reait.toml')
-        if os.path.exists(config_file_path):
-            # If the config file exists, show the SampleSubmitDialog
-            dialog = SampleSubmitDialog()
-        else:
-            # Otherwise, show the LoginDialog
+        if not os.path.exists(config_file_path):
+            # show the LoginDialog
             dialog = LoginDialog()
+        else:
+            # Otherwise, if the config file exists, show the SampleSubmitDialog
+            dialog = SampleSubmitDialog()
         dialog.exec_()  # This will block until the dialog is closed
 
 
