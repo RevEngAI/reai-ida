@@ -7,6 +7,30 @@ import webbrowser
 import requests
 from reait import api as reait_api
 
+url = 'https://portal.reveng.ai/_next/image?url=%2Ficon.png&w=64&q=75'
+
+
+def company_logo(layout, url: str, window_title:str):
+    # Logo
+    logo_url = url
+    data = urllib.request.urlopen(logo_url).read()
+    pixmap = QtGui.QPixmap()
+    pixmap.loadFromData(data)
+    logo_label = QtWidgets.QLabel()
+    logo_label.setPixmap(pixmap)
+    logo_label.setAlignment(QtCore.Qt.AlignCenter)  # Center the logo
+    layout.addWidget(logo_label)
+
+    # Title
+    title_label = QtWidgets.QLabel(window_title)
+    font = title_label.font()
+    font.setBold(True)  # Set font to bold
+    title_label.setFont(font)
+    title_label.setAlignment(QtCore.Qt.AlignCenter)  # Center the title
+    layout.addWidget(title_label)
+
+    return layout
+
 
 class SampleSubmitDialog(QtWidgets.QDialog):
     def __init__(self):
@@ -16,23 +40,24 @@ class SampleSubmitDialog(QtWidgets.QDialog):
         self.setWindowTitle("RevEng.AI for IDA Pro")
 
         layout = QtWidgets.QVBoxLayout()
+        layout = company_logo(layout, url, "Submit Sample for Analysis")
 
-        # Logo
-        logo_url = 'https://portal.reveng.ai/_next/image?url=%2Ficon.png&w=64&q=75'
-        data = urllib.request.urlopen(logo_url).read()
-        pixmap = QtGui.QPixmap()
-        pixmap.loadFromData(data)
-        logo_label = QtWidgets.QLabel()
-        logo_label.setPixmap(pixmap)
-        logo_label.setAlignment(QtCore.Qt.AlignCenter)  # Center the logo
-        layout.addWidget(logo_label)
-
-        title_label = QtWidgets.QLabel("Submit Sample for Analysis")
-        font = title_label.font()
-        font.setBold(True)  # Set font to bold
-        title_label.setFont(font)
-        title_label.setAlignment(QtCore.Qt.AlignCenter)  # Center the title
-        layout.addWidget(title_label)
+        # # Logo
+        # logo_url = 'https://portal.reveng.ai/_next/image?url=%2Ficon.png&w=64&q=75'
+        # data = urllib.request.urlopen(logo_url).read()
+        # pixmap = QtGui.QPixmap()
+        # pixmap.loadFromData(data)
+        # logo_label = QtWidgets.QLabel()
+        # logo_label.setPixmap(pixmap)
+        # logo_label.setAlignment(QtCore.Qt.AlignCenter)  # Center the logo
+        # layout.addWidget(logo_label)
+        #
+        # title_label = QtWidgets.QLabel("Submit Sample for Analysis")
+        # font = title_label.font()
+        # font.setBold(True)  # Set font to bold
+        # title_label.setFont(font)
+        # title_label.setAlignment(QtCore.Qt.AlignCenter)  # Center the title
+        # layout.addWidget(title_label)
 
         # Sample Path Field with the current file name in IDA Pro
         current_file_path = idaapi.get_input_file_path()
@@ -107,6 +132,7 @@ class SampleSubmitDialog(QtWidgets.QDialog):
                 # For this example, if the result is a dictionary, convert it to a readable string.
                 message = result.status_code
 
+            self.close()
             # Show the result in a message box
             msg_box = QtWidgets.QMessageBox()
             msg_box.setWindowTitle("Submit Result")
@@ -114,6 +140,7 @@ class SampleSubmitDialog(QtWidgets.QDialog):
             msg_box.accepted.connect(self.on_msg_box_closed)
             msg_box.exec_()
         else:
+            self.close()
             QtWidgets.QMessageBox.warning(self, 'Error', 'Invalid file path.')
 
 
@@ -124,24 +151,25 @@ class LoginDialog(QtWidgets.QDialog):
         self.setWindowTitle("RevEng.AI for IDA Pro")  # Set window title
 
         layout = QtWidgets.QVBoxLayout()
+        layout = company_logo(layout, url, 'Input Your User Info')
 
-        # Logo
-        logo_url = 'https://portal.reveng.ai/_next/image?url=%2Ficon.png&w=64&q=75'
-        data = urllib.request.urlopen(logo_url).read()
-        pixmap = QtGui.QPixmap()
-        pixmap.loadFromData(data)
-        logo_label = QtWidgets.QLabel()
-        logo_label.setPixmap(pixmap)
-        logo_label.setAlignment(QtCore.Qt.AlignCenter)  # Center the logo
-        layout.addWidget(logo_label)
-
-        # Title
-        title_label = QtWidgets.QLabel('Input Your User Info')
-        font = title_label.font()
-        font.setBold(True)  # Set font to bold
-        title_label.setFont(font)
-        title_label.setAlignment(QtCore.Qt.AlignCenter)  # Center the title
-        layout.addWidget(title_label)
+        # # Logo
+        # logo_url = 'https://portal.reveng.ai/_next/image?url=%2Ficon.png&w=64&q=75'
+        # data = urllib.request.urlopen(logo_url).read()
+        # pixmap = QtGui.QPixmap()
+        # pixmap.loadFromData(data)
+        # logo_label = QtWidgets.QLabel()
+        # logo_label.setPixmap(pixmap)
+        # logo_label.setAlignment(QtCore.Qt.AlignCenter)  # Center the logo
+        # layout.addWidget(logo_label)
+        #
+        # # Title
+        # title_label = QtWidgets.QLabel('Input Your User Info')
+        # font = title_label.font()
+        # font.setBold(True)  # Set font to bold
+        # title_label.setFont(font)
+        # title_label.setAlignment(QtCore.Qt.AlignCenter)  # Center the title
+        # layout.addWidget(title_label)
 
         # API Key Field
         self.api_key_label = QtWidgets.QLabel('API Key:')
@@ -240,20 +268,79 @@ class BinStatusDialog(QtWidgets.QDialog):
             res_json = reait_api.RE_embeddings(self.fpath, self.model_name)
 
             self.timer.stop()
-            self.status_label.setText("Embeddings successfully fetched!")
+            self.status_label.setText("Analysis successfully fetched!")
+            # print(res_json)
+            self.close()
 
             # Populate the list widget
-            self.embeddings_list.clear()  # Clear any previous entries
-            # todo
-            for embedding in res_json:
-                self.embeddings_list.addItem(str(embedding))
+            embeddings_dialog = EmbeddingsTableDialog(res_json, os.path.basename(self.fpath))
+            embeddings_dialog.exec_()
 
-        except requests.exceptions.HTTPError as e:
+        except requests.exceptions.HTTPError:
             self.counter += 1
             if self.counter > 10:
-                self.status_label.setText("Error fetching embeddings. Please try again later.")
+                self.status_label.setText("Error fetching result. Please try again later.")
                 self.timer.stop()
                 QtCore.QTimer.singleShot(3000, self.close)
+
+
+class EmbeddingsTableDialog(QtWidgets.QDialog):
+    def __init__(self, res_json, filename):
+        super().__init__()
+
+        self.setWindowTitle("RevEng.AI for IDA Pro")  # Set window title
+
+        layout = QtWidgets.QVBoxLayout()
+        layout = company_logo(layout, url, f"Analyse Result of binary {filename}")
+
+        self.table = QtWidgets.QTableWidget(self)
+        self.table.setColumnCount(4)
+        self.table.setHorizontalHeaderLabels(["Functions", "Size", "Vaddr", "Embedding"])
+
+        for row_index, row_data in enumerate(res_json):
+            self.table.insertRow(row_index)
+            for col_index, cell_key in enumerate(["name", "size", "vaddr", "embedding"]):
+                self.table.setItem(row_index, col_index, QtWidgets.QTableWidgetItem(str(row_data[cell_key]) if cell_key != "vaddr" else hex(row_data[cell_key])))
+
+        self.table.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self.show_context_menu)
+
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QtWidgets.QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QtWidgets.QHeaderView.Stretch)
+
+        layout.addWidget(self.table)
+        self.setLayout(layout)
+        self.setMinimumWidth(800)
+        self.setMinimumHeight(600)
+
+    def show_context_menu(self, position):
+        menu = QtWidgets.QMenu(self)
+
+        show_action = menu.addAction("Show function embedding")
+        search_action = menu.addAction("Search similar binaries")
+
+        action = menu.exec_(self.table.mapToGlobal(position))
+
+        if action == show_action:
+            row = self.table.currentRow()
+            item = self.table.item(row, 3)  # assuming the function name is in column 0
+            if item:
+                embedding = item.text()
+                msgBox = QtWidgets.QMessageBox(self)
+                msgBox.setWindowTitle("Function embedding")
+                msgBox.setText(embedding)
+
+                # Adjusting the size of the text area
+                spacer = QtWidgets.QSpacerItem(400, 400, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
+                layout = msgBox.layout()
+                layout.addItem(spacer, layout.rowCount(), 0, 1, layout.columnCount())
+
+                msgBox.exec_()
 
 
 class LoginPlugin(idaapi.plugin_t):
