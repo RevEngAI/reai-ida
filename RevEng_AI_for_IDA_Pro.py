@@ -42,23 +42,6 @@ class SampleSubmitDialog(QtWidgets.QDialog):
         layout = QtWidgets.QVBoxLayout()
         layout = company_logo(layout, url, "Submit Sample for Analysis")
 
-        # # Logo
-        # logo_url = 'https://portal.reveng.ai/_next/image?url=%2Ficon.png&w=64&q=75'
-        # data = urllib.request.urlopen(logo_url).read()
-        # pixmap = QtGui.QPixmap()
-        # pixmap.loadFromData(data)
-        # logo_label = QtWidgets.QLabel()
-        # logo_label.setPixmap(pixmap)
-        # logo_label.setAlignment(QtCore.Qt.AlignCenter)  # Center the logo
-        # layout.addWidget(logo_label)
-        #
-        # title_label = QtWidgets.QLabel("Submit Sample for Analysis")
-        # font = title_label.font()
-        # font.setBold(True)  # Set font to bold
-        # title_label.setFont(font)
-        # title_label.setAlignment(QtCore.Qt.AlignCenter)  # Center the title
-        # layout.addWidget(title_label)
-
         # Sample Path Field with the current file name in IDA Pro
         current_file_path = idaapi.get_input_file_path()
         self.sample_path = current_file_path
@@ -96,6 +79,8 @@ class SampleSubmitDialog(QtWidgets.QDialog):
         self.submit_button.clicked.connect(self.submit_sample)
         layout.addWidget(self.submit_button, alignment=QtCore.Qt.AlignCenter)
 
+        self.model_name = "binnet-0.1"
+
         self.setLayout(layout)
         self.setMinimumWidth(400)
 
@@ -111,12 +96,12 @@ class SampleSubmitDialog(QtWidgets.QDialog):
             self.sample_path_field.setText(sample_path)
 
     def on_msg_box_closed(self):
-        self.bin_dialog = BinStatusDialog(self.sample_path, "binnet-0.1")
+        self.bin_dialog = BinStatusDialog(self.sample_path, self.model_name, self)
         self.bin_dialog.exec_()
 
     def submit_sample(self):
         if os.path.exists(self.sample_path):
-            result = reait_api.RE_analyse(self.sample_path, "binnet-0.1")
+            result = reait_api.RE_analyse(self.sample_path, self.model_name)
 
             # Check the type of the result and format accordingly
             if result.status_code == 200:
@@ -143,6 +128,15 @@ class SampleSubmitDialog(QtWidgets.QDialog):
             self.close()
             QtWidgets.QMessageBox.warning(self, 'Error', 'Invalid file path.')
 
+    def set_to_fetch_again(self):
+        self.submit_button.setText("Fetch Again")
+        self.submit_button.clicked.connect(self.fetch_again)
+
+    def fetch_again(self):
+        # Open the BinStatusDialog when the "Fetch Again" button is clicked
+        bin_status_dialog = BinStatusDialog(self.sample_path, self.model_name, self)
+        bin_status_dialog.exec_()
+
 
 class LoginDialog(QtWidgets.QDialog):
     def __init__(self):
@@ -152,24 +146,6 @@ class LoginDialog(QtWidgets.QDialog):
 
         layout = QtWidgets.QVBoxLayout()
         layout = company_logo(layout, url, 'Input Your User Info')
-
-        # # Logo
-        # logo_url = 'https://portal.reveng.ai/_next/image?url=%2Ficon.png&w=64&q=75'
-        # data = urllib.request.urlopen(logo_url).read()
-        # pixmap = QtGui.QPixmap()
-        # pixmap.loadFromData(data)
-        # logo_label = QtWidgets.QLabel()
-        # logo_label.setPixmap(pixmap)
-        # logo_label.setAlignment(QtCore.Qt.AlignCenter)  # Center the logo
-        # layout.addWidget(logo_label)
-        #
-        # # Title
-        # title_label = QtWidgets.QLabel('Input Your User Info')
-        # font = title_label.font()
-        # font.setBold(True)  # Set font to bold
-        # title_label.setFont(font)
-        # title_label.setAlignment(QtCore.Qt.AlignCenter)  # Center the title
-        # layout.addWidget(title_label)
 
         # API Key Field
         self.api_key_label = QtWidgets.QLabel('API Key:')
@@ -236,8 +212,10 @@ class LoginDialog(QtWidgets.QDialog):
 
 
 class BinStatusDialog(QtWidgets.QDialog):
-    def __init__(self, fpath, model_name):
+    def __init__(self, fpath, model_name, sample_submit_dialog):
         super().__init__()
+
+        self.sample_submit_dialog = sample_submit_dialog
 
         self.fpath = fpath
         self.model_name = model_name
@@ -276,12 +254,26 @@ class BinStatusDialog(QtWidgets.QDialog):
             embeddings_dialog = EmbeddingsTableDialog(res_json, os.path.basename(self.fpath))
             embeddings_dialog.exec_()
 
+        # except requests.exceptions.HTTPError:
+        #     self.counter += 1
+        #     if self.counter > 10:
+        #         self.status_label.setText("Error fetching result. Please try again later.")
+        #         self.timer.stop()
+        #         QtCore.QTimer.singleShot(3000, self.close)
+
         except requests.exceptions.HTTPError:
             self.counter += 1
             if self.counter > 10:
                 self.status_label.setText("Error fetching result. Please try again later.")
                 self.timer.stop()
-                QtCore.QTimer.singleShot(3000, self.close)
+                # self.sample_submit_dialog = SampleSubmitDialog
+                QtCore.QTimer.singleShot(3000, self.on_error_after_10_tries)
+
+    def on_error_after_10_tries(self):
+        self.close()  # Close the current dialog
+        if self.sample_submit_dialog is not None:
+            self.sample_submit_dialog.set_to_fetch_again()  # Change the button text of SampleSubmitDialog
+            self.sample_submit_dialog.show()  # Show the SampleSubmitDialog again
 
 
 class EmbeddingsTableDialog(QtWidgets.QDialog):
@@ -328,19 +320,35 @@ class EmbeddingsTableDialog(QtWidgets.QDialog):
 
         if action == show_action:
             row = self.table.currentRow()
-            item = self.table.item(row, 3)  # assuming the function name is in column 0
+            item = self.table.item(row, 3)
+            func = self.table.item(row, 0)  # assuming the function name is in column 0
             if item:
                 embedding = item.text()
-                msgBox = QtWidgets.QMessageBox(self)
-                msgBox.setWindowTitle("Function embedding")
-                msgBox.setText(embedding)
-
-                # Adjusting the size of the text area
-                spacer = QtWidgets.QSpacerItem(400, 400, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
-                layout = msgBox.layout()
-                layout.addItem(spacer, layout.rowCount(), 0, 1, layout.columnCount())
-
+                msgBox = ScrollableMessageBox(f"{func.text()}'s embedding", embedding)
                 msgBox.exec_()
+
+
+class ScrollableMessageBox(QtWidgets.QDialog):
+
+    def __init__(self, title, msg, parent=None):
+        super(ScrollableMessageBox, self).__init__(parent)
+
+        self.setWindowTitle(title)
+        self.setMinimumSize(400, 400)
+
+        # Setting up the scroll area
+        scroll = QtWidgets.QScrollArea(self)
+        scroll.setWidgetResizable(True)
+
+        # Label to hold the text
+        self.content = QtWidgets.QLabel(scroll)
+        self.content.setText(msg)
+        self.content.setWordWrap(True)
+        self.content.setAlignment(QtCore.Qt.AlignTop)
+        scroll.setWidget(self.content)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.addWidget(scroll)
 
 
 class LoginPlugin(idaapi.plugin_t):
