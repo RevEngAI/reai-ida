@@ -32,112 +32,6 @@ def company_logo(layout, url: str, window_title:str):
     return layout
 
 
-class SampleSubmitDialog(QtWidgets.QDialog):
-    def __init__(self):
-        super().__init__()
-
-        self.bin_dialog = None
-        self.setWindowTitle("RevEng.AI for IDA Pro")
-
-        layout = QtWidgets.QVBoxLayout()
-        layout = company_logo(layout, url, "Submit Sample for Analysis")
-
-        # Sample Path Field with the current file name in IDA Pro
-        current_file_path = idaapi.get_input_file_path()
-        self.sample_path = current_file_path
-        current_file_name = os.path.basename(current_file_path)  # Extract only the filename
-        truncated_name = self.truncate_filename(current_file_name,
-                                                max_length=30)  # Limit filename to a max of 30 characters for this example
-
-        self.sample_path_field = QtWidgets.QLineEdit(truncated_name)
-        self.sample_path_field.setReadOnly(True)  # So the user can't edit it
-
-        # Calculate width based on text content and set the width of QLineEdit
-        font_metrics = self.sample_path_field.fontMetrics()
-        width = font_metrics.width(truncated_name) + 10  # Additional 10 pixels for some padding
-        self.sample_path_field.setFixedWidth(width)
-
-        # Adding "Opened File:" QLabel
-        label = QtWidgets.QLabel("Opened File:")
-
-        # Centering QLineEdit and label using QHBoxLayout
-        hlayout = QtWidgets.QHBoxLayout()
-        hlayout.addStretch(1)
-        hlayout.addWidget(label)
-        hlayout.addWidget(self.sample_path_field)
-        hlayout.addStretch(1)
-
-        layout.addLayout(hlayout)
-
-        # Add a spacer for some distance between the QLineEdit and QPushButton
-        spacer = QtWidgets.QSpacerItem(0, 10, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
-        layout.addItem(spacer)
-
-        # Submit Button
-        self.submit_button = QtWidgets.QPushButton('Submit')
-        self.submit_button.setFixedWidth(100)  # Making the button shorter
-        self.submit_button.clicked.connect(self.submit_sample)
-        layout.addWidget(self.submit_button, alignment=QtCore.Qt.AlignCenter)
-
-        self.model_name = "binnet-0.1"
-
-        self.setLayout(layout)
-        self.setMinimumWidth(400)
-
-    def truncate_filename(self, filename, max_length):
-        if len(filename) > max_length:
-            return filename[:max_length - 3] + "..."
-        return filename
-
-    def browse_for_sample(self):
-        # Show a File Dialog and get the selected file's path
-        sample_path = QtWidgets.QFileDialog.getOpenFileName(self, 'Select Sample')[0]
-        if sample_path:
-            self.sample_path_field.setText(sample_path)
-
-    def on_msg_box_closed(self):
-        self.bin_dialog = BinStatusDialog(self.sample_path, self.model_name, self)
-        self.bin_dialog.exec_()
-
-    def submit_sample(self):
-        if os.path.exists(self.sample_path):
-            result = reait_api.RE_analyse(self.sample_path, self.model_name)
-
-            # Check the type of the result and format accordingly
-            if result.status_code == 200:
-                message = "[+] Successfully submitted binary for analysis."
-            elif result.status_code == 400:
-                response = json.loads(result.text)
-                print(response)
-                if 'error' in response.keys():
-                    # Handle other status codes or extract more information from the response if needed
-                    message = f"[-] Error {response['error']}"
-            else:
-                # Format other types of results, if any.
-                # For this example, if the result is a dictionary, convert it to a readable string.
-                message = result.status_code
-
-            self.close()
-            # Show the result in a message box
-            msg_box = QtWidgets.QMessageBox()
-            msg_box.setWindowTitle("Submit Result")
-            msg_box.setText(message)
-            msg_box.accepted.connect(self.on_msg_box_closed)
-            msg_box.exec_()
-        else:
-            self.close()
-            QtWidgets.QMessageBox.warning(self, 'Error', 'Invalid file path.')
-
-    def set_to_fetch_again(self):
-        self.submit_button.setText("Fetch Again")
-        self.submit_button.clicked.connect(self.fetch_again)
-
-    def fetch_again(self):
-        # Open the BinStatusDialog when the "Fetch Again" button is clicked
-        bin_status_dialog = BinStatusDialog(self.sample_path, self.model_name, self)
-        bin_status_dialog.exec_()
-
-
 class LoginDialog(QtWidgets.QDialog):
     def __init__(self):
         super().__init__()
@@ -211,11 +105,129 @@ class LoginDialog(QtWidgets.QDialog):
         webbrowser.open('https://portal.reveng.ai')
 
 
+class SampleSubmitDialog(QtWidgets.QDialog):
+    def __init__(self):
+        super().__init__()
+        self.is_submit_mode = True
+
+        self.bin_dialog = None
+        self.setWindowTitle("RevEng.AI for IDA Pro")
+
+        layout = QtWidgets.QVBoxLayout()
+        layout = company_logo(layout, url, "Submit Sample for Analysis")
+
+        # Sample Path Field with the current file name in IDA Pro
+        current_file_path = idaapi.get_input_file_path()
+        self.sample_path = current_file_path
+        current_file_name = os.path.basename(current_file_path)  # Extract only the filename
+        truncated_name = self.truncate_filename(current_file_name,
+                                                max_length=30)  # Limit filename to a max of 30 characters for this example
+
+        self.sample_path_field = QtWidgets.QLineEdit(truncated_name)
+        self.sample_path_field.setReadOnly(True)  # So the user can't edit it
+
+        # Calculate width based on text content and set the width of QLineEdit
+        font_metrics = self.sample_path_field.fontMetrics()
+        width = font_metrics.width(truncated_name) + 10  # Additional 10 pixels for some padding
+        self.sample_path_field.setFixedWidth(width)
+
+        # Adding "Opened File:" QLabel
+        label = QtWidgets.QLabel("Opened File:")
+
+        # Centering QLineEdit and label using QHBoxLayout
+        hlayout = QtWidgets.QHBoxLayout()
+        hlayout.addStretch(1)
+        hlayout.addWidget(label)
+        hlayout.addWidget(self.sample_path_field)
+        hlayout.addStretch(1)
+
+        layout.addLayout(hlayout)
+
+        # Add a spacer for some distance between the QLineEdit and QPushButton
+        spacer = QtWidgets.QSpacerItem(0, 10, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
+        layout.addItem(spacer)
+
+        # Submit Button
+        self.submit_button = QtWidgets.QPushButton('Submit')
+        self.submit_button.setFixedWidth(100)  # Making the button shorter
+        self.submit_button.clicked.connect(self.submit_sample)
+        layout.addWidget(self.submit_button, alignment=QtCore.Qt.AlignCenter)
+
+        self.model_name = "binnet-0.1"
+
+        self.setLayout(layout)
+        self.setMinimumWidth(400)
+
+    def truncate_filename(self, filename, max_length):
+        if len(filename) > max_length:
+            return filename[:max_length - 3] + "..."
+        return filename
+
+    def browse_for_sample(self):
+        # Show a File Dialog and get the selected file's path
+        sample_path = QtWidgets.QFileDialog.getOpenFileName(self, 'Select Sample')[0]
+        if sample_path:
+            self.sample_path_field.setText(sample_path)
+
+    def on_msg_box_closed(self):
+        self.bin_dialog = BinStatusDialog(self.sample_path, self.model_name, self)
+        self.bin_dialog.exec_()
+
+    def submit_sample(self):
+        if self.is_submit_mode:
+            if os.path.exists(self.sample_path):
+                result = reait_api.RE_analyse(self.sample_path, self.model_name)
+
+                # Check the type of the result and format accordingly
+                if result.status_code == 200:
+                    message = "[+] Successfully submitted binary for analysis."
+                elif result.status_code == 400:
+                    response = json.loads(result.text)
+                    print(response)
+                    if 'error' in response.keys():
+                        # Handle other status codes or extract more information from the response if needed
+                        message = f"[-] Error {response['error']}"
+                else:
+                    # Format other types of results, if any.
+                    # For this example, if the result is a dictionary, convert it to a readable string.
+                    message = result.status_code
+
+                self.close()
+                # Show the result in a message box
+                msg_box = QtWidgets.QMessageBox()
+                msg_box.setWindowTitle("Submit Result")
+                msg_box.setText(message)
+                msg_box.accepted.connect(self.on_msg_box_closed)
+                msg_box.exec_()
+            else:
+                self.close()
+                QtWidgets.QMessageBox.warning(self, 'Error', 'Invalid file path.')
+        else:
+            # The user wants to fetch the result
+            bin_status_dialog = BinStatusDialog(self.sample_path, self.model_name, self)
+            bin_status_dialog.exec_()
+
+    def set_to_fetch_again(self):
+        self.is_submit_mode = False
+        self.submit_button.disconnect()  # Disconnect all connections
+        self.submit_button.setText("Fetch Again")
+        self.submit_button.clicked.connect(self.submit_sample)
+
+    def fetch_again(self):
+        # Open the BinStatusDialog when the "Fetch Again" button is clicked
+        bin_status_dialog = BinStatusDialog(self.sample_path, self.model_name, self)
+        bin_status_dialog.exec_()
+
+
 class BinStatusDialog(QtWidgets.QDialog):
     def __init__(self, fpath, model_name, sample_submit_dialog):
         super().__init__()
 
         self.sample_submit_dialog = sample_submit_dialog
+
+        # Close the SampleSubmitDialog right when BinStatusDialog is opened
+        if self.sample_submit_dialog:
+            self.sample_submit_dialog.close()
 
         self.fpath = fpath
         self.model_name = model_name
@@ -237,7 +249,7 @@ class BinStatusDialog(QtWidgets.QDialog):
         # Timer setup
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self.check_status)
-        self.timer.start(3000)  # Call check_status every 10 seconds
+        self.timer.start(1000)  # Call check_status every 1 seconds
 
         self.counter = 0
 
@@ -263,15 +275,17 @@ class BinStatusDialog(QtWidgets.QDialog):
 
         except requests.exceptions.HTTPError:
             self.counter += 1
-            if self.counter > 10:
+            if self.counter > 2:
                 self.status_label.setText("Error fetching result. Please try again later.")
                 self.timer.stop()
+                # self.close()
                 # self.sample_submit_dialog = SampleSubmitDialog
-                QtCore.QTimer.singleShot(3000, self.on_error_after_10_tries)
+                QtCore.QTimer.singleShot(1000, self.on_error_after_10_tries)
 
     def on_error_after_10_tries(self):
         self.close()  # Close the current dialog
         if self.sample_submit_dialog is not None:
+            self.counter = 0
             self.sample_submit_dialog.set_to_fetch_again()  # Change the button text of SampleSubmitDialog
             self.sample_submit_dialog.show()  # Show the SampleSubmitDialog again
 
