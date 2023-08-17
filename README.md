@@ -6,7 +6,6 @@ This documentation provides steps to install the RevEng.AI plugin for IDA on ARM
 
 Simply put [RevEng_AI_for_IDA_Pro.py](RevEng_AI_for_IDA_Pro.py) to your IDA Pro/IDA Home's plugins folder.
 1. Windows:
-    
     `C:\Program Files\IDA x.x\plugins (or wherever IDA is installed)`
    
 2. macOS:
