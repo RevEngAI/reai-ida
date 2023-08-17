@@ -4,6 +4,17 @@ This documentation provides steps to install the RevEng.AI plugin for IDA on ARM
 
 ## Installation on ARM macOS (M series chips)
 
+Simply put [RevEng_AI_for_IDA_Pro.py](RevEng_AI_for_IDA_Pro.py) to your IDA Pro/IDA Home's plugins folder.
+1. Windows:
+    
+    `C:\Program Files\IDA x.x\plugins (or wherever IDA is installed)`
+   
+2. macOS:
+   `/Applications/IDA x.x/ida64.app/Contents/MacOS/plugins`
+   
+3. Linux:
+   `~/ida-x.x/plugins/ or /opt/ida-x.x/plugins/`
+
 Since IDA Pro utilizes the in-built macOS python version (still x86_64 for ARM architecture) for its IDAPython scripts, it's necessary to determine the correct python path and install the python packages in the x86_64 architecture.
 
 ### Steps:
@@ -34,3 +45,6 @@ Since IDA Pro utilizes the in-built macOS python version (still x86_64 for ARM a
      ```
 
 > **Note:** Make sure to replace `[reait-repo-link]` with the actual link to the repository.
+
+
+
