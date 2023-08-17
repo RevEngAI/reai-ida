@@ -290,7 +290,7 @@ class BinStatusDialog(QtWidgets.QDialog):
 
 
 class BaseTableDialog(QtWidgets.QDialog):
-    def __init__(self, data_json, title, column_headers, column_keys):
+    def __init__(self, data_json, title, column_headers, column_keys, column_ratios=None):
         super().__init__()
 
         self.setWindowTitle("RevEng.AI for IDA Pro")
@@ -317,10 +317,9 @@ class BaseTableDialog(QtWidgets.QDialog):
         self.table.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
 
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(2, QtWidgets.QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(3, QtWidgets.QHeaderView.Stretch)
+        for i, mode in enumerate(column_ratios or []):
+            header.setSectionResizeMode(i, QtWidgets.QHeaderView.Interactive)
+            header.resizeSection(i, mode)
 
         layout.addWidget(self.table)
         self.setLayout(layout)
@@ -334,7 +333,8 @@ class EmbeddingsTableDialog(BaseTableDialog):
             data_json=res_json,
             title=f"Analyse Result of binary {filename}",
             column_headers=["Functions", "Size", "Vaddr", "Embedding"],
-            column_keys=["name", "size", "vaddr", "embedding"]
+            column_keys=["name", "size", "vaddr", "embedding"],
+            column_ratios=[100, 50, 120, 400]
         )
         self.model_name = 'binnet-0.1'
         self.nns = 10
@@ -385,7 +385,8 @@ class NearestSymbolsDialog(BaseTableDialog):
             data_json=symbols_json,
             title="Similar functions in our database",
             column_headers=["Filename", "Function Name", "Sha-256", "Distance"],
-            column_keys=["binary_name", "name", "sha_256_hash", "distance"]
+            column_keys=["binary_name", "name", "sha_256_hash", "distance"],
+            column_ratios=[100, 120, 300, 50]
         )
 
 
