@@ -10,7 +10,7 @@ from reait import api as reait_api
 url = 'https://portal.reveng.ai/_next/image?url=%2Ficon.png&w=64&q=75'
 
 
-def company_logo(layout, url: str, window_title:str):
+def company_logo(layout, url: str, window_title: str):
     # Logo
     logo_url = url
     data = urllib.request.urlopen(logo_url).read()
@@ -99,7 +99,6 @@ class LoginDialog(QtWidgets.QDialog):
 
         sample_submit_dialog = SampleSubmitDialog()
         sample_submit_dialog.exec_()
-
 
     def on_api_key_help_click(self):
         webbrowser.open('https://portal.reveng.ai')
@@ -275,14 +274,14 @@ class BinStatusDialog(QtWidgets.QDialog):
 
         except requests.exceptions.HTTPError:
             self.counter += 1
-            if self.counter > 2:
+            if self.counter > 3:
                 self.status_label.setText("Error fetching result. Please try again later.")
                 self.timer.stop()
                 # self.close()
                 # self.sample_submit_dialog = SampleSubmitDialog
-                QtCore.QTimer.singleShot(1000, self.on_error_after_10_tries)
+                QtCore.QTimer.singleShot(1000, self.on_error_after_few_tries)
 
-    def on_error_after_10_tries(self):
+    def on_error_after_few_tries(self):
         self.close()  # Close the current dialog
         if self.sample_submit_dialog is not None:
             self.counter = 0
@@ -290,28 +289,32 @@ class BinStatusDialog(QtWidgets.QDialog):
             self.sample_submit_dialog.show()  # Show the SampleSubmitDialog again
 
 
-class EmbeddingsTableDialog(QtWidgets.QDialog):
-    def __init__(self, res_json, filename):
+class BaseTableDialog(QtWidgets.QDialog):
+    def __init__(self, data_json, title, column_headers, column_keys):
         super().__init__()
 
-        self.setWindowTitle("RevEng.AI for IDA Pro")  # Set window title
+        self.setWindowTitle("RevEng.AI for IDA Pro")
 
         layout = QtWidgets.QVBoxLayout()
-        layout = company_logo(layout, url, f"Analyse Result of binary {filename}")
+        layout = company_logo(layout, url, title)
 
         self.table = QtWidgets.QTableWidget(self)
-        self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["Functions", "Size", "Vaddr", "Embedding"])
+        self.table.setColumnCount(len(column_headers))
+        self.table.setHorizontalHeaderLabels(column_headers)
 
-        for row_index, row_data in enumerate(res_json):
+        for row_index, row_data in enumerate(data_json):
             self.table.insertRow(row_index)
-            for col_index, cell_key in enumerate(["name", "size", "vaddr", "embedding"]):
-                self.table.setItem(row_index, col_index, QtWidgets.QTableWidgetItem(str(row_data[cell_key]) if cell_key != "vaddr" else hex(row_data[cell_key])))
+            for col_index, cell_key in enumerate(column_keys):
+                value = str(row_data[cell_key])
+                if cell_key == "vaddr":
+                    value = hex(row_data[cell_key])
+                item = QtWidgets.QTableWidgetItem(value)
+                item.setFlags(QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled)
+                self.table.setItem(row_index, col_index, item)
 
         self.table.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
-        self.table.customContextMenuRequested.connect(self.show_context_menu)
 
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
@@ -324,22 +327,66 @@ class EmbeddingsTableDialog(QtWidgets.QDialog):
         self.setMinimumWidth(800)
         self.setMinimumHeight(600)
 
+
+class EmbeddingsTableDialog(BaseTableDialog):
+    def __init__(self, res_json, filename):
+        super().__init__(
+            data_json=res_json,
+            title=f"Analyse Result of binary {filename}",
+            column_headers=["Functions", "Size", "Vaddr", "Embedding"],
+            column_keys=["name", "size", "vaddr", "embedding"]
+        )
+        self.model_name = 'binnet-0.1'
+        self.nns = 10
+        self.add_context_menu(self.show_context_menu)
+        self.table.customContextMenuRequested.connect(self.show_context_menu)
+
     def show_context_menu(self, position):
         menu = QtWidgets.QMenu(self)
-
+        search_action = menu.addAction("Search similar functions")
         show_action = menu.addAction("Show function embedding")
-        search_action = menu.addAction("Search similar binaries")
 
         action = menu.exec_(self.table.mapToGlobal(position))
 
         if action == show_action:
-            row = self.table.currentRow()
-            item = self.table.item(row, 3)
-            func = self.table.item(row, 0)  # assuming the function name is in column 0
-            if item:
-                embedding = item.text()
-                msgBox = ScrollableMessageBox(f"{func.text()}'s embedding", embedding)
-                msgBox.exec_()
+            self._handle_show_embedding()
+
+        if action == search_action:
+            self._handle_search_similar()
+
+    def add_context_menu(self, callback):
+        self.table.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(callback)
+
+    def _handle_show_embedding(self):
+        row = self.table.currentRow()
+        item = self.table.item(row, 3)  # assuming the embedding is in column 3
+        func = self.table.item(row, 0)  # assuming the function name is in column 0
+        if item:
+            embedding = item.text()
+            msgBox = ScrollableMessageBox(f"{func.text()}'s embedding", embedding)
+            msgBox.exec_()
+
+    def _handle_search_similar(self):
+        row = self.table.currentRow()
+        embedding = self.table.item(row, 3)
+        if embedding:
+            import ast
+            embedding_text = embedding.text()
+            embedding_list = ast.literal_eval(embedding_text)
+            nn_symbols = reait_api.RE_nearest_symbols(embedding_list, self.model_name, self.nns)
+            symbolsDialog = NearestSymbolsDialog(nn_symbols)
+            symbolsDialog.exec_()
+
+
+class NearestSymbolsDialog(BaseTableDialog):
+    def __init__(self, symbols_json):
+        super().__init__(
+            data_json=symbols_json,
+            title="Similar functions in our database",
+            column_headers=["Filename", "Function Name", "Sha-256", "Distance"],
+            column_keys=["binary_name", "name", "sha_256_hash", "distance"]
+        )
 
 
 class ScrollableMessageBox(QtWidgets.QDialog):
