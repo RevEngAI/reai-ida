@@ -455,6 +455,12 @@ class NearestSymbolsDialog(BaseTableDialog):
             download_flag=True
         )
 
+        for row_index in range(self.table.rowCount()):
+            # Assuming the download button is in the last column
+            btn = self.table.cellWidget(row_index, self.table.columnCount() - 1)
+            if btn:
+                btn.clicked.connect(lambda checked, row=row_index: print(symbols_json[row]))
+
 
 class ScrollableMessageBox(QtWidgets.QDialog):
 
