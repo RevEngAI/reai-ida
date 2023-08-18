@@ -10,9 +10,8 @@ from reait import api as reait_api
 url = 'https://portal.reveng.ai/_next/image?url=%2Ficon.png&w=64&q=75'
 
 
-def company_logo(layout, url: str, window_title: str):
+def company_logo(layout, logo_url: str, window_title: str):
     # Logo
-    logo_url = url
     data = urllib.request.urlopen(logo_url).read()
     pixmap = QtGui.QPixmap()
     pixmap.loadFromData(data)
@@ -258,27 +257,17 @@ class BinStatusDialog(QtWidgets.QDialog):
 
             self.timer.stop()
             self.status_label.setText("Analysis successfully fetched!")
-            # print(res_json)
             self.close()
 
             # Populate the list widget
             embeddings_dialog = EmbeddingsTableDialog(res_json, os.path.basename(self.fpath))
             embeddings_dialog.exec_()
 
-        # except requests.exceptions.HTTPError:
-        #     self.counter += 1
-        #     if self.counter > 10:
-        #         self.status_label.setText("Error fetching result. Please try again later.")
-        #         self.timer.stop()
-        #         QtCore.QTimer.singleShot(3000, self.close)
-
         except requests.exceptions.HTTPError:
             self.counter += 1
             if self.counter > 3:
                 self.status_label.setText("Error fetching result. Please try again later.")
                 self.timer.stop()
-                # self.close()
-                # self.sample_submit_dialog = SampleSubmitDialog
                 QtCore.QTimer.singleShot(1000, self.on_error_after_few_tries)
 
     def on_error_after_few_tries(self):
@@ -337,7 +326,7 @@ class EmbeddingsTableDialog(BaseTableDialog):
             column_ratios=[100, 50, 120, 400]
         )
         self.model_name = 'binnet-0.1'
-        self.nns = 10
+        self.nns = 15
         self.add_context_menu(self.show_context_menu)
         self.table.customContextMenuRequested.connect(self.show_context_menu)
 
@@ -413,9 +402,9 @@ class ScrollableMessageBox(QtWidgets.QDialog):
         layout.addWidget(scroll)
 
 
-class LoginPlugin(idaapi.plugin_t):
+class REAI_Plugin(idaapi.plugin_t):
     flags = 0  # Do not use PLUGIN_FIX
-    comment = ("This is a RevEng.AI plugin")
+    comment = "This is a RevEng.AI plugin"
     help = "Please go to help.reveng.ai for more information"
     wanted_name = "RevEng.AI for IDA Pro"
     wanted_hotkey = "Ctrl-Shift-A"
@@ -446,4 +435,4 @@ class LoginPlugin(idaapi.plugin_t):
 
 
 def PLUGIN_ENTRY():
-    return LoginPlugin()
+    return REAI_Plugin()
