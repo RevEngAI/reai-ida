@@ -1,6 +1,9 @@
 import json
 import os
 from PyQt5 import QtWidgets, QtGui, QtCore
+from PyQt5.QtCore import QPropertyAnimation, QEasingCurve, QAbstractAnimation
+from PyQt5.QtWidgets import QGraphicsOpacityEffect
+
 import idaapi
 import urllib.request
 import webbrowser
@@ -376,12 +379,61 @@ class EmbeddingsTableDialog(BaseTableDialog):
             btn = self.table.cellWidget(row_index, self.table.columnCount() - 1)
             if btn:
                 btn.clicked.connect(lambda checked, row=row_index:
-                                    self.save_json(self.res_json[row]))
+                                    self.download_signature(self.res_json[row]))
 
         self.model_name = 'binnet-0.1'
         self.nns = 15
         self.add_context_menu(self.show_context_menu)
         self.table.customContextMenuRequested.connect(self.show_context_menu)
+
+    def download_signature(self, data):
+        # Fetch the widget from the given data
+        row_index = self.res_json.index(data)
+        btn = self.table.cellWidget(row_index, self.table.columnCount() - 1)
+
+        # Apply an opacity effect to the button
+        opacity_effect = QGraphicsOpacityEffect(btn)
+        btn.setGraphicsEffect(opacity_effect)
+
+        # Create the fade animation
+        self.animation = QPropertyAnimation(opacity_effect, b"opacity")
+        self.animation.setStartValue(1)
+        self.animation.setEndValue(0.2)
+        self.animation.setDuration(500)
+        self.animation.setEasingCurve(QEasingCurve.OutQuad)
+
+        # When animation finishes, restore opacity and start the download process
+        self.animation.finished.connect(lambda: self.finish_download_animation(opacity_effect, data))
+        self.animation.start(QAbstractAnimation.DeleteWhenStopped)
+
+    def finish_download_animation(self, effect, data):
+        effect.setOpacity(1)
+
+        # Determine the user's Downloads directory path
+        downloads_path = os.path.join(os.path.expanduser('~'), 'Downloads')
+
+        # Check if the Downloads directory exists, if not create one (this step might not be necessary in most cases)
+        if not os.path.exists(downloads_path):
+            os.makedirs(downloads_path)
+
+        # Construct the initial file path
+        base_filename = f'{data["name"]}.json'
+        file_path = os.path.join(downloads_path, base_filename)
+
+        # Modify the filename to avoid overwriting if it exists
+        counter = 1
+        while os.path.exists(file_path):
+            # Split the base filename into name and extension
+            name, ext = os.path.splitext(base_filename)
+            file_path = os.path.join(downloads_path, f'{name} ({counter}){ext}')
+            counter += 1
+
+        # Save the JSON data to the file
+        with open(file_path, 'w') as f:
+            json.dump(data, f, indent=4)
+
+        # Notify the user or perform any other action you want
+        print(f"Data saved to: {file_path}")
 
     def show_context_menu(self, position):
         menu = QtWidgets.QMenu(self)
@@ -415,33 +467,6 @@ class EmbeddingsTableDialog(BaseTableDialog):
             nn_symbols = reait_api.RE_nearest_symbols(embedding, self.model_name, self.nns)
             symbolsDialog = NearestSymbolsDialog(nn_symbols)
             symbolsDialog.exec_()
-
-    def save_json(self, data):
-        # Determine the user's Downloads directory path
-        downloads_path = os.path.join(os.path.expanduser('~'), 'Downloads')
-
-        # Check if the Downloads directory exists, if not create one (this step might not be necessary in most cases)
-        if not os.path.exists(downloads_path):
-            os.makedirs(downloads_path)
-
-        # Construct the initial file path
-        base_filename = f'{data["name"]}.json'
-        file_path = os.path.join(downloads_path, base_filename)
-
-        # Modify the filename to avoid overwriting if it exists
-        counter = 1
-        while os.path.exists(file_path):
-            # Split the base filename into name and extension
-            name, ext = os.path.splitext(base_filename)
-            file_path = os.path.join(downloads_path, f'{name} ({counter}){ext}')
-            counter += 1
-
-        # Save the JSON data to the file
-        with open(file_path, 'w') as f:
-            json.dump(data, f, indent=4)
-
-        # Notify the user or perform any other action you want
-        print(f"Data saved to: {file_path}")
 
 
 class NearestSymbolsDialog(BaseTableDialog):
