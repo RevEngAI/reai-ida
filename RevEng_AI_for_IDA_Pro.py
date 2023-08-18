@@ -460,6 +460,7 @@ class NearestSymbolsDialog(BaseTableDialog):
             btn = self.table.cellWidget(row_index, self.table.columnCount() - 1)
             if btn:
                 btn.clicked.connect(lambda checked, row=row_index: print(symbols_json[row]))
+                # todo: download similar function info
 
 
 class ScrollableMessageBox(QtWidgets.QDialog):
