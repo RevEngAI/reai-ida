@@ -6,6 +6,7 @@ from typing import Dict, Any, Union, List
 from revengai.configuration import Configuration
 from revengai.logger import plugin_logger
 from threading import Thread
+from pathlib import Path
 
 
 class Threader(Thread):
@@ -22,22 +23,21 @@ class Threader(Thread):
 
 class Endpoint:
     ep = {
-        "echo": (lambda: "/echo", requests.get),
+        "upload": (lambda: "/upload", requests.post),
+        "echo": (lambda: "/tags", requests.get),
         "get_models": (lambda: "/models", requests.get),
         "explain": (lambda: "/explain", requests.post),
-        "analyse": (lambda: "/upload", requests.post),
+        "analyse": (lambda: "/analyse", requests.post),
         "status": (lambda sha256hash: f"/analyse/status/{sha256hash}", requests.get),
         "delete": (lambda bin_id: f"/analyse/{bin_id}", requests.delete),
         "collections": (lambda: f"/collections", requests.get),
         "embeddings": (lambda bin_id: f"/embeddings/{bin_id}", requests.get),
         "nearest": (lambda: f"/ ann/symbol", requests.post),
-        "getid": (
-            lambda sha256hash: f"/search?search=sha_256_hash:{sha256hash}",
+        "search": (
+            lambda sha256hash: f"/search?search=sha_256_hash:{sha256hash}&state=All&user_owned=true",
             requests.get,
         ),
     }
-
-    cache = {}
 
     def __init__(self, configuration: Configuration) -> None:
         self._conf = configuration
@@ -48,15 +48,16 @@ class Endpoint:
         req: requests.request,
         endpoint: str,
         additional_headers: Dict = None,  # HTTP headers
-        data: bytes = None,  # POST form-encoded data
+        data: bytes = None,  # POST form-encoded data passed in body of POST request
         param: Dict = None,  # URL Parameters
+        json: any = None,  # JSON-serializable Python object to be passed as the request body
     ) -> None:
         """Make a request on another thread to ensure that this call is non-blocking
 
         Args:
-            req (requests.request): _description_
-            additional_headers (Dict, optional): _description_. Defaults to None.
-            param (_type_, optional): _description_. Defaults to None.
+            req (requests.request): The type of request, e.g. GET, POST, DELETE etc..
+            additional_headers (Dict, optional): Additional header to put in HTTP header
+            param (_type_, optional): _description_. Parameters to pass as part of the URL
         """
         conf = self._conf.config
         header = {"Authorization": f"{conf['key']}"}
@@ -69,6 +70,7 @@ class Endpoint:
                 "headers": header,
                 "data": data,
                 "params": param,
+                "json": json,
             },
         )
         self._runner.start()
@@ -103,7 +105,7 @@ class Endpoint:
         data: Dict = None,
         param: Dict = None,
     ) -> any:
-        self._request(r, ep, data=data, param=param)
+        self._request(r, ep, json=data, param=param)
         res: requests.Response = self._result(timeout)
         if res is not None:
             try:
@@ -114,28 +116,63 @@ class Endpoint:
         return None, 0
 
     def ping(self) -> Union[None, Dict]:
-        # TODO - The echo endpoint does not seem to work right now so just ignore it
-        # right now this just uses the collections endpoint and checks the status of
-        # the request
-        return self.collections()
+        return None
+        # return self._error_handle_request(self.ep["echo"][1], self.ep["echo"][0](), 5)
 
     def upload(
         self, data: bytes, file_name: str
     ) -> Union[None, Dict[str, Union[str, int]]]:
         param = {"file_name": file_name, "model": self._conf.config["current_model"]}
         return self._error_handle_request(
-            self.ep["analyse"][1], self.ep["analyse"][0](), data=data, param=param
+            self.ep["upload"][1],
+            self.ep["upload"][0](),
+            5,
+            data=data,
+            param=param,
+        )
+
+    def analyze(
+        self, file_name: str, hash: str, data: bytes
+    ) -> Union[None, Dict[str, Union[str, int]]]:
+        """Request full analysis.
+
+        Args:
+            fp (str): Absolute file path to binary
+            hash (str): SHA256 of the file
+
+        Returns:
+            Union[None, Dict[str, Union[str, int]]]: _description_
+        """
+        params = {
+            "file_name": file_name,
+            "sha_256_hash": hash,
+            "model_name": self._conf.config["current_model"],
+            # "isa_options": None,
+            # "platform_options": None,
+            # "file_options": None,
+            # "dynamic_execution": False,
+            # "command_line_args": None,
+            # "scope": None,
+            # "tags": None,
+            # "priority": 0,
+        }
+
+        # TODO - Fix analyse endpoint call
+
+        plugin_logger.debug(f"{params}")
+
+        return self._error_handle_request(
+            self.ep["analyse"][1], self.ep["analyse"][0](), 5, data=params, param=None
         )
 
     def collections(self) -> Union[None, Dict[str, Union[str, int]]]:
         return self._error_handle_request(
-            self.ep["collections"][1], self.ep["collections"][0]()
+            self.ep["collections"][1], self.ep["collections"][0](), 5
         )
 
     def delete(self, bin_id) -> Union[None, Dict[str, Union[str, int]]]:
         return self._error_handle_request(
-            self.ep["delete"][1],
-            self.ep["delete"][0](bin_id),
+            self.ep["delete"][1], self.ep["delete"][0](bin_id), 5
         )
 
     def get_symbol_embeddings(
@@ -144,8 +181,7 @@ class Endpoint:
     ) -> Union[None, Dict[str, Union[str, int]]]:
         # Returns a list of function embeddings for the binary or 400 ret code
         return self._error_handle_request(
-            self.ep["embeddings"][1],
-            self.ep["embeddings"][0](bin_id),
+            self.ep["embeddings"][1], self.ep["embeddings"][0](bin_id), 5
         )
 
     def get_symbol_nearest(
@@ -169,6 +205,7 @@ class Endpoint:
         return self._error_handle_request(
             self.ep["nearest"][1],
             self.ep["nearest"][0](),
+            5,
             data=json.dumps(embeddings),
             param=params,
         )
@@ -180,8 +217,7 @@ class Endpoint:
             Union[None, List[str]]: If successful a list of models or None if any errors.
         """
         return self._error_handle_request(
-            self.ep["get_models"][1],
-            self.ep["get_models"][0](),
+            self.ep["get_models"][1], self.ep["get_models"][0](), 5
         )
 
     def explain(self, decomp_data) -> Union[None, Dict[str, Union[str, int]]]:
@@ -193,30 +229,25 @@ class Endpoint:
             data=decomp_data,
         )
 
-    def get_id(self, hash) -> Union[None, int]:
+    def get_analysis_ids(self, hash) -> Union[None, list]:
         """
         Gets the ID for the binary from the endpoint.
         """
-        if hash in Endpoint.cache.keys():
-            plugin_logger.info(
-                f"found cached id for hash{hash} of {Endpoint.cache[hash]}"
-            )
-            return Endpoint.cache[hash]
 
         # get id matching to hash
         js, resp = self._error_handle_request(
-            self.ep["getid"][1], self.ep["getid"][0](hash)
+            self.ep["search"][1], self.ep["search"][0](hash), 5
         )
 
+        # analyses
+        analyses = []
+
         if resp.status_code == 200:
+            plugin_logger.info(f"got {len(js['binaries'])} binaries back")
             for bin in js["binaries"]:
                 if hash == bin["sha_256_hash"]:
-                    # found the right one
-                    bin_id = bin["binary_details"][0]["binary_id"]
-                    Endpoint.cache[hash] = bin_id
-                    plugin_logger.info(f"caching id {bin_id} for hash {hash}")
-                    return bin_id
-            ida_kernwin.warning(f"Did not find matching hash from endpoint")
+                    analyses.append(bin)
+            return analyses
         else:
             ida_kernwin.warning(f"error response from endpoint")
         return None

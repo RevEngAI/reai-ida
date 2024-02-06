@@ -2,26 +2,6 @@ import ida_kernwin
 import os
 
 
-class FunctionRename(ida_kernwin.Form):
-    class chooser(ida_kernwin.Choose):
-        def __init__(self, title):
-            ida_kernwin.Choose.__init__(
-                self, title, [["Function", 10], ["Confidence", 10], ["From", 10]]
-            )
-
-    def __init__(self, form, controls):
-        self.invert = False
-        f = ida_kernwin.Form
-        f.__init__(
-            self,
-            r"""
-RevEng.AI Function Renaming
-<Functions: {funcChooser}>
-<#Refresh#~Re~fresh:{btnRefresh}>
-""",
-        )
-
-
 class busy_form_t(ida_kernwin.Form):
     class test_chooser_t(ida_kernwin.Choose):
         """
@@ -32,7 +12,10 @@ class busy_form_t(ida_kernwin.Form):
             ida_kernwin.Choose.__init__(
                 self,
                 title,
-                [["Address", 10], ["Name", 30]],
+                [
+                    ["Address", 10 | ida_kernwin.Choose.CHCOL_HEX],
+                    ["Name", 30 | ida_kernwin.Choose.CHCOL_HEX],
+                ],
                 flags=flags,
                 embedded=True,
                 width=30,

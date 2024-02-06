@@ -168,6 +168,12 @@ class ExplainFunctionHandler(ida_kernwin.action_handler_t):
     def __init__(self, endpoint: Endpoint):
         ida_kernwin.action_handler_t.__init__(self)
         self._endpoint = endpoint
+        #
+        # TODO - Ignore this for now and just finish implementing the
+        # function renaming given collections / regex search / limit search by number
+        # confidence slider thingy too!
+        #
+        #
 
     def activate(self, ctx):
         location = ida_kernwin.get_screen_ea()
@@ -256,6 +262,7 @@ class UploadBinaryHandler(ida_kernwin.action_handler_t):
                         data = open(fp, "rb").read()
                         j, resp = self._endpoint.upload(data, pobj.name)
                         if j and resp.status_code == 200:
+                            # upload the file to the remote endpoint
                             assert (
                                 j["sha_256_hash"]
                                 == hexlify(
@@ -263,6 +270,20 @@ class UploadBinaryHandler(ida_kernwin.action_handler_t):
                                 ).decode()
                             )
                             self._upload_view.insert_entry(fp)
+
+                            # The endpoint differentiates different
+                            # types of analysis requested so for
+                            # each new analysis we need to store a new
+                            # 'ID' for each of these.
+
+                            # Currently there is no way to specialise
+                            # the type of analysis done so when we
+                            # upload we request a full analysis of
+                            # the uploaded binary.
+
+                            Dialog.ok_box("File uploaded successfully!")
+                            # the user still needs to send the file for analysis!
+
                         else:
                             warning("Failed to upload, see debug log")
                     else:

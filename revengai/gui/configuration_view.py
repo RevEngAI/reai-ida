@@ -88,11 +88,13 @@ class ConfigurationView:
         # TODO - if the user enters data directly in to the fields and then clicks check WITHOUT doing Update before
         # this will then fail as the config has yet to be updated via a call to 'Update'
         if self._configdata.is_valid():
-            json, resp = self._endpoint.ping()
-            if resp.status_code == 200:
-                Dialog.ok_box("OK!")
-            else:
-                Dialog.ok_box(f"Failed - response {json} code {resp.status_code}")
+            # json, resp = self._endpoint.ping()
+            # if resp.status_code == 200:
+            #     Dialog.ok_box("OK!")
+            # Dialog.ok_box("Not implemented")
+            # else:
+            #     Dialog.ok_box(f"Failed - response {json} code {resp.status_code}")
+            Dialog.ok_box("Not implemented")
         else:
             idaapi.warning("Configuration is not set or valid")
 
