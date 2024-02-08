@@ -227,7 +227,23 @@ class ConfigurationHandler(ida_kernwin.action_handler_t):
 
     def update(self, ctx):
         return ida_kernwin.AST_ENABLE_ALWAYS
+    
+class RequestAnalysis(ida_kernwin.Form):
+    def __init__(self):
+        self.invert = False
+        F = ida_kernwin.Form
+        F.__init__(
+            self,
+            r"""STARTITEM 0
+BUTTON YES* Yes
+BUTTON CANCEL No
+Analysis
 
+
+Request analysis of file also?
+                """,
+                {},
+        )
 
 class UploadBinaryHandler(ida_kernwin.action_handler_t):
     MAX_FILE_SIZE_UPLOAD_BYTES = 16000000  # 1MB = 1000 bytes
@@ -243,9 +259,18 @@ class UploadBinaryHandler(ida_kernwin.action_handler_t):
 
     def activate(self, ctx):
         plugin_logger.info("Upload button pressed")
+        request_analysis = False
         # check file is opened in the database
         # then attempt to read the file from disk
         # then issue API call using key to endpoint to submit it
+
+        # check if user wants to request analysis
+        ra = RequestAnalysis()
+        ra.Compile()
+        ok = ra.Execute()
+        if ok == 1:
+            request_analysis = True
+        
         fp = idaapi.get_input_file_path()
         plugin_logger.debug(
             f"input file is {fp} with hash {hexlify(ida_nalt.retrieve_input_file_sha256()).decode()}"
@@ -260,7 +285,7 @@ class UploadBinaryHandler(ida_kernwin.action_handler_t):
                         <= UploadBinaryHandler.MAX_FILE_SIZE_UPLOAD_BYTES
                     ):
                         data = open(fp, "rb").read()
-                        j, resp = self._endpoint.upload(data, pobj.name)
+                        j, resp = self._endpoint.upload(data)
                         if j and resp.status_code == 200:
                             # upload the file to the remote endpoint
                             assert (
@@ -271,19 +296,20 @@ class UploadBinaryHandler(ida_kernwin.action_handler_t):
                             )
                             self._upload_view.insert_entry(fp)
 
-                            # The endpoint differentiates different
-                            # types of analysis requested so for
-                            # each new analysis we need to store a new
-                            # 'ID' for each of these.
-
-                            # Currently there is no way to specialise
-                            # the type of analysis done so when we
-                            # upload we request a full analysis of
-                            # the uploaded binary.
-
                             Dialog.ok_box("File uploaded successfully!")
                             # the user still needs to send the file for analysis!
 
+                            if request_analysis:
+                                # send request to trigger analysis of file
+                                json, resp = self._endpoint.analyze(pobj.name, j["sha_256_hash"])
+                                if resp.status_code == 200:
+                                    Dialog.ok_box(f"{json['success']} - Binary ID {json['binary_id']}")
+
+                                    # update current context with selected analysis id
+                                    self._endpoint._conf.context["selected_analysis"] = json["binary_id"]
+                                else:
+                                    plugin_logger.error(f"Failed to submit file for analysis {json}")
+                                    warning("Failed to submit file for analysis, see log")
                         else:
                             warning("Failed to upload, see debug log")
                     else:

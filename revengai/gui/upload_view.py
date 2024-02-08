@@ -39,14 +39,14 @@ class StatusForm(ida_kernwin.Form):
             self.items = items
 
         def OnGetLine(self, n):
-            print(f"getline {n}")
+            plugin_logger.debug(f"getline {n}")
             return self.items[n]
 
         def OnGetSize(
             self,
         ):
             n = len(self.items)
-            print(f"getsizeo {n}")
+            plugin_logger.debug(f"getsizeof {n}")
             return n
 
     def __init__(self, items):
@@ -176,17 +176,17 @@ class UploadView:
 
         with open(idaapi.get_input_file_path(), "rb") as f:
             data = f.read()
-            json, resp = self._endpoint.analyze(name, hash, data)
+            json, resp = self._endpoint.analyze(name, hash)
             if resp.status_code != 200:
                 plugin_logger.error(f"Failed to submit file for analysis {json}")
                 warning(f"Failed to submit file for analysis, see log")
             else:
                 # check return and show msg to user
-                assert "success" in json.keys() and json["success"] is True
+                # assert "success" in json.keys() and json["binary_id"]  in json.keys()
                 Dialog.ok_box(f"{json['success']}")
 
                 # update current context with the selected analysis id
-                self._configuration.context["selected_analysis"] = json["analysis_id"]
+                self._configuration.context["selected_analysis"] = json["binary_id"]
 
     def draw_context_menu(self, pos) -> None:
         # highlight row

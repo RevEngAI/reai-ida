@@ -104,8 +104,14 @@ class Endpoint:
         timeout: int,
         data: Dict = None,
         param: Dict = None,
-    ) -> any:
-        self._request(r, ep, json=data, param=param)
+        json: Dict = None,
+    ) -> any: # json / response object
+        
+        # both json and data are used in the post body so we cannot have both
+        # used at the same time
+
+        assert(data == None or json == None)
+        self._request(r, ep, json=json, param=param, data=data)
         res: requests.Response = self._result(timeout)
         if res is not None:
             try:
@@ -114,26 +120,20 @@ class Endpoint:
             except requests.JSONDecodeError as jde:
                 plugin_logger.error(str(jde))
         return None, 0
-
-    def ping(self) -> Union[None, Dict]:
-        return None
-        # return self._error_handle_request(self.ep["echo"][1], self.ep["echo"][0](), 5)
+    
 
     def upload(
-        self, data: bytes, file_name: str
+        self, data: bytes
     ) -> Union[None, Dict[str, Union[str, int]]]:
-        param = {"file_name": file_name, "model": self._conf.config["current_model"]}
         return self._error_handle_request(
             self.ep["upload"][1],
             self.ep["upload"][0](),
             5,
             data=data,
-            param=param,
         )
 
     def analyze(
-        self, file_name: str, hash: str, data: bytes
-    ) -> Union[None, Dict[str, Union[str, int]]]:
+        self, file_name: str, hash: str) -> Union[None, Dict[str, Union[str, int]]]:
         """Request full analysis.
 
         Args:
@@ -157,12 +157,10 @@ class Endpoint:
             # "priority": 0,
         }
 
-        # TODO - Fix analyse endpoint call
-
-        plugin_logger.debug(f"{params}")
+        plugin_logger.debug(f"params for analysis {params}")
 
         return self._error_handle_request(
-            self.ep["analyse"][1], self.ep["analyse"][0](), 5, data=params, param=None
+            self.ep["analyse"][1], self.ep["analyse"][0](), 5, json=params, param=None
         )
 
     def collections(self) -> Union[None, Dict[str, Union[str, int]]]:

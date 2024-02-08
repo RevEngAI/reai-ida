@@ -17,7 +17,7 @@ from revengai.configuration import Configuration
 class ContextHook(idaapi.UI_Hooks):
     """
     This deals with adding buttons to the context menu (right-click menu) within
-    the pseudocode view. The buttons do not appear when right-clicking on other views.
+    the various view, pseudocode, disassembly and proximity view
     """
 
     def __init__(
@@ -42,7 +42,7 @@ class ContextHook(idaapi.UI_Hooks):
         on the pseudocode view.
         """
         t = idaapi.get_widget_type(widget)
-        if t == idaapi.BWN_PSEUDOCODE and self.plugin_configuration.is_valid():
+        if (t == idaapi.BWN_PSEUDOCODE or t == idaapi.BWN_DISASM) and self.plugin_configuration.is_valid():
             current_file_info = {
                 "hash": hexlify(ida_nalt.retrieve_input_file_sha256()).decode()
             }
