@@ -8,6 +8,7 @@ from revengai.handler import (
     UploadBinaryHandler,
     RenameFunctionHandler,
     ExplainFunctionHandler,
+    RenameFileHandler,
 )
 from revengai.gui.upload_view import UploadView
 from revengai.api import Endpoint
@@ -42,10 +43,10 @@ class ContextHook(idaapi.UI_Hooks):
         on the pseudocode view.
         """
         t = idaapi.get_widget_type(widget)
-        if (t == idaapi.BWN_PSEUDOCODE or t == idaapi.BWN_DISASM) and self.plugin_configuration.is_valid():
-            current_file_info = {
-                "hash": hexlify(ida_nalt.retrieve_input_file_sha256()).decode()
-            }
+        if (
+            t == idaapi.BWN_PSEUDOCODE or t == idaapi.BWN_DISASM
+        ) and self.plugin_configuration.is_valid():
+            current_file_info = {"hash": hexlify(ida_nalt.retrieve_input_file_sha256()).decode()}
             CONTEXT_MENU = "RevEng.AI/"
 
             # The upload handler needs the current upload view to add the
@@ -56,14 +57,20 @@ class ContextHook(idaapi.UI_Hooks):
                 UploadBinaryHandler(self.upload_view, self._endpoint),
             )
 
-            action_name_rename_func = idaapi.action_desc_t(
+            # action_name_rename_func = idaapi.action_desc_t(
+            #     None,
+            #     "Rename Functions",
+            #     RenameFunctionHandler(
+            #         self._form,
+            #         self._endpoint,
+            #         current_file_info,
+            #     ),
+            # )
+
+            action_name_rename_file = idaapi.action_desc_t(
                 None,
-                "Rename...",
-                RenameFunctionHandler(
-                    self._form,
-                    self._endpoint,
-                    current_file_info,
-                ),
+                "Rename Function...",
+                RenameFileHandler(self.plugin_configuration),
             )
 
             action_name_explain_func = idaapi.action_desc_t(
@@ -78,12 +85,16 @@ class ContextHook(idaapi.UI_Hooks):
                 idaapi.SETMENU_INS,
             )
 
+            # idaapi.attach_dynamic_action_to_popup(
+            #     widget,
+            #     popup_handle,
+            #     action_name_rename_func,
+            #     CONTEXT_MENU,
+            #     idaapi.SETMENU_INS,
+            # )
+
             idaapi.attach_dynamic_action_to_popup(
-                widget,
-                popup_handle,
-                action_name_rename_func,
-                CONTEXT_MENU,
-                idaapi.SETMENU_INS,
+                widget, popup_handle, action_name_rename_file, CONTEXT_MENU, idaapi.SETMENU_INS
             )
 
             idaapi.attach_dynamic_action_to_popup(

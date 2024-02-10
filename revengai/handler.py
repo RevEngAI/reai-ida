@@ -7,6 +7,7 @@ import ida_hexrays
 import ida_lines
 import ida_ua
 import idautils
+from PyQt5 import QtCore, QtWidgets
 from binascii import hexlify
 from pathlib import Path
 from typing import Dict, Union, Tuple
@@ -16,6 +17,71 @@ from revengai.logger import plugin_logger
 from revengai.api import Endpoint
 from revengai.gui.dialog import Dialog
 from revengai.gui.upload_view import UploadView
+from revengai.configuration import Configuration
+
+
+class FileRename(ida_kernwin.Form):
+    class FileRenameChooser(ida_kernwin.Choose):
+        def __init__(
+            self,
+            title,
+            items,
+            flags=ida_kernwin.Choose.CH_MULTI,
+        ):
+            ida_kernwin.Choose.__init__(
+                self,
+                title,
+                [
+                    ["File name", 20],
+                    ["analysis id", 5],
+                    ["status", 5],
+                    ["submitted", 5],
+                ],
+                flags,
+                embedded=True,
+                width=30,
+                height=10,
+            )
+            self.items = items
+
+        def OnGetLine(self, n):
+            plugin_logger.debug(f"getline {n}")
+            return self.items[n]
+
+        def OnGetSize(
+            self,
+        ):
+            n = len(self.items)
+            plugin_logger.debug(f"getsizeof {n}")
+            return n
+
+    def __init__(self, items):
+        self.invert = False
+        F = ida_kernwin.Form
+        F.__init__(
+            self,
+            r"""STARTITEM 0
+BUTTON Yes* Select
+BUTTON CANCEL Cancel
+Analysis
+
+{OnChangeFormCallback}
+<:{Analysis}>
+
+                """,
+            {
+                "Analysis": F.EmbeddedChooserControl(
+                    StatusForm.StatusFormChooser("Analysis Tasks", items)
+                ),
+                "OnChangeFormCallback": F.FormChangeCb(self.OnFormChange),
+            },
+        )
+
+    def OnFormChange(self, fid):
+        """
+        Triggered when an event occurs on form
+        """
+        return 1
 
 
 class FunctionRename(ida_kernwin.Form):
@@ -87,6 +153,209 @@ RevEng.AI Function Renaming
         return selection
 
 
+class RenameFileHandlerDialog(QtWidgets.QDialog):
+    def __init__(self, pluging_configuration: Configuration, embeddings: dict):
+        super(RenameFileHandlerDialog, self).__init__()
+
+        # set size and geometry stuff
+        screen = QtWidgets.QDesktopWidget().screenGeometry()
+        self.setGeometry(0, 0, screen.width() * 0.5, screen.height() * 0.5)
+        self.move(
+            screen.width() // 2 - self.width() // 2, screen.height() // 2 - self.height() // 2
+        )
+
+        # The assumed format for this is { 'collection_name': [embeddings_info]}
+        #
+        # Assumes self.embeddings is of the form
+        # { 'collection_name': [{'function': <data>, 'confidence': <data>}] }
+        #
+        self.embeddings = embeddings
+
+        layout = QtWidgets.QVBoxLayout()
+
+        # self.list = QtWidgets.QListWidget()
+
+        # table views
+        self.func_table = QtWidgets.QTableWidget()
+        self.func_table.setColumnCount(3)
+
+        # no grid
+        self.func_table.setShowGrid(False)
+
+        # selections are done across the whole row
+        self.func_table.setSelectionBehavior(QtWidgets.QTableWidget.SelectionBehavior.SelectRows)
+
+        # rows are clickable for selection
+        self.func_table.setFocusPolicy(QtCore.Qt.FocusPolicy.ClickFocus)
+
+        # headers
+        self.func_table.setHorizontalHeaderLabels(["Function", "Confidence", "Collection"])
+
+        # non-editable
+        self.func_table.setEditTriggers(QtWidgets.QTableWidget.EditTrigger.NoEditTriggers)
+
+        # single-selection
+        self.func_table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+
+        # stretch to fill space
+        self.func_table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
+
+        # fill table with initial data
+        if embeddings:
+            self.update_table("All")
+
+        # collection selection
+        self.collection_selection = QtWidgets.QComboBox()
+        self.collection_selection.addItems(["All"])
+
+        # register call back to fire only when a change has occured!
+        self.collection_selection.currentIndexChanged.connect(self.user_collection_select)
+
+        # set layout for the collection combom bpx
+        collection_selection_layout = QtWidgets.QHBoxLayout()
+        collection_selection_layout.addWidget(self.collection_selection)
+
+        # collection drop-down group box
+        collection_group_box = QtWidgets.QGroupBox("Collections")
+        collection_group_box.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignLeft
+        )  # Does not seem to have any effect
+
+        # add Combo drop down box with horizontal box layout to group box
+        collection_group_box.setLayout(collection_selection_layout)
+
+        # buttons
+        buttonBox = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Cancel)
+        rename_function = QtWidgets.QPushButton(
+            "Rename Function",
+        )
+        rename_file = QtWidgets.QPushButton("Rename File")
+        buttonBox.addButton(rename_function, QtWidgets.QDialogButtonBox.ActionRole)
+        buttonBox.addButton(rename_file, QtWidgets.QDialogButtonBox.ActionRole)
+
+        buttonBox.clicked.connect(self.clicked)
+        buttonBox.rejected.connect(self.reject)
+
+        # layout for the slider and confidence label
+        confidence_layout = QtWidgets.QHBoxLayout()
+
+        # group box
+        confidence_group_box = QtWidgets.QGroupBox("Confidence Level")
+        confidence_group_box.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignLeft
+        )  # Does not seem to have any effect
+
+        # slider
+        slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        slider.setSingleStep(1)
+        slider.setPageStep(10)
+        slider.setMinimum(0)
+        slider.setMaximum(100)
+        slider.setValue(100)
+        slider.setTickPosition(QtWidgets.QSlider.TicksBelow)
+        slider.setTickInterval(10)
+        slider.valueChanged.connect(self.slider_change)
+
+        # label
+        self.confidence_level = QtWidgets.QLineEdit()
+        self.confidence_level.setReadOnly(True)
+        self.confidence_level.setText(str(slider.value()))
+
+        confidence_layout.addWidget(self.confidence_level)
+        confidence_layout.addWidget(slider)
+
+        # set stretch ratios between slider and text
+        confidence_layout.setStretch(0, 1)
+        confidence_layout.setStretch(1, 10)
+
+        confidence_group_box.setLayout(confidence_layout)
+
+        # add widgets
+        layout.addWidget(self.func_table)
+        layout.addWidget(collection_group_box)
+        layout.addWidget(confidence_group_box)
+        layout.addWidget(buttonBox)
+
+        self.setLayout(layout)
+
+    def slider_change(self, value):
+        # plugin_logger.info(f"slider value {value}")
+        self.confidence_level.setText(str(value))
+
+    def reject(self):
+        # close window if the user selects cancel
+        plugin_logger.info("reject")
+        super().reject()
+
+    def clicked(self, button):
+        # Called before action-specifc handlers are called
+        if "function" in button.text().lower():
+            # check user has selected a function in the list
+            item = self.func_table.selectedItems()
+            if len(item) > 0:
+                plugin_logger.info(
+                    f"clicked {button.text()} - user selected function {item[0].text()}"
+                )
+                # TODO - Do the stuff in IDA now to now rename the given function
+            else:
+                warning("No function selected!")
+        elif "file" in button.text().lower():
+            # check user has selected a collection from the drop down
+            if self.collection_selection.currentText() == "All":
+                warning("Select a collection first!")
+            else:
+                # TODO - Do some stuff in IDA to now rename ALL the functions given the selected collection
+                pass
+        else:
+            plugin_logger.info(f"clicked {button.text()}")
+
+    def user_collection_select(self, idx):
+        # called whenever the user select an item in the drop-down
+        # and it is different from the previous selection
+        text = self.collection_selection.itemText(idx)
+        plugin_logger.info(f"user selected {text}")
+        self.update_table(text)
+
+    def update_table(self, sel: str) -> None:
+        # update the table given the selection text value which is the collection
+        # that the user has selected.
+
+        self.func_table.clear()
+        self.func_table.setRowCount(0)
+
+        if sel.lower() == "all":
+            self.func_table.setRowCount(sum(len(v) for v in self.embeddings.values()))
+
+            # update the table with all of the embeddings
+            def create(idx: int, item: dict, collection: str):
+                self.func_table.setItem(idx, 0, QtWidgets.QTableWidgetItem(item["function"]))
+                self.func_table.setItem(idx, 1, QtWidgets.QTableWidgetItem(str(item["confidence"])))
+                self.func_table.setItem(idx, 1, QtWidgets.QTableWidgetItem(collection))
+
+            [create(i, x, k) for i, (k, v) in enumerate(self.embeddings.items()) for x in v]
+
+        else:
+            self.func_table.setRowCount(len(self.embeddings[sel]))
+            [create(i, v, sel) for i, v in enumerate(self.embeddings[sel])]
+
+
+class RenameFileHandler(ida_kernwin.action_handler_t):
+    def __init__(self, conf: Configuration) -> None:
+        ida_kernwin.action_handler_t.__init__(self)
+        self._config = conf
+
+    def activate(self, ctx) -> None:
+        if (
+            "selected_analysis" in self._config.context.keys()
+            and self._config.context["selected_analysis"] is not None
+        ):
+            # TODO - send request here to the endpoint with the analysis ID to pull back nearest neighbours
+            f = RenameFileHandlerDialog(self._config, None)
+            f.exec()
+        else:
+            warning("No analysis ID selected - Select an analysis or send file for analysis!")
+
+
 class RenameFunctionHandler(ida_kernwin.action_handler_t):
     # TODO - hook this up to function rename window
     def __init__(self, form, endpoint: Endpoint, current_file_info: dict) -> None:
@@ -109,8 +378,7 @@ class RenameFunctionHandler(ida_kernwin.action_handler_t):
                     display_data = self.api_get_nearest_symbol(fs[idx]["embedding"])
                     if display_data:
                         data = [
-                            [x["name"], str(x["distance"]), x["binary_name"]]
-                            for x in display_data
+                            [x["name"], str(x["distance"]), x["binary_name"]] for x in display_data
                         ]
                         plugin_logger.info(f"{data}")
                         f = FunctionRename.show(data)
@@ -152,15 +420,11 @@ class RenameFunctionHandler(ida_kernwin.action_handler_t):
 
     def api_get_nearest_symbol(self, func_embedding: list) -> Union[dict, None]:
         # make the request and format data to give it back to the form
-        js, response = self._endpoint.get_symbol_nearest(
-            self.current_file["hash"], func_embedding
-        )
+        js, response = self._endpoint.get_symbol_nearest(self.current_file["hash"], func_embedding)
         if response.status_code == 200:
             return js
         else:
-            warning(
-                f"Failed getting nearest neighbours for function, see logger output"
-            )
+            warning(f"Failed getting nearest neighbours for function, see logger output")
         return None
 
 
@@ -204,9 +468,7 @@ class ExplainFunctionHandler(ida_kernwin.action_handler_t):
                 if resp.status_code == 200:
                     ida_funcs.set_func_cmd(location, js["explanation"])
             else:
-                warning(
-                    f"Response code {resp.status_code} - see log for further details"
-                )
+                warning(f"Response code {resp.status_code} - see log for further details")
 
     def update(self, ctx):
         return ida_kernwin.AST_ENABLE_ALWAYS
@@ -227,7 +489,8 @@ class ConfigurationHandler(ida_kernwin.action_handler_t):
 
     def update(self, ctx):
         return ida_kernwin.AST_ENABLE_ALWAYS
-    
+
+
 class RequestAnalysis(ida_kernwin.Form):
     def __init__(self):
         self.invert = False
@@ -242,8 +505,9 @@ Analysis
 
 Request analysis of file also?
                 """,
-                {},
+            {},
         )
+
 
 class UploadBinaryHandler(ida_kernwin.action_handler_t):
     MAX_FILE_SIZE_UPLOAD_BYTES = 16000000  # 1MB = 1000 bytes
@@ -270,7 +534,7 @@ class UploadBinaryHandler(ida_kernwin.action_handler_t):
         ok = ra.Execute()
         if ok == 1:
             request_analysis = True
-        
+
         fp = idaapi.get_input_file_path()
         plugin_logger.debug(
             f"input file is {fp} with hash {hexlify(ida_nalt.retrieve_input_file_sha256()).decode()}"
@@ -280,19 +544,14 @@ class UploadBinaryHandler(ida_kernwin.action_handler_t):
             if fp is not None:
                 pobj = Path(fp)
                 if Path.exists(pobj):
-                    if (
-                        pobj.stat().st_size
-                        <= UploadBinaryHandler.MAX_FILE_SIZE_UPLOAD_BYTES
-                    ):
+                    if pobj.stat().st_size <= UploadBinaryHandler.MAX_FILE_SIZE_UPLOAD_BYTES:
                         data = open(fp, "rb").read()
                         j, resp = self._endpoint.upload(data)
                         if j and resp.status_code == 200:
                             # upload the file to the remote endpoint
                             assert (
                                 j["sha_256_hash"]
-                                == hexlify(
-                                    ida_nalt.retrieve_input_file_sha256()
-                                ).decode()
+                                == hexlify(ida_nalt.retrieve_input_file_sha256()).decode()
                             )
                             self._upload_view.insert_entry(fp)
 
@@ -303,12 +562,18 @@ class UploadBinaryHandler(ida_kernwin.action_handler_t):
                                 # send request to trigger analysis of file
                                 json, resp = self._endpoint.analyze(pobj.name, j["sha_256_hash"])
                                 if resp.status_code == 200:
-                                    Dialog.ok_box(f"{json['success']} - Binary ID {json['binary_id']}")
+                                    Dialog.ok_box(
+                                        f"{json['success']} - Binary ID {json['binary_id']}"
+                                    )
 
                                     # update current context with selected analysis id
-                                    self._endpoint._conf.context["selected_analysis"] = json["binary_id"]
+                                    self._endpoint._conf.context["selected_analysis"] = json[
+                                        "binary_id"
+                                    ]
                                 else:
-                                    plugin_logger.error(f"Failed to submit file for analysis {json}")
+                                    plugin_logger.error(
+                                        f"Failed to submit file for analysis {json}"
+                                    )
                                     warning("Failed to submit file for analysis, see log")
                         else:
                             warning("Failed to upload, see debug log")
