@@ -31,8 +31,8 @@ class Endpoint:
         "status": (lambda sha256hash: f"/analyse/status/{sha256hash}", requests.get),
         "delete": (lambda bin_id: f"/analyse/{bin_id}", requests.delete),
         "collections": (lambda: f"/collections", requests.get),
-        "embeddings": (lambda bin_id: f"/embeddings/{bin_id}", requests.get),
-        "nearest": (lambda: f"/ ann/symbol", requests.post),
+        "embeddings": (lambda bin_id: f"/analyse/functions/{bin_id}", requests.get),
+        "nearest": (lambda: f"/ann/symbol", requests.post),
         "search": (
             lambda sha256hash: f"/search?search=sha_256_hash:{sha256hash}&state=All&user_owned=true",
             requests.get,
@@ -50,7 +50,7 @@ class Endpoint:
         additional_headers: Dict = None,  # HTTP headers
         data: bytes = None,  # POST form-encoded data passed in body of POST request
         param: Dict = None,  # URL Parameters
-        json: any = None,  # JSON-serializable Python object to be passed as the request body
+        json: any = None,  # JSON-serializable Python object to be passed as the POST body
     ) -> None:
         """Make a request on another thread to ensure that this call is non-blocking
 
@@ -103,28 +103,29 @@ class Endpoint:
         ep: str,
         timeout: int,
         data: Dict = None,
-        param: Dict = None,
+        urlparam: Dict = None,
         json: Dict = None,
-    ) -> any: # json / response object
-        
+    ) -> any:  # json / response object
+
         # both json and data are used in the post body so we cannot have both
         # used at the same time
 
-        assert(data == None or json == None)
-        self._request(r, ep, json=json, param=param, data=data)
+        assert data == None or json == None
+        self._request(r, ep, json=json, param=urlparam, data=data)
         res: requests.Response = self._result(timeout)
         if res is not None:
             try:
+                plugin_logger.debug(f"Req URL {res.request.url}")
+                plugin_logger.debug(f"Req Headers {res.request.headers}")
+                plugin_logger.debug(f"Req Body {res.request.body}")
+                plugin_logger.debug(f"Req Method {res.request.method}")
                 plugin_logger.info(f"response {res.content} code {res.status_code}")
                 return res.json(), res
             except requests.JSONDecodeError as jde:
                 plugin_logger.error(str(jde))
         return None, 0
-    
 
-    def upload(
-        self, data: bytes
-    ) -> Union[None, Dict[str, Union[str, int]]]:
+    def upload(self, data: bytes) -> Union[None, Dict[str, Union[str, int]]]:
         return self._error_handle_request(
             self.ep["upload"][1],
             self.ep["upload"][0](),
@@ -132,8 +133,7 @@ class Endpoint:
             data=data,
         )
 
-    def analyze(
-        self, file_name: str, hash: str) -> Union[None, Dict[str, Union[str, int]]]:
+    def analyze(self, file_name: str, hash: str) -> Union[None, Dict[str, Union[str, int]]]:
         """Request full analysis.
 
         Args:
@@ -160,18 +160,14 @@ class Endpoint:
         plugin_logger.debug(f"params for analysis {params}")
 
         return self._error_handle_request(
-            self.ep["analyse"][1], self.ep["analyse"][0](), 5, json=params, param=None
+            self.ep["analyse"][1], self.ep["analyse"][0](), 5, json=params, urlparam=None
         )
 
     def collections(self) -> Union[None, Dict[str, Union[str, int]]]:
-        return self._error_handle_request(
-            self.ep["collections"][1], self.ep["collections"][0](), 5
-        )
+        return self._error_handle_request(self.ep["collections"][1], self.ep["collections"][0](), 5)
 
     def delete(self, bin_id) -> Union[None, Dict[str, Union[str, int]]]:
-        return self._error_handle_request(
-            self.ep["delete"][1], self.ep["delete"][0](bin_id), 5
-        )
+        return self._error_handle_request(self.ep["delete"][1], self.ep["delete"][0](bin_id), 5)
 
     def get_symbol_embeddings(
         self,
@@ -186,17 +182,35 @@ class Endpoint:
         self,
         hash,
         embeddings,
-        nns: int = 5,
         collections: list = None,
         ignore_hashes: list = None,
     ) -> Union[None, Dict[str, Union[str, int]]]:
+        """Get the nearest neighbours given a function embedding.
+        By default ignores the hash the current file opened.
+
+        Currently it only searches for the top 100
+
+        Args:
+            hash (bool): SHA-256 of currently opened file
+            embeddings (_type_): Embedding of function user has selected
+            collections (list, optional): A specific collection that a user has specified to search.
+            Defaults to None.
+            ignore_hashes (list, optional): A list of other binary hashes to ignore embeddings from.
+            Defaults to None.
+
+        Returns:
+            Union[None, Dict[str, Union[str, int]]]: _description_
+        """
+
         params = {
-            "nns": nns,
             "model_name": self._conf.config["current_model"],
+            "nns": 100,
             "ignore_hashes": [hash],
         }
+
         if collections:
-            params["collections"] = collections
+            params["collection"] = "|".join(collections)
+
         if ignore_hashes:  # by default we block finding functions in our own binary
             params[ignore_hashes].append(ignore_hashes)
 
@@ -204,8 +218,8 @@ class Endpoint:
             self.ep["nearest"][1],
             self.ep["nearest"][0](),
             5,
-            data=json.dumps(embeddings),
-            param=params,
+            data=embeddings,  # just send it as a string?
+            urlparam=params,  # other parameters as URL parameters
         )
 
     def get_models(self) -> Union[None, Dict[str, Union[str, int]]]:
@@ -214,9 +228,7 @@ class Endpoint:
         Returns:
             Union[None, List[str]]: If successful a list of models or None if any errors.
         """
-        return self._error_handle_request(
-            self.ep["get_models"][1], self.ep["get_models"][0](), 5
-        )
+        return self._error_handle_request(self.ep["get_models"][1], self.ep["get_models"][0](), 5)
 
     def explain(self, decomp_data) -> Union[None, Dict[str, Union[str, int]]]:
         """Requests explanation of function from endpoint."""
@@ -233,9 +245,7 @@ class Endpoint:
         """
 
         # get id matching to hash
-        js, resp = self._error_handle_request(
-            self.ep["search"][1], self.ep["search"][0](hash), 5
-        )
+        js, resp = self._error_handle_request(self.ep["search"][1], self.ep["search"][0](hash), 5)
 
         # analyses
         analyses = []

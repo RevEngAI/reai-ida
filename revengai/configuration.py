@@ -24,8 +24,6 @@ class Configuration:
         # when the file is opened
         self._context = {}
 
-        plugin_logger.debug(f"CONTEXT: \n {self._context}")
-
     def persistConfig(self) -> None:
         if len(self._config.keys()) > 0:
             try:
@@ -98,14 +96,10 @@ class Configuration:
 
         """
         self._context["file_name"] = idaapi.get_input_file_path()
-        self._context["sha256"] = hexlify(
-            ida_nalt.retrieve_input_file_sha256()
-        ).decode()
+        self._context["sha256"] = hexlify(ida_nalt.retrieve_input_file_sha256()).decode()
         self._context["file_bytes"] = idaapi.get_file
         self._context["is_uploaded"] = False
-        self._context[
-            "selected_analysis"
-        ] = -1  # -1 means no analysis has been selected
+        self._context["selected_analysis"] = -1  # -1 means no analysis has been selected
 
     def is_valid(self) -> bool:
         expected = ["host", "port", "key"]

@@ -39,14 +39,12 @@ class StatusForm(ida_kernwin.Form):
             self.items = items
 
         def OnGetLine(self, n):
-            plugin_logger.debug(f"getline {n}")
             return self.items[n]
 
         def OnGetSize(
             self,
         ):
             n = len(self.items)
-            plugin_logger.debug(f"getsizeof {n}")
             return n
 
     def __init__(self, items):
@@ -97,12 +95,12 @@ class UploadView:
         )
 
     def action_status(self) -> None:
-        '''
-        Given a specific file (specified by sha256 file hash) - 
-        get all analysis carried out by the end point and 
+        """
+        Given a specific file (specified by sha256 file hash) -
+        get all analysis carried out by the end point and
         give the user the option to select the analysis to use
         for other functionality within the plugin.
-        '''
+        """
         # get all the current analysis against a given file and let the user
         # select a suitable one.
 
@@ -132,9 +130,7 @@ class UploadView:
 
         if len(bin) > 0:
             for b in bin:
-                entries.append(
-                    [b["binary_name"], str(b["binary_id"]), b["status"], b["creation"]]
-                )
+                entries.append([b["binary_name"], str(b["binary_id"]), b["status"], b["creation"]])
 
         plugin_logger.debug(f"entries {entries}")
 
@@ -151,7 +147,7 @@ class UploadView:
                     f"selected {sel}, updating current context with binary_id {entries[sel[0]][1]}"
                 )
                 # update current context with the selected analysis id
-                self._configuration.context["selected_analysis"] = sel
+                self._configuration.context["selected_analysis"] = entries[sel[0]][1]
             else:
                 plugin_logger.debug(f"Nothing selected")
         else:
@@ -220,12 +216,8 @@ class UploadView:
         self._table = QtWidgets.QTableWidget()
         self._table.setColumnCount(2)
         self._table.setShowGrid(False)
-        self._table.setHorizontalHeaderLabels(
-            ["file", "sha256", " current analysis id"]
-        )
-        self._table.setSelectionBehavior(
-            QtWidgets.QTableWidget.SelectionBehavior.SelectRows
-        )
+        self._table.setHorizontalHeaderLabels(["file", "sha256", " current analysis id"])
+        self._table.setSelectionBehavior(QtWidgets.QTableWidget.SelectionBehavior.SelectRows)
         self._table.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
 
         self._table.setRowCount(self._configuration.get_tracked_files_number())
@@ -238,9 +230,7 @@ class UploadView:
         if track_files is not None:
             for idc, k in enumerate(track_files):
                 plugin_logger.info(f"adding {track_files[k]} at index {idc}")
-                name = QtWidgets.QTableWidgetItem(
-                    f"{track_files[k]['file_path']}"
-                )  # fp
+                name = QtWidgets.QTableWidgetItem(f"{track_files[k]['file_path']}")  # fp
                 hash = QtWidgets.QTableWidgetItem(f"{k}")  # hash
                 self._table.setItem(idc, 0, name)
                 self._table.setItem(idc, 1, hash)

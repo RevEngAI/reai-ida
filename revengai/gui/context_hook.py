@@ -6,8 +6,7 @@ import ida_nalt
 from binascii import hexlify
 from revengai.handler import (
     UploadBinaryHandler,
-    RenameFunctionHandler,
-    ExplainFunctionHandler,
+    # ExplainFunctionHandler,
     RenameFileHandler,
 )
 from revengai.gui.upload_view import UploadView
@@ -39,8 +38,8 @@ class ContextHook(idaapi.UI_Hooks):
         Callback when use right clicks - we need to check what view the right-click is occuring
         in and whether we want to add our buttons to the menu.
 
-        NOTE - This menu ONLY shows when configuration has been setup AND the user has right-clicked
-        on the pseudocode view.
+        NOTE - This menu ONLY shows when there is a valid configuration present either persisted
+        or entered by the user.
         """
         t = idaapi.get_widget_type(widget)
         if (
@@ -57,25 +56,24 @@ class ContextHook(idaapi.UI_Hooks):
                 UploadBinaryHandler(self.upload_view, self._endpoint),
             )
 
-            # action_name_rename_func = idaapi.action_desc_t(
-            #     None,
-            #     "Rename Functions",
-            #     RenameFunctionHandler(
-            #         self._form,
-            #         self._endpoint,
-            #         current_file_info,
-            #     ),
-            # )
-
             action_name_rename_file = idaapi.action_desc_t(
                 None,
                 "Rename Function...",
-                RenameFileHandler(self.plugin_configuration),
+                RenameFileHandler(self.plugin_configuration, self._endpoint),
             )
 
-            action_name_explain_func = idaapi.action_desc_t(
-                None, "Explain...", ExplainFunctionHandler(self._endpoint)
-            )
+            #
+            # TODO - enable same status window from context-menu as well
+            #
+            # action_name_status_file = idaapi.action_desc_t(
+            #     None,
+            #     "Status...",
+            # )
+
+            # TODO - broken
+            # action_name_explain_func = idaapi.action_desc_t(
+            #     None, "Explain...", ExplainFunctionHandler(self._endpoint)
+            # )
 
             idaapi.attach_dynamic_action_to_popup(
                 widget,
@@ -85,22 +83,15 @@ class ContextHook(idaapi.UI_Hooks):
                 idaapi.SETMENU_INS,
             )
 
-            # idaapi.attach_dynamic_action_to_popup(
-            #     widget,
-            #     popup_handle,
-            #     action_name_rename_func,
-            #     CONTEXT_MENU,
-            #     idaapi.SETMENU_INS,
-            # )
-
             idaapi.attach_dynamic_action_to_popup(
                 widget, popup_handle, action_name_rename_file, CONTEXT_MENU, idaapi.SETMENU_INS
             )
 
-            idaapi.attach_dynamic_action_to_popup(
-                widget,
-                popup_handle,
-                action_name_explain_func,
-                CONTEXT_MENU,
-                idaapi.SETMENU_INS,
-            )
+            # TODO - broken
+            # idaapi.attach_dynamic_action_to_popup(
+            #     widget,
+            #     popup_handle,
+            #     action_name_explain_func,
+            #     CONTEXT_MENU,
+            #     idaapi.SETMENU_INS,
+            # )

@@ -6,7 +6,6 @@ from revengai.gui.about_view import AboutView
 from revengai.gui.configuration_view import ConfigurationView
 from revengai.gui.upload_view import UploadView
 from revengai.gui.context_hook import ContextHook
-from revengai.handler import RenameFunctionHandler
 from revengai.handler import ConfigurationHandler
 from revengai.logger import plugin_logger
 from revengai.api import Endpoint
@@ -47,7 +46,6 @@ class Plugin(plugin_t):
         # setup the UI hooks for the menu buttons
         self.handlers = {
             "menu_open_configuration": ConfigurationHandler,
-            "rename_function": RenameFunctionHandler,
         }
 
         # setup the views within the main configuration form
