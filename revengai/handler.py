@@ -25,23 +25,24 @@ from revengai.exception import ReturnValueException
 class IdaUtils(object):
 
     @staticmethod
-    def get_selected_function() -> str:
+    def get_selected_function() -> Tuple[any, str]:
         """
         Get the name of the function that the user has selected
+        returns (location, function_name)
         """
         location = ida_kernwin.get_screen_ea()
         if location is not None:
             func_name = ida_funcs.get_func_name(location)
             if func_name:
-                return func_name
+                return location, func_name
             else:
                 raise ReturnValueException("Failed to get function name")
         else:
             raise ReturnValueException("Failed to get screen address location")
 
     @staticmethod
-    def rename_function(location: int, new_name: str) -> None:
-        # TODO - implement the function renaming
+    def rename_function(location: int, new_name: str) -> bool:
+        return ida_name.set_name(location, new_name)
         pass
 
 
@@ -179,8 +180,11 @@ RevEng.AI Function Renaming
 
 
 class RenameFileHandlerDialog(QtWidgets.QDialog):
-    def __init__(self, pluging_configuration: Configuration, embeddings: list[dict]):
+    def __init__(self, pluging_configuration: Configuration, embeddings: list[dict], loc: any):
         super(RenameFileHandlerDialog, self).__init__()
+
+        # record the location where the user triggered the context menu
+        self.location = loc
 
         # set size and geometry stuff
         screen = QtWidgets.QDesktopWidget().screenGeometry()
@@ -232,10 +236,6 @@ class RenameFileHandlerDialog(QtWidgets.QDialog):
         # stretch to fill space
         self.func_table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
 
-        # fill table with initial data
-        if embeddings:
-            self.update_table("All")
-
         # binaries filter selection
         self.binary_filter_selection = QtWidgets.QComboBox()
         self.binary_filter_selection.addItems(self.update_binaries_filter())
@@ -251,7 +251,7 @@ class RenameFileHandlerDialog(QtWidgets.QDialog):
         collection_group_box = QtWidgets.QGroupBox("Binaries")
         collection_group_box.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignLeft
-        )  # Does not seem to have any effect
+        )  # NOTE - Does not seem to have any effect
 
         # add Combo drop down box with horizontal box layout to group box
         collection_group_box.setLayout(collection_selection_layout)
@@ -302,17 +302,26 @@ class RenameFileHandlerDialog(QtWidgets.QDialog):
 
         confidence_group_box.setLayout(confidence_layout)
 
+        # fill table with initial data
+        if embeddings:
+            self.update_table("All", 0)
+
         # add widgets
         layout.addWidget(self.func_table)
         layout.addWidget(collection_group_box)
         layout.addWidget(confidence_group_box)
         layout.addWidget(buttonBox)
 
+        # first tab - figure out how to draw a tabbed dialog!
+        self.tabWidget = QtWidgets.QTabWidget()
+        self.tab1_widget = QtWidgets.QWidget()
+
         self.setLayout(layout)
 
     def slider_change(self, value):
         # plugin_logger.info(f"slider value {value}")
         self.confidence_level.setText(str(value))
+        self.update_table(self.binary_filter_selection.currentText(), value)
 
     def reject(self):
         # close window if the user selects cancel
@@ -328,7 +337,8 @@ class RenameFileHandlerDialog(QtWidgets.QDialog):
                 plugin_logger.info(
                     f"clicked {button.text()} - user selected function {item[0].text()}"
                 )
-                # TODO - Do the stuff in IDA now to now rename the given function
+                IdaUtils.rename_function(self.location, item[0].text())
+                self.close()
             else:
                 warning("No function selected!")
         elif "file" in button.text().lower():
@@ -337,6 +347,7 @@ class RenameFileHandlerDialog(QtWidgets.QDialog):
                 warning("Select a collection first!")
             else:
                 # TODO - Do some stuff in IDA to now rename ALL the functions given the selected collection
+                # and confidence level?
                 pass
         else:
             plugin_logger.info(f"clicked {button.text()}")
@@ -346,7 +357,7 @@ class RenameFileHandlerDialog(QtWidgets.QDialog):
         # and it is different from the previous selection
         text = self.binary_filter_selection.itemText(idx)
         plugin_logger.info(f"user selected {text}")
-        self.update_table(text)
+        self.update_table(text, int(self.confidence_level.text()))
 
     def update_binaries_filter(self) -> list[str]:
         """Updates the drop-down list that enables binary filtering for given nearest neighbours given the list of embedding passed in when the dialog was opened."""
@@ -355,7 +366,7 @@ class RenameFileHandlerDialog(QtWidgets.QDialog):
             bins.append(e["binary_name"])
         return ["all"] + list(set(bins))
 
-    def update_table(self, sel: str) -> None:
+    def update_table(self, sel: str, confidence: int) -> None:
         """Updates the table with the ANN information returned from the endpoint given
         the selected binary name.
 
@@ -379,10 +390,18 @@ class RenameFileHandlerDialog(QtWidgets.QDialog):
 
         if sel.lower() == "all":
             self.func_table.setRowCount(len(self.embeddings))
-            [create(i, v) for i, v in enumerate(self.embeddings)]
+            [
+                create(i, v)
+                for i, v in enumerate(self.embeddings)
+                if v["distance"] * 100 >= confidence
+            ]
         else:
             self.func_table.setRowCount(len(self.embeddings))
-            [create(i, v) for i, v in enumerate(self.embeddings) if v["binary_name"] == sel]
+            [
+                create(i, v)
+                for i, v in enumerate(self.embeddings)
+                if v["binary_name"] == sel and v["distance"] * 100 >= confidence
+            ]
 
 
 class RenameFileHandler(ida_kernwin.action_handler_t):
@@ -396,18 +415,18 @@ class RenameFileHandler(ida_kernwin.action_handler_t):
             "selected_analysis" in self._config.context.keys()
             and self._config.context["selected_analysis"] is not None
         ):
-            # TODO - send request here to the endpoint with the analysis ID to pull back nearest neighbours
             try:
-                func = IdaUtils.get_selected_function()
+                loc, func = IdaUtils.get_selected_function()
                 # get the embedding for the selected function, given analysis ID and file.
                 embedding = self.get_file_embeddings(func)
                 # get the nearest neighbours given the embedding
                 neighbours = self.get_neighbours(embedding)
                 # draw dialog and pass in the data
-                f = RenameFileHandlerDialog(self._config, neighbours)
+                f = RenameFileHandlerDialog(self._config, neighbours, loc)
                 f.exec()
             except ReturnValueException as rve:
                 plugin_logger.error(f"{rve.message}")
+                warning(f"{rve.message}")
         else:
             warning("No analysis ID selected - Select an analysis or send file for analysis!")
 
