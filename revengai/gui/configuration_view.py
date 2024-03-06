@@ -40,12 +40,7 @@ class DropDownBox(QtWidgets.QComboBox):
                 gui_model: QtGui.QStandardItemModel = self.model()
                 if models is not None:
                     for m in models:
-                        if (
-                            not len(
-                                gui_model.findItems(m, QtCore.Qt.MatchFlag.MatchExactly)
-                            )
-                            > 0
-                        ):
+                        if not len(gui_model.findItems(m, QtCore.Qt.MatchFlag.MatchExactly)) > 0:
                             self.addItem(m)
 
         # call parent so the drop-down still triggers
@@ -135,7 +130,7 @@ class ConfigurationView:
         layout.addRow(QtWidgets.QLabel("Model:"), model_dropdown)
 
         # Update button
-        update_button = QtWidgets.QPushButton("Update")
+        update_button = QtWidgets.QPushButton("Save")
         update_button.clicked.connect(self.clicked_update)
 
         # Clear button

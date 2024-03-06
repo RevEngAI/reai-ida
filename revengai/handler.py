@@ -2,12 +2,7 @@ from ast import Return
 import ida_kernwin
 import idaapi
 import ida_nalt
-import idc
 import ida_name
-import ida_hexrays
-import ida_lines
-import ida_ua
-import idautils
 from PyQt5 import QtCore, QtWidgets
 from binascii import hexlify
 from pathlib import Path
@@ -46,68 +41,68 @@ class IdaUtils(object):
         pass
 
 
-class FileRename(ida_kernwin.Form):
-    class FileRenameChooser(ida_kernwin.Choose):
-        def __init__(
-            self,
-            title,
-            items,
-            flags=ida_kernwin.Choose.CH_MULTI,
-        ):
-            ida_kernwin.Choose.__init__(
-                self,
-                title,
-                [
-                    ["File name", 20],
-                    ["analysis id", 5],
-                    ["status", 5],
-                    ["submitted", 5],
-                ],
-                flags,
-                embedded=True,
-                width=30,
-                height=10,
-            )
-            self.items = items
+# class FileRename(ida_kernwin.Form):
+#     class FileRenameChooser(ida_kernwin.Choose):
+#         def __init__(
+#             self,
+#             title,
+#             items,
+#             flags=ida_kernwin.Choose.CH_MULTI,
+#         ):
+#             ida_kernwin.Choose.__init__(
+#                 self,
+#                 title,
+#                 [
+#                     ["File name", 20],
+#                     ["analysis id", 5],
+#                     ["status", 5],
+#                     ["submitted", 5],
+#                 ],
+#                 flags,
+#                 embedded=True,
+#                 width=30,
+#                 height=10,
+#             )
+#             self.items = items
 
-        def OnGetLine(self, n):
-            plugin_logger.debug(f"getline {n}")
-            return self.items[n]
+#         def OnGetLine(self, n):
+#             plugin_logger.debug(f"getline {n}")
+#             return self.items[n]
 
-        def OnGetSize(
-            self,
-        ):
-            n = len(self.items)
-            plugin_logger.debug(f"getsizeof {n}")
-            return n
+#         def OnGetSize(
+#             self,
+#         ):
+#             n = len(self.items)
+#             plugin_logger.debug(f"getsizeof {n}")
+#             return n
 
-    def __init__(self, items):
-        self.invert = False
-        F = ida_kernwin.Form
-        F.__init__(
-            self,
-            r"""STARTITEM 0
-BUTTON Yes* Select
-BUTTON CANCEL Cancel
-Analysis
+#     def __init__(self, items):
+#         self.invert = False
+#         F = ida_kernwin.Form
+#         F.__init__(
+#             self,
+#             r"""STARTITEM 0
+# BUTTON Yes* Select
+# BUTTON CANCEL Cancel
+# Analysis
 
-{OnChangeFormCallback}
-<:{Analysis}>
+# {OnChangeFormCallback}
+# <:{Analysis}>
 
-                """,
-            {
-                "Analysis": F.EmbeddedChooserControl(
-                    StatusForm.StatusFormChooser("Analysis Tasks", items)
-                ),
-                "OnChangeFormCallback": F.FormChangeCb(self.OnFormChange),
-            },
-        )
+#                 """,
+#             {
+#                 "Analysis": F.EmbeddedChooserControl(
+#                     StatusForm.StatusFormChooser("Analysis Tasks", items)
+#                 ),
+#                 "OnChangeFormCallback": F.FormChangeCb(self.OnFormChange),
+#             },
+#         )
 
-    def OnFormChange(self, fid):
-        """
-        Triggered when an event occurs on form
-        """
-        return 1
+#     def OnFormChange(self, fid):
+#         """
+#         Triggered when an event occurs on form
+#         """
+#         return 1
 
 
 class FunctionRename(ida_kernwin.Form):
@@ -209,6 +204,10 @@ class RenameFileHandlerDialog(QtWidgets.QDialog):
 
         self.embeddings = embeddings
 
+        # TODO - make a request to the endpoint for all the collections known to the user
+        # and pass via constructor
+        self.collections = []
+
         layout = QtWidgets.QVBoxLayout()
 
         # table views
@@ -225,7 +224,7 @@ class RenameFileHandlerDialog(QtWidgets.QDialog):
         self.func_table.setFocusPolicy(QtCore.Qt.FocusPolicy.ClickFocus)
 
         # headers
-        self.func_table.setHorizontalHeaderLabels(["Function", "Confidence", "Collection"])
+        self.func_table.setHorizontalHeaderLabels(["Function", "Confidence", "Binary"])
 
         # non-editable
         self.func_table.setEditTriggers(QtWidgets.QTableWidget.EditTrigger.NoEditTriggers)
@@ -306,16 +305,51 @@ class RenameFileHandlerDialog(QtWidgets.QDialog):
         if embeddings:
             self.update_table("All", 0)
 
-        # add widgets
-        layout.addWidget(self.func_table)
-        layout.addWidget(collection_group_box)
-        layout.addWidget(confidence_group_box)
-        layout.addWidget(buttonBox)
+        # add widgets - existing working code for when we were not using tabs
+        # layout.addWidget(self.func_table)
+        # layout.addWidget(collection_group_box)
+        # layout.addWidget(confidence_group_box)
+        # layout.addWidget(buttonBox)
 
         # first tab - figure out how to draw a tabbed dialog!
         self.tabWidget = QtWidgets.QTabWidget()
-        self.tab1_widget = QtWidgets.QWidget()
+        self.function_widget = QtWidgets.QWidget()
+        self.file_widget = QtWidgets.QWidget()
 
+        # layout for the tabs
+        tab_function_layout = QtWidgets.QVBoxLayout()
+
+        # add the widgets to the layouts
+        tab_function_layout.addWidget(self.func_table)
+        tab_function_layout.addWidget(collection_group_box)
+        tab_function_layout.addWidget(confidence_group_box)
+        tab_function_layout.addWidget(buttonBox)
+
+        # layouts for the tabs
+        self.function_widget.setLayout(tab_function_layout)
+        self.file_widget.setLayout(self.create_batch_tab())
+
+        # add the tabs to the QTabbedWidget thing
+        self.tabWidget.addTab(self.function_widget, "Functions")
+        self.tabWidget.addTab(self.file_widget, "Batch Renaming")
+
+        # add tabbed widget to the main layout
+        layout.addWidget(self.tabWidget)
+
+        """
+        
+        GUI - Setup separate tab that display the collections to the user for the given users creds
+        user can select which collections to scan for functions
+        send request for each function given a selection of collections
+        apply renaming of said functions given the highest one returned
+        display the changed functions in a results list
+        
+        for the whole set of file functions use the /ann/symbol/batch endpoint -> n
+        not sure on how the data itself is returned to the user.
+        
+        """
+
+        # set main layout that contains all descendents
         self.setLayout(layout)
 
     def slider_change(self, value):
@@ -327,6 +361,47 @@ class RenameFileHandlerDialog(QtWidgets.QDialog):
         # close window if the user selects cancel
         plugin_logger.info("reject")
         super().reject()
+
+    def create_batch_tab(self):
+        """
+        TODO - This tab will display the collections that the user can select
+        to perform automated analysis on the binary. The endpoint is currently
+        not setup so this will need to be finished once the endpoint has been setup.
+
+
+        This will be of the form <collection> <selected> - see ghidra plugin for example
+
+        """
+
+        layout = QtWidgets.QVBoxLayout()
+        table = QtWidgets.QTableWidget()
+
+        # column
+        table.setColumnCount(2)
+
+        # no grid
+        table.setShowGrid(False)
+
+        # selections are done across the whole row
+        table.setSelectionBehavior(QtWidgets.QTableWidget.SelectionBehavior.SelectRows)
+
+        # rows are clickable for selection
+        table.setFocusPolicy(QtCore.Qt.FocusPolicy.ClickFocus)
+
+        # headers
+        table.setHorizontalHeaderLabels(["Collection", "Include"])
+
+        # non-editable
+        table.setEditTriggers(QtWidgets.QTableWidget.EditTrigger.NoEditTriggers)
+
+        # single-selection
+        table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+
+        # stretch to fill space
+        table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
+
+        layout.addWidget(table)
+        return layout
 
     def clicked(self, button):
         # Called before action-specifc handlers are called
@@ -348,6 +423,15 @@ class RenameFileHandlerDialog(QtWidgets.QDialog):
             else:
                 # TODO - Do some stuff in IDA to now rename ALL the functions given the selected collection
                 # and confidence level?
+                # what requests do I need to do in order to rename all the functions in a file?
+                #
+                # 1. Get a list of collections that you have available and display these to the user
+                # 2. User selects colelctions and then clicks start button / use slider to select the confidence level
+                # 3. Use ANN batch renaming, any function returned that is higher than this value will
+                # automatically trigger the function to be renamed.
+                # 4. results table will show all the functions from -> to and the confidence
+                # Results will be a table
+                # there will also be other information about the number of functions seen, renamed, skipped or error
                 pass
         else:
             plugin_logger.info(f"clicked {button.text()}")
