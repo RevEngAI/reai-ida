@@ -11,7 +11,8 @@ from revengai.logger import plugin_logger
 from revengai.api import Endpoint
 from revengai.configuration import Configuration
 from revengai.gui.dialog import Dialog
-from revengai.gui.rename_function_form import busy_form_t
+
+# from revengai.gui.rename_function_form import busy_form_t
 
 
 class StatusForm(ida_kernwin.Form):

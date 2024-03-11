@@ -15,9 +15,7 @@ class IdaLogHandler(logging.Handler):
 # Setup logging for the plugin
 idalogger = IdaLogHandler()
 plugin_logger = logging.getLogger("plugin_logger")
-formatter = logging.Formatter(
-    "%(asctime)s ::%(funcName)s [%(levelname)s] - %(message)s"
-)
+formatter = logging.Formatter("%(asctime)s ::%(funcName)s [%(levelname)s] - %(message)s")
 # setup logging and temp dirs for writing files
 plugin_logger.setLevel(logging.DEBUG)
 idalogger.setFormatter(formatter)

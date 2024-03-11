@@ -58,7 +58,7 @@ class ContextHook(idaapi.UI_Hooks):
 
             action_name_rename_file = idaapi.action_desc_t(
                 None,
-                "Rename Function...",
+                "Rename Function... / Analyse...",
                 RenameFileHandler(self.plugin_configuration, self._endpoint),
             )
 
