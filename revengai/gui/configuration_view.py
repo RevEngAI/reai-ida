@@ -1,10 +1,14 @@
 from typing import Union
 import idaapi
 from PyQt5 import QtWidgets, QtGui, QtCore
+from PyQt5.QtGui import QIntValidator
+
 from revengai.api import Endpoint
-from revengai.configuration import Configuration
+from revengai.misc.base import Base
+from revengai.misc.configuration import Configuration
 from revengai.logger import plugin_logger
 from revengai.gui.dialog import Dialog
+from revengai.wizard.wizard import RevEngSetupWizard
 
 
 class DropDownBox(QtWidgets.QComboBox):
@@ -49,30 +53,36 @@ class DropDownBox(QtWidgets.QComboBox):
 
 class ConfigurationView:
     def __init__(self, config: Configuration, endpoint: Endpoint) -> None:
+        self.layout = None
         self._configdata = config
         self._parent = None
         self._endpoint = endpoint
 
     def clicked_update(self) -> None:
         config = {}
-        layout: QtWidgets.QFormLayout = self._parent.sender().parent().layout()
-        for i in range(layout.rowCount()):
+        # layout: QtWidgets.QFormLayout = self._parent.sender().parent().layout()
+        for i in range(self.layout.rowCount()):
             # use the property we set on the QLineEdit to set the correct key for config
-            item: QtWidgets.QLineEdit = layout.itemAt(
+            item: QtWidgets.QLineEdit = self.layout.itemAt(
                 i, QtWidgets.QFormLayout.ItemRole.FieldRole
             ).widget()
             if isinstance(item, QtWidgets.QLineEdit):
                 config[item.property("config_key")] = item.text()
+            elif isinstance(item, DropDownBox):
+                config["current_model"] = item.currentText()
 
         # NOTE - Model is recorded when user selects it from the drop down list
         plugin_logger.debug(f"got new config {config}")
-        self._configdata.update(config["host"], config["port"], config["key"])
+        self._configdata.update(config["host"], config["port"], config["key"], config["current_model"])
 
     def clicked_clear(self) -> None:
+        RevEngSetupWizard(Base()).exec()
+
+        # layout: QtWidgets.QFormLayout = self.view().layout()
         # find parent and get layout object then clear all LineEdit objects inside it
-        layout: QtWidgets.QFormLayout = self._parent.sender().parent().layout()
-        for i in range(layout.rowCount()):
-            item: QtWidgets.QLineEdit = layout.itemAt(
+        # layout: QtWidgets.QFormLayout = self._parent.sender().parent().layout()
+        for i in range(self.layout.rowCount()):
+            item: QtWidgets.QLineEdit = self.layout.itemAt(
                 i, QtWidgets.QFormLayout.ItemRole.FieldRole
             ).widget()
             if isinstance(item, QtWidgets.QLineEdit):
@@ -100,34 +110,46 @@ class ConfigurationView:
         self._configdata.config["current_model"] = val
 
     def view(self) -> QtWidgets.QWidget:
-        plugin_logger.debug("<<<")
-        container = QtWidgets.QGroupBox("Configuration")
-        layout = QtWidgets.QFormLayout()
+        container = QtWidgets.QGroupBox("Setup Account Information")
+        self.layout = QtWidgets.QFormLayout()
 
         api = QtWidgets.QLineEdit()
+        api.setToolTip("API key from your account settings")
         api.setProperty("config_key", QtCore.QVariant("key"))
+
         host = QtWidgets.QLineEdit()
+        host.setToolTip("URL hosting the RevEng.ai Server")
         host.setProperty("config_key", QtCore.QVariant("host"))
+
         port = QtWidgets.QLineEdit()
+        port.setValidator(QIntValidator(0, 65535, self.layout))
         port.setProperty("config_key", QtCore.QVariant("port"))
 
-        if self._configdata.is_valid():
-            plugin_logger.debug("config detected, pre-entering data")
-            api.setText(self._configdata.config["key"])
-            host.setText(self._configdata.config["host"])
-            port.setText(self._configdata.config["port"])
+        # api.setText(self._configdata.config["key"])
+        # host.setText(self._configdata.config["host"])
+        #
+        # if self._configdata.is_valid():
+        #     plugin_logger.debug("config detected, pre-entering data")
+        #     api.setText(self._configdata.config["key"])
+        #     host.setText(self._configdata.config["host"])
+        #     port.setText(self._configdata.config["port"])
+        # else:
+        #     api.setFocus()
 
-        layout.addRow(QtWidgets.QLabel("API Key:"), api)
-        layout.addRow(QtWidgets.QLabel("Host:"), host)
-        layout.addRow(QtWidgets.QLabel("Port"), port)
+        self.layout.addRow(QtWidgets.QLabel("API Key:"), api)
+        self.layout.addRow(QtWidgets.QLabel("Hostname:"), host)
+        # self.layout.addRow(QtWidgets.QLabel("Port"), port)
 
         # model dropdown list
         model_dropdown = DropDownBox(None, self._endpoint)
+        port.setProperty("current_model", QtCore.QVariant("current_model"))
+
         model_dropdown.activated.connect(self.record_model)
 
-        if self._configdata.is_valid():
-            model_dropdown.addItem(self._configdata.config["current_model"])
-        layout.addRow(QtWidgets.QLabel("Model:"), model_dropdown)
+        # TODO
+        # if self._configdata.is_valid():
+        #     model_dropdown.addItem(self._configdata.config["current_model"])
+        self.layout.addRow(QtWidgets.QLabel("Model:"), model_dropdown)
 
         # Update button
         update_button = QtWidgets.QPushButton("Save")
@@ -146,6 +168,6 @@ class ConfigurationView:
         vbox.addWidget(clear_button)
         vbox.addWidget(check_button)
 
-        layout.addRow(vbox)
-        container.setLayout(layout)
+        self.layout.addRow(vbox)
+        container.setLayout(self.layout)
         return container

@@ -2,14 +2,12 @@ import ida_nalt
 from binascii import hexlify
 import ida_kernwin
 import idaapi
-from typing import List
-from hashlib import sha256
 from pathlib import Path
 from PyQt5 import QtWidgets, QtCore
 from idaapi import warning
 from revengai.logger import plugin_logger
 from revengai.api import Endpoint
-from revengai.configuration import Configuration
+from revengai.misc.configuration import Configuration
 from revengai.gui.dialog import Dialog
 
 # from revengai.gui.rename_function_form import busy_form_t

@@ -1,12 +1,18 @@
+from ida_hexrays import init_hexrays_plugin
+from ida_idaapi import PLUGIN_SKIP, PLUGIN_OK
+from ida_kernwin import get_kernel_version
 from idaapi import plugin_t, PLUGIN_FIX, PLUGIN_KEEP
-from revengai.configuration import Configuration
+
+from revengai.conf import RevEngConfiguration
+from revengai.manager import RevEngState
+from revengai.misc.configuration import Configuration
 from revengai.gui.mainform import MainForm
 from revengai.gui.menubar import ConfigBar
 from revengai.gui.about_view import AboutView
 from revengai.gui.configuration_view import ConfigurationView
 from revengai.gui.upload_view import UploadView
 from revengai.gui.context_hook import ContextHook
-from revengai.handler import RenameFunctionHandler
+# from revengai.handler import RenameFunctionHandler
 from revengai.handler import ConfigurationHandler
 from revengai.logger import plugin_logger
 from revengai.api import Endpoint
@@ -38,6 +44,8 @@ class Plugin(plugin_t):
         # stop plugin from being unloaded once we have run.
         plugin_logger.debug("plugin init")
 
+        # idaapi.set_dock_pos(self.wanted_name, "IDA View-A", idaapi.DP_TAB)
+
         # configuration of plugin
         self.configuration: Configuration = Configuration()
 
@@ -47,7 +55,7 @@ class Plugin(plugin_t):
         # setup the UI hooks for the menu buttons
         self.handlers = {
             "menu_open_configuration": ConfigurationHandler,
-            "rename_function": RenameFunctionHandler,
+            # "rename_function": RenameFunctionHandler,
         }
 
         # setup the views within the main configuration form
@@ -90,6 +98,48 @@ class Plugin(plugin_t):
         pass
 
 
+class RevEngPlugin(plugin_t):
+    # variables required by IDA
+    flags = 0  # normal plugin
+    wanted_name = "RevEng.AI"
+    help = "Configure IDA plugin for RevEng.ai"
+    comment = "AI-assisted reverse engineering from RevEng.ai"
+    wanted_hotkey = "Ctrl-Shift-R"
+    initialized = False
+
+    def __init__(self):
+        super(RevEngPlugin, self).__init__()
+        self.initialized = False
+
+        self.state = RevEngState(RevEngConfiguration())
+
+    def init(self):
+        if not init_hexrays_plugin():
+            return PLUGIN_SKIP
+
+        kv = get_kernel_version().split(".")
+        if int(kv[0]) < 8:
+            return PLUGIN_SKIP
+        return PLUGIN_OK
+
+    def reload_plugin(self):
+        if self.initialized:
+            self.term()
+
+        RevEngConfiguration()
+        self.state.start_plugin()
+        self.initialized = True
+
+    def run(self, args):
+        self.reload_plugin()
+
+    def term(self):
+        if self.state is not None:
+            self.state.stop_plugin()
+
+        self.initialized = False
+
+
 def PLUGIN_ENTRY():
-    plugin_logger.debug("global plugin entry called")
-    return Plugin()
+    return RevEngPlugin()
+    # return Plugin()

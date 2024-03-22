@@ -1,12 +1,13 @@
-import json
 import ida_kernwin
-from collections.abc import Callable, Iterable, Mapping
-import requests
+
+try:
+    import requests
+except ImportError:
+    import requests
 from typing import Dict, Any, Union, List
-from revengai.configuration import Configuration
+from revengai.misc.configuration import Configuration
 from revengai.logger import plugin_logger
 from threading import Thread
-from pathlib import Path
 
 
 class Threader(Thread):
@@ -24,19 +25,26 @@ class Threader(Thread):
 class Endpoint:
     ep = {
         "upload": (lambda: "/upload", requests.post),
-        "echo": (lambda: "/tags", requests.get),
+        "echo": (lambda: "/echo", requests.get),
         "get_models": (lambda: "/models", requests.get),
         "explain": (lambda: "/explain", requests.post),
         "analyse": (lambda: "/analyse", requests.post),
         "status": (lambda sha256hash: f"/analyse/status/{sha256hash}", requests.get),
         "delete": (lambda bin_id: f"/analyse/{bin_id}", requests.delete),
         "collections": (lambda: f"/collections", requests.get),
-        "embeddings": (lambda bin_id: f"/analyse/functions/{bin_id}", requests.get),
+        "embeddings": (lambda bin_id: f"/embeddings/{bin_id}", requests.get),
         "nearest": (lambda: f"/ann/symbol", requests.post),
         "search": (
             lambda sha256hash: f"/search?search=sha_256_hash:{sha256hash}&state=All&user_owned=true",
             requests.get,
         ),
+        "models": (lambda: "/models", requests.get),
+        "sbom": (lambda bin_id: f"/sboms/{bin_id}", requests.get),
+        "ann_binary": (lambda bin_id: f"/ann/binary", requests.post),
+        "cves": (lambda bin_id: f"/cves/{bin_id}", requests.get),
+        "logs": (lambda bin_id: f"/logs/{bin_id}", requests.get),
+        "embedding": (lambda bin_id, start_vaddr: f"/embedding/{bin_id}/{start_vaddr}", requests.get),
+        "signature": (lambda bin_id: f"/signature/{bin_id}", requests.get),
     }
 
     def __init__(self, configuration: Configuration) -> None:
@@ -59,14 +67,13 @@ class Endpoint:
             additional_headers (Dict, optional): Additional header to put in HTTP header
             param (_type_, optional): _description_. Parameters to pass as part of the URL
         """
-        conf = self._conf.config
-        header = {"Authorization": f"{conf['key']}"}
+        header = {"Authorization": self._conf.get("api_key")}
         if additional_headers:
             header.update(additional_headers)
         self._runner = Threader(
             target=req,
             kwargs={
-                "url": f"{conf['host']}{endpoint}",
+                "url": f"{self._conf.get('server_url')}{endpoint}",
                 "headers": header,
                 "data": data,
                 "params": param,

@@ -66,7 +66,7 @@ class MainForm(idaapi.PluginForm):
         # selection list
         select = QtCore.QItemSelectionModel.Select
         list_view.selectionModel().select(
-            self.views_model.createIndex(0, 0), select
+            self.views_model.createIndex(1, 0), select
         )  # ???
         list_view.clicked.connect(self.view_clicked)
 
@@ -74,7 +74,7 @@ class MainForm(idaapi.PluginForm):
         self.splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         self.splitter.addWidget(list_view)  # left
         self.splitter.addWidget(
-            self.configuration_views["About"].view()
+            self.configuration_views["Configuration"].view()
         )  # opens on the about view initially
         self.splitter.setChildrenCollapsible(False)
         self.splitter.show()

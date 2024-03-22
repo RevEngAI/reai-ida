@@ -1,0 +1,26 @@
+[
+  {
+    "id": "reai:wizard",
+    "name": "Run Setup Wizard",
+    "callback": "setup_wizard",
+    "icon": 81
+  },
+  {
+    "id": "reai:upload",
+    "name": "Upload Binary",
+    "callback": "upload_binary",
+    "icon": 79
+  },
+  {
+    "id": "reai:check_analyze",
+    "name": "Check Analysis Status",
+    "callback": "check_analyze",
+    "icon": 188
+  },
+  {
+    "id": "reai:auto_analyze",
+    "name": "Auto Analyze Binary Symbol",
+    "callback": "auto_analyze",
+    "icon": 182
+  }
+]

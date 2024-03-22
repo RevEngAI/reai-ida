@@ -1,6 +1,4 @@
-from hashlib import sha256
 import idaapi
-import ida_ida
 import ida_kernwin
 import ida_nalt
 from binascii import hexlify
@@ -11,7 +9,7 @@ from revengai.handler import (
 )
 from revengai.gui.upload_view import UploadView
 from revengai.api import Endpoint
-from revengai.configuration import Configuration
+from revengai.misc.configuration import Configuration
 
 
 class ContextHook(idaapi.UI_Hooks):

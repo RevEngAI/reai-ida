@@ -1,4 +1,3 @@
-from ast import Return
 import ida_kernwin
 import idaapi
 import ida_nalt
@@ -6,14 +5,14 @@ import ida_name
 from PyQt5 import QtCore, QtWidgets
 from binascii import hexlify
 from pathlib import Path
-from typing import Dict, Optional, Union, Tuple
+from typing import Tuple
 import ida_funcs
 from ida_kernwin import warning
 from revengai.logger import plugin_logger
 from revengai.api import Endpoint
 from revengai.gui.dialog import Dialog
 from revengai.gui.upload_view import UploadView
-from revengai.configuration import Configuration
+from revengai.misc.configuration import Configuration
 from revengai.exception import ReturnValueException
 
 
