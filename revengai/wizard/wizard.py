@@ -1,23 +1,26 @@
+# -*- coding: utf-8 -*-
+
+import abc
 from sys import platform
 from requests import get, HTTPError, Response
 
 from PyQt5.QtWidgets import QWizardPage, QFormLayout, QLineEdit, QLabel, QWizard, QComboBox, QLayout
 
-from reait.api import reveng_req
+from reait.api import reveng_req, re_conf
+from revengai.manager import RevEngState
 
-from revengai.misc.base import Base
 from revengai.logger import plugin_logger
 
 
 class RevEngSetupWizard(QWizard):
-    def __init__(self, base: Base, parent=None):
+    def __init__(self, state: RevEngState, parent=None):
         super(RevEngSetupWizard, self).__init__(parent)
 
-        self.base: Base = base
+        self.state: RevEngState = state
 
-        self.addPage(UserCredentialsPage(self.base))
+        self.addPage(UserCredentialsPage(self.state))
 
-        self.addPage(UserAvailableModelsPage(self.base))
+        self.addPage(UserAvailableModelsPage(self.state))
 
         self.setWindowTitle("RevEng.AI Setup Wizard")
         self.setOptions(QWizard.CancelButtonOnLeft | QWizard.NoBackButtonOnStartPage)
@@ -26,42 +29,47 @@ class RevEngSetupWizard(QWizard):
         self.button(QWizard.FinishButton).clicked.connect(self._finishClicked)
 
     def _finishClicked(self):
-        self.base.config.persistConfig()
+        self.state.config.base.config.persistConfig()
 
 
 class BasePage(QWizardPage):
-    def __init__(self, base: Base, parent=None):
+    __metaclass__ = abc.ABCMeta
+
+    def __init__(self, state: RevEngState, parent=None):
         super().__init__(parent)
 
-        self.base = base
+        self.state = state
 
         self.setTitle(self._getTitle())
         self.setLayout(self._get_layout())
 
+    @abc.abstractmethod
     def _getTitle(self) -> str:
         pass
 
+    @abc.abstractmethod
     def _get_layout(self) -> QLayout:
         pass
 
 
 class UserCredentialsPage(BasePage):
-    def __init__(self, base: Base, parent=None):
-        super().__init__(base, parent)
+    def __init__(self, state: RevEngState, parent=None):
+        super().__init__(state, parent)
 
     def initializePage(self):
-        self.api_key.setText(self.base.config.get("apikey"))
-        self.server_url.setText(self.base.config.get("host"))
+        self.api_key.setText(self.state.config.base.config.get("apikey"))
+        self.server_url.setText(self.state.config.base.config.get("host"))
 
     def validatePage(self):
         if not any(c.text() == "" for c in [self.api_key, self.server_url]):
             try:
-                res: Response = reveng_req(get, "/models")
+                print(re_conf)
+                res: Response = reveng_req(get, "models")
                 res.raise_for_status()
 
-                self.base.config.set("apikey", self.api_key.text())
-                self.base.config.set("host", self.server_url.text())
-                self.base.config.set("models", res.json()["models"])
+                self.state.config.base.config.set("apikey", self.api_key.text())
+                self.state.config.base.config.set("host", self.server_url.text())
+                self.state.config.base.config.set("models", res.json()["models"])
                 return True
             except HTTPError as e:
                 plugin_logger.error(f"[EXCEPTION] -> {e}")
@@ -88,8 +96,8 @@ class UserCredentialsPage(BasePage):
 
 
 class UserAvailableModelsPage(BasePage):
-    def __init__(self, base: Base, parent=None):
-        super().__init__(base, parent)
+    def __init__(self, state: RevEngState, parent=None):
+        super().__init__(state, parent)
 
         self.setFinalPage(True)
 
@@ -109,13 +117,13 @@ class UserAvailableModelsPage(BasePage):
     def initializePage(self):
         self.cbModel.clear()
 
-        self.cbModel.addItems(self.base.config.get("models"))
-        self.cbModel.setCurrentText(self.base.config.get("model"))
+        self.cbModel.addItems(self.state.config.base.config.get("models"))
+        self.cbModel.setCurrentIndex(-1)
 
     def validatePage(self):
         if self.cbModel.currentIndex() != -1:
-            self.base.config.set("models", None)
-            self.base.config.set("model", self.cbModel.currentText())
+            self.state.config.base.config.set("models")
+            self.state.config.base.config.set("model", self.cbModel.currentText())
             return True
 
         return False

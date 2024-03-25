@@ -26,19 +26,19 @@ class Model:
             else:
                 return 0
 
-        def data(self, index, role: int = QtCore.Qt.ItemDataRole.DisplayRole) -> str:
+        def data(self, index, role: int = QtCore.Qt.ItemDataRole.DisplayRole):
             """
             Returns the data stored under the given role for the item referred to by the index.
             """
-            if role == QtCore.Qt.ItemDataRole.DisplayRole:
+            if index.isValid() and role == QtCore.Qt.ItemDataRole.DisplayRole:
                 # get data from given row index
                 row = self._data[index.row()]
-                if index.column() == 0 and type(row) != dict:
+                if index.column() == 0 and type(row) is not dict:
                     # the data itself is not a dict and the col val is 0.
                     return row
-                elif index.column() < self.columnCount():
+                elif index.column() < self.columnCount(self.parent):
                     # the data is a dict, need to check col val is valid
-                    if type(row) == dict:
+                    if type(row) is dict:
                         # index the header using the column value and then use that value to index the row
                         if self._header[index.column()].lower() in row:
                             return row[self._header[index.column()].lower()]
@@ -47,7 +47,7 @@ class Model:
 
                     else:
                         # get the element using the column from the row data.
-                        row[index.column()]
+                        return row[index.column()]
 
                 # column val is not valid
                 return None
@@ -58,16 +58,16 @@ class Model:
 
         def headerData(self, section: int, orientation, role: int = ...) -> Any:
             """
-                        Returns the data for the given role and section in the header with the specified orientation.
-
-            For horizontal headers, the section number corresponds to the column number. Similarly, for vertical headers, the section number corresponds to the row number.
+            Returns the data for the given role and section in the header with the specified orientation.
+            For horizontal headers, the section number corresponds to the column number.
+            Similarly, for vertical headers, the section number corresponds to the row number.
             """
             if (
-                role == QtCore.Qt.ItemDataRole.DisplayRole
-                and orientation == QtCore.Qt.ItemDataRole.Horizontal
-                and section < len(self._header)
+                    role == QtCore.Qt.ItemDataRole.DisplayRole
+                    and orientation == QtCore.Qt.Orientation.Horizontal
+                    and section < len(self._header)
             ):
+                plugin_logger.debug("headerData() called")
                 return self._header[section]
             else:
-                plugin_logger.debug("headerData() called")
                 return None

@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 from os import makedirs
 from json import loads, dumps
 from os.path import join, exists
@@ -5,7 +7,7 @@ from os.path import join, exists
 
 from ida_diskio import get_user_idadir
 
-from reait import api
+from reait.api import re_conf
 from revengai.logger import plugin_logger
 
 
@@ -16,14 +18,14 @@ class Configuration(object):
     def __init__(self) -> None:
         makedirs(Configuration._dir, mode=0o755, exist_ok=True)
 
-        self._config = api.re_conf
+        self._config = {}
 
         self.readConfig()
 
     def get(self, name: str) -> any:
         return self._config.get(name)
 
-    def set(self, name: str, value: any) -> None:
+    def set(self, name: str, value: any = None) -> None:
         if value is None:
             self._config.pop(name, value)
         else:
@@ -31,7 +33,10 @@ class Configuration(object):
 
     def persistConfig(self) -> None:
         try:
-            with open(join(Configuration._dir, Configuration._filename), "w", encoding="utf-8") as fd:
+            if self.is_valid():
+                re_conf["apikey"] = self._config["apikey"]
+
+            with open(join(Configuration._dir, Configuration._filename), "w") as fd:
                 fd.write(dumps(self._config))
         except Exception as e:
             plugin_logger.error(f"[EXCEPTION] -> {e}")
@@ -39,12 +44,15 @@ class Configuration(object):
     def readConfig(self) -> None:
         if exists(join(Configuration._dir, Configuration._filename)):
             try:
-                with open(join(Configuration._dir, Configuration._filename), "r", encoding="utf-8") as fd:
+                with open(join(Configuration._dir, Configuration._filename), "r") as fd:
                     self._config = loads(fd.read())
+
+                if self.is_valid():
+                    re_conf["apikey"] = self._config["apikey"]
             except Exception as e:
                 plugin_logger.error(f"[EXCEPTION] -> {e}")
         else:
-            self._config.pop("apikey", None)
+            self._config["host"] = re_conf["host"]
 
     @property
     def config(self) -> any:

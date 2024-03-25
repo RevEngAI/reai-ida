@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 from json import load
 from os.path import abspath, dirname, join, realpath
 
@@ -6,16 +8,15 @@ from ida_kernwin import set_dock_pos, PluginForm, DP_TAB, unregister_action, att
     attach_action_to_popup
 
 from revengai import actions
-from revengai.conf import RevEngConfiguration
 from revengai.manager import RevEngState
 
 
 class Handler(action_handler_t):
-    def __init__(self, callback, config: RevEngConfiguration):
+    def __init__(self, callback, state: RevEngState):
         """Create a Handler calling @callback when activated"""
         super(Handler, self).__init__()
         self.name = None
-        self.config = config
+        self.state = state
 
         from inspect import getmembers, isfunction
         for func in getmembers(actions, isfunction):
@@ -24,31 +25,30 @@ class Handler(action_handler_t):
 
     def activate(self, ctx):
         if self.callback:
-            self.callback(self.config)
+            self.callback(self.state)
         return 1
 
     def update(self, ctx):
         return AST_ENABLE_ALWAYS
 
-    def register(self, name, label, shortcut=None, tooltip=None, icon=-1):
+    def register(self, name, label, shortcut=None, tooltip=None, icon=-1) -> None:
         action = action_desc_t(
-            name,    # The action name. This acts like an ID and must be unique
-            label,   # The action text.
-            self,    # The action handler.
-            shortcut,# Optional: the action shortcut
-            tooltip, # Optional: the action tooltip (available in menus/toolbar)
-            icon,    # Optional: the action icon (shows when in menus/toolbars)
+            name,      # The action name. This acts like an ID and must be unique
+            label,     # The action text.
+            self,      # The action handler.
+            shortcut,  # Optional: the action shortcut
+            tooltip,   # Optional: the action tooltip (available in menus/toolbar)
+            icon,      # Optional: the action icon (shows when in menus/toolbars)
         )
 
         if not register_action(action):
-            print(f"Failed to register {name}")
+            print(f"Failed to register '{name}'.")
 
         self.name = name
-        return action
 
-    def attach_to_menu(self, menu):
+    def attach_to_menu(self, menu) -> None:
         if not attach_action_to_menu(menu, self.name, SETMENU_INS):
-            print(f"Failed to attach to {menu} the action '{self.name}'")
+            print(f"Failed to attach to {menu} the action '{self.name}'.")
 
 
 class Hooks(UI_Hooks):
@@ -59,7 +59,7 @@ class Hooks(UI_Hooks):
     def populating_widget_popup(self, form, popup):
         with open(join(abspath(dirname(realpath(__file__))), "conf/actions.json"), "r") as fd:
             for action in load(fd):
-                if action["id"] != "reai:wizard" and self.state.reai_config.base.config.is_valid():
+                if action["id"] != "reai:wizard" and self.state.config.base.config.is_valid():
                     attach_action_to_popup(form, popup, action["id"], "RevEng.AI/", SETMENU_APP)
 
 
@@ -97,8 +97,11 @@ class RevEngConfigForm_t(PluginForm):
 
         with open(join(abspath(dirname(realpath(__file__))), "conf/actions.json"), "r") as fd:
             for action in load(fd):
-                handler = Handler(action["callback"], self.state.reai_config)
-                handler.register(action["id"], action["name"], icon=action["icon"])
+                handler = Handler(action["callback"], self.state)
+                handler.register(action["id"], action["name"],
+                                 shortcut=action.get("shortcut"),
+                                 tooltip=action.get("tooltip"),
+                                 icon=action.get("icon", -1))
                 handler.attach_to_menu("View/RevEng.AI/")
 
     def unregister_actions(self):
@@ -112,13 +115,13 @@ class RevEngConfigForm_t(PluginForm):
 class RevEngGUI(object):
     def __init__(self, state):
         self.state = state
-        self.reai_config_form = RevEngConfigForm_t(self.state)
+        self.config_form = RevEngConfigForm_t(self.state)
 
         create_menu("reai:menu", "RevEng.AI", "View")
         set_dock_pos("RevEng.AI", "IDA View-A", DP_TAB)
 
     def show_windows(self):
-        self.reai_config_form.Show("RevEng.AI Configuration")
+        self.config_form.Show("RevEng.AI Configuration")
 
     def term(self):
-        self.reai_config_form.Close(PluginForm.WCLS_SAVE)
+        self.config_form.Close(PluginForm.WCLS_SAVE)

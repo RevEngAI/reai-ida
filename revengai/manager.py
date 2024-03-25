@@ -1,10 +1,18 @@
+# -*- coding: utf-8 -*-
+
+from PyQt5.QtCore import pyqtSignal, QThreadPool
+
 from revengai.conf import RevEngConfiguration
 
 
 class RevEngState(object):
-    def __init__(self, reai_config: RevEngConfiguration):
+    def __init__(self, config: RevEngConfiguration):
         self.gui = None
-        self.reai_config = reai_config
+        self.config = config
+
+        self.threadpool = QThreadPool.globalInstance()
+
+        self.updateSignal = pyqtSignal()
 
     def start_plugin(self):
         from revengai.ida_ui import RevEngGUI

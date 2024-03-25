@@ -9,6 +9,7 @@
     "id": "reai:upload",
     "name": "Upload Binary",
     "callback": "upload_binary",
+    "shortcut": "Ctrl+Shift+U",
     "icon": 79
   },
   {
@@ -21,6 +22,14 @@
     "id": "reai:auto_analyze",
     "name": "Auto Analyze Binary Symbol",
     "callback": "auto_analyze",
+    "shortcut": "Ctrl+Shift+A",
+    "icon": 182
+  },
+  {
+    "id": "reai:rename",
+    "name": "Rename From Similar Functions",
+    "callback": "rename_functions",
+    "shortcut": "Ctrl+Shift+R",
     "icon": 182
   }
 ]

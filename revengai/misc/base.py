@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 from revengai.api import Endpoint
 from revengai.misc.configuration import Configuration
 
