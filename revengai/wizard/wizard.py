@@ -27,7 +27,7 @@ class RevEngSetupWizard(QWizard):
         self.setWizardStyle(QWizard.MacStyle if platform == 'darwin' else QWizard.ModernStyle)
 
         self.button(QWizard.FinishButton).clicked.connect(self.state.config.save)
-        
+
 
 class BasePage(QWizardPage):
     __metaclass__ = abc.ABCMeta

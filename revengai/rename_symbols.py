@@ -44,10 +44,6 @@ class RenameSymbolsDialog(QDialog):
         super(RenameSymbolsDialog, self).showEvent(event)
         self.fetch()
 
-    def hideEvent(self, event):
-        super(RenameSymbolsDialog, self).hideEvent(event)
-        self.state.threadpool.cancel(self)
-
     def fetch(self):
         if self.v_addr > 0:
             self._load()
