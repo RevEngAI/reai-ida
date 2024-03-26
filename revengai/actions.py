@@ -18,7 +18,7 @@ def setup_wizard(state: RevEngState) -> None:
 
 
 def upload_binary(state: RevEngState) -> None:
-    if not state.config.base.config.is_valid():
+    if not state.config.is_valid():
         setup_wizard(state)
     else:
         path = get_input_file_path()
@@ -27,14 +27,14 @@ def upload_binary(state: RevEngState) -> None:
             try:
                 RE_upload(path)
 
-                RE_analyse(fpath=path, model_name=state.config.base.config.get("model"), duplicate=True)
+                RE_analyse(fpath=path, model_name=state.config.get("model"), duplicate=True)
             except HTTPError as e:
                 Dialog.showInfo("Upload Binary",
                                 f"Error analysing {basename(path)}.\nReason: {e.response.json()['error']}")
 
 
 def check_analyze(state: RevEngState) -> None:
-    if not state.config.base.config.is_valid():
+    if not state.config.is_valid():
         setup_wizard(state)
     else:
         path = get_input_file_path()
@@ -55,7 +55,7 @@ def check_analyze(state: RevEngState) -> None:
 
 
 def auto_analyze(state: RevEngState) -> None:
-    if not state.config.base.config.is_valid():
+    if not state.config.is_valid():
         setup_wizard(state)
     else:
         path = get_input_file_path()
@@ -66,7 +66,7 @@ def auto_analyze(state: RevEngState) -> None:
 
 
 def rename_functions(state: RevEngState) -> None:
-    if not state.config.base.config.is_valid():
+    if not state.config.is_valid():
         setup_wizard(state)
     else:
         path = get_input_file_path()

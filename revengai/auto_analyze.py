@@ -1,13 +1,24 @@
-import ida_name
+from enum import IntEnum
+
 import idc
 from PyQt5.QtWidgets import QDialog
+from ida_nalt import get_imagebase
+from idautils import Functions
 from requests import Response, HTTPError, post
 
 from reait.api import RE_embeddings, binary_id, RE_nearest_symbols, reveng_req
 from revengai.checkable_model import RevEngCheckableTableModel
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
+from revengai.table_model import RevEngTableModel
 from revengai.ui.auto_analysis_panel import Ui_AutoAnalysisPanel
+
+
+class Analysis(IntEnum):
+    TOTAL = 0
+    SKIPPED = 1
+    UNSUCCESSFUL = 2
+    SUCCESSFUL = 3
 
 
 class AutoAnalysisDialog(QDialog):
@@ -22,10 +33,11 @@ class AutoAnalysisDialog(QDialog):
         self.ui = Ui_AutoAnalysisPanel()
         self.ui.setupUi(self)
 
-        self.ui.collectionsTable.setModel(RevEngCheckableTableModel(header=["Collection Name", "Include"],
+        self.ui.collectionsTable.setModel(RevEngCheckableTableModel(header=["Collection Name", "Include",],
                                                                     data=[], columns=[1], parent=self))
 
-        # self.ui.resultsTable.setModel(RevEngTableModel([], ["Source Symbol", "Destination Symbol", "Successful", "Reason"], self))
+        self.ui.resultsTable.setModel(RevEngTableModel(data=[], parent=self,
+                                                       header=["Source Symbol", "Destination Symbol", "Successful", "Reason",]))
 
         self.ui.startButton.clicked.connect(self.analyze)
 
@@ -34,18 +46,18 @@ class AutoAnalysisDialog(QDialog):
 
         self.ui.confidenceSlider.valueChanged.connect(self._confidence)
         self.ui.tabWidget.tabBarClicked.connect(self._tabChanged)
+
         self._confidence(self.ui.confidenceSlider.sliderPosition())
+
         self._functions = []
+        self._analysis = [0] * len(Analysis)
 
-        ea = idc.here()
-        if idc.get_func_name(ea) == "":
-            ea = idc.get_next_func(ea)
+        base_addr = get_imagebase()
 
-        while ea != idc.BADADDR:
-            func_name = idc.get_func_name(ea)
-            func_end = idc.get_func_attr(ea, idc.FUNCATTR_END)
-            self._functions.append({"name": func_name, "start_addr": ea, "end_addr": func_end})
-            ea = idc.get_next_func(ea)
+        for func_ea in Functions():
+            self._functions.append({"name": idc.get_func_name(func_ea),
+                                    "start_addr": (idc.get_func_attr(func_ea, idc.FUNCATTR_START) - base_addr),
+                                    "end_addr": (idc.get_func_attr(func_ea, idc.FUNCATTR_END) - base_addr)})
 
         self.ui.progressBar.setProperty("maximum", len(self._functions))
 
@@ -55,6 +67,8 @@ class AutoAnalysisDialog(QDialog):
 
     def analyze(self):
         try:
+            self._analysis = [0] * len(Analysis)
+
             self.ui.startButton.setEnabled(False)
             self.ui.progressBar.setProperty("value", 0)
 
@@ -67,6 +81,7 @@ class AutoAnalysisDialog(QDialog):
                 collections.append([collection["collection_name"], ""])
 
             self.ui.collectionsTable.model().updateData(collections)
+            self.ui.collectionsTable.resizeColumnsToContents()
 
             res: Response = RE_embeddings(fpath=self.path)
 
@@ -81,21 +96,25 @@ class AutoAnalysisDialog(QDialog):
                               float(self.ui.confidenceSlider.property("maximum")))
 
                 for idx, func in enumerate(self._functions):
+                    self._analysis[Analysis.TOTAL.value] += 1
                     self.ui.progressBar.setProperty("value", idx)
 
                     fe = next((item for item in embeddings if item["vaddr"] == func["start_addr"]), None)
 
-                    if not fe:
+                    if fe is None:
+                        self._analysis[Analysis.SKIPPED.value] += 1
                         resultsData.append((func["name"], "N/A", "No Function Embedding Found"))
                     else:
                         try:
                             res = RE_nearest_symbols(embedding=fe["embedding"],
                                                      nns=1, ignore_hashes=self._ignore_hashes,
-                                                     model_name=self.state.config.base.config.get("model"))
+                                                     model_name=self.state.config.get("model"))
 
                             data = res.json()
 
                             if len(data) == 0:
+                                self._analysis[Analysis.SKIPPED.value] += 1
+                                resultsData.append((func["name"], "N/A", "No Function Embedding Found"))
                                 continue
 
                             symbol = data[0]
@@ -103,14 +122,19 @@ class AutoAnalysisDialog(QDialog):
                             if symbol["distance"] >= confidence:
                                 # if idc.set_name(self.v_addr, item['name'],
                                 #                 ida_name.SN_FORCE | ida_name.SN_NOWARN | ida_name.SN_NOCHECK):
-                                resultsData.append((f"{symbol['name']} ({symbol['binary_name']})", True,
+                                resultsData.append((func["name"],
+                                                    f"{symbol['name']} ({symbol['binary_name']})",
                                                     f"Renamed with confidence of {symbol['distance']}"))
                                 # else:
                                 #     Dialog.showError("Rename Function Error", "Symbol already exists.")
 
-                            # print(resultsData)
+                            self._analysis[Analysis.SUCCESSFUL.value] += 1
                         except HTTPError as e:
+                            self._analysis[Analysis.UNSUCCESSFUL.value] += 1
                             resultsData.append((func["name"], "N/A", e.response.text))
+
+                self.ui.resultsTable.model().updateData(resultsData)
+                self.ui.resultsTable.resizeColumnsToContents()
         except HTTPError as e:
             Dialog.showError("Auto Analysis",
                              f"Auto Analysis Error: {e.response.json()['error']}")
@@ -131,3 +155,11 @@ class AutoAnalysisDialog(QDialog):
 
     def _tabChanged(self, index):
         self.ui.confidenceSlider.setEnabled(index == 0)
+
+        if index == 0:
+            self._confidence(self.ui.confidenceSlider.sliderPosition())
+        else:
+            self.ui.description.setText(f"Total Functions Analysed: {self._analysis[Analysis.TOTAL.value]}<br/>"
+                                        f"Successful Analyses: {self._analysis[Analysis.SUCCESSFUL.value]}<br/>"
+                                        f"Skipped Analyses: {self._analysis[Analysis.SKIPPED.value]}<br/>"
+                                        f"Errored Analyses: {self._analysis[Analysis.UNSUCCESSFUL.value]}")

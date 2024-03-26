@@ -29,7 +29,7 @@ class RevEngSetupWizard(QWizard):
         self.button(QWizard.FinishButton).clicked.connect(self._finishClicked)
 
     def _finishClicked(self):
-        self.state.config.base.config.persistConfig()
+        self.state.config.persistConfig()
 
 
 class BasePage(QWizardPage):
@@ -57,19 +57,18 @@ class UserCredentialsPage(BasePage):
         super().__init__(state, parent)
 
     def initializePage(self):
-        self.api_key.setText(self.state.config.base.config.get("apikey"))
-        self.server_url.setText(self.state.config.base.config.get("host"))
+        self.api_key.setText(self.state.config.get("apikey"))
+        self.server_url.setText(self.state.config.get("host"))
 
     def validatePage(self):
         if not any(c.text() == "" for c in [self.api_key, self.server_url]):
             try:
-                print(re_conf)
                 res: Response = reveng_req(get, "models")
                 res.raise_for_status()
 
-                self.state.config.base.config.set("apikey", self.api_key.text())
-                self.state.config.base.config.set("host", self.server_url.text())
-                self.state.config.base.config.set("models", res.json()["models"])
+                self.state.config.set("apikey", self.api_key.text())
+                self.state.config.set("host", self.server_url.text())
+                self.state.config.set("models", res.json()["models"])
                 return True
             except HTTPError as e:
                 plugin_logger.error(f"[EXCEPTION] -> {e}")
@@ -117,13 +116,13 @@ class UserAvailableModelsPage(BasePage):
     def initializePage(self):
         self.cbModel.clear()
 
-        self.cbModel.addItems(self.state.config.base.config.get("models"))
+        self.cbModel.addItems(self.state.config.get("models"))
         self.cbModel.setCurrentIndex(-1)
 
     def validatePage(self):
         if self.cbModel.currentIndex() != -1:
-            self.state.config.base.config.set("models")
-            self.state.config.base.config.set("model", self.cbModel.currentText())
+            self.state.config.set("models")
+            self.state.config.set("model", self.cbModel.currentText())
             return True
 
         return False

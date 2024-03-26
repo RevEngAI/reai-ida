@@ -1,23 +1,22 @@
 # -*- coding: utf-8 -*-
 
-import ida_funcs
 import ida_name
 import idc
-from PyQt5.QtCore import Qt, QRunnable
+from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIntValidator
 from PyQt5.QtWidgets import QDialog
+from ida_funcs import get_func, update_func
 from ida_nalt import get_imagebase
 from requests import Response, HTTPError
 
 from reait.api import RE_embeddings, RE_nearest_symbols, binary_id
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
-from revengai.misc.async_task import Worker
 from revengai.table_model import RevEngTableModel
 from revengai.ui.rename_symbols_panel import Ui_RenameSymbolsPanel
 
 
-class RenameSymbolsDialog(QDialog, QRunnable):
+class RenameSymbolsDialog(QDialog):
     def __init__(self, state: RevEngState, fpath: str):
         QDialog.__init__(self)
 
@@ -27,7 +26,7 @@ class RenameSymbolsDialog(QDialog, QRunnable):
         start_addr = idc.get_func_attr(idc.here(), idc.FUNCATTR_START)
 
         if start_addr is not idc.BADADDR:
-            self.v_addr = get_imagebase() + start_addr
+            self.v_addr = start_addr - get_imagebase()
         else:
             self.v_addr = 0
             Dialog.showError("Find Similar Functions", "Cursor position not in a function.")
@@ -51,10 +50,9 @@ class RenameSymbolsDialog(QDialog, QRunnable):
 
     def fetch(self):
         if self.v_addr > 0:
-            self.run()
-            # self.state.threadpool.start(self)
+            self._load()
 
-    def run(self):
+    def _load(self):
         try:
             self.ui.tableView.model().updateData([])
             self.ui.fetchButton.setEnabled(False)
@@ -76,7 +74,7 @@ class RenameSymbolsDialog(QDialog, QRunnable):
                     res = RE_nearest_symbols(embedding=fe["embedding"],
                                              nns=int(self.ui.lineEdit.text()),
                                              ignore_hashes=[binary_id(self.path)],
-                                             model_name=self.state.config.base.config.get("model"))
+                                             model_name=self.state.config.get("model"))
 
                     self.ui.progressBar.setProperty("value", 75)
 
@@ -95,6 +93,10 @@ class RenameSymbolsDialog(QDialog, QRunnable):
         rows = self.ui.tableView.selectionModel().selectedRows(column=0)
 
         if len(rows) > 0:
-            if not idc.set_name(self.v_addr, self.ui.tableView.model().data(rows[0], Qt.DisplayRole),
-                                ida_name.SN_FORCE | ida_name.SN_NOWARN | ida_name.SN_NOCHECK):
+            if idc.set_name(self.v_addr, self.ui.tableView.model().data(rows[0], Qt.DisplayRole),
+                            ida_name.SN_FORCE | ida_name.SN_NOWARN | ida_name.SN_NOCHECK):
+                func = get_func(self.v_addr)
+                func.flags |= idc.FUNC_LIB
+                update_func(func)
+            else:
                 Dialog.showError("Rename Function Error", "Symbol already exists.")

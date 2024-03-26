@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from ida_idaapi import PLUGIN_SKIP, PLUGIN_OK
+from ida_idaapi import PLUGIN_SKIP, PLUGIN_OK, PLUGIN_KEEP
 from ida_kernwin import get_kernel_version
 from idaapi import plugin_t, PLUGIN_FIX
 
@@ -18,7 +18,6 @@ class RevEngPlugin(plugin_t):
 
     def __init__(self):
         super(RevEngPlugin, self).__init__()
-        self.initialized = False
 
         self.state = RevEngState(RevEngConfiguration())
 
@@ -26,6 +25,10 @@ class RevEngPlugin(plugin_t):
         kv = get_kernel_version().split(".")
         if int(kv[0]) < 8:
             return PLUGIN_SKIP
+
+        if self.state.config.auto_start:
+            self.run()
+            return PLUGIN_KEEP
         return PLUGIN_OK
 
     def reload_plugin(self):
@@ -35,7 +38,7 @@ class RevEngPlugin(plugin_t):
         self.state.start_plugin()
         self.initialized = True
 
-    def run(self, args):
+    def run(self, args=None):
         self.reload_plugin()
 
     def term(self):
