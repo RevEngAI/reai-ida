@@ -3,6 +3,7 @@
 from enum import IntEnum
 
 import idc
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QDialog
 from ida_nalt import get_imagebase
 from idautils import Functions
@@ -41,13 +42,13 @@ class AutoAnalysisDialog(QDialog):
         self.ui.resultsTable.setModel(RevEngTableModel(data=[], parent=self,
                                                        header=["Source Symbol", "Destination Symbol", "Successful", "Reason",]))
 
-        self.ui.startButton.clicked.connect(self.analyze)
+        self.ui.startButton.clicked.connect(self.auto_analysis)
 
         self.ui.resultsFilter.textChanged.connect(self._filter)
         self.ui.collectionsFilter.textChanged.connect(self._filter)
 
         self.ui.confidenceSlider.valueChanged.connect(self._confidence)
-        self.ui.tabWidget.tabBarClicked.connect(self._tabChanged)
+        self.ui.tabWidget.tabBarClicked.connect(self._tab_changed)
 
         self._confidence(self.ui.confidenceSlider.sliderPosition())
 
@@ -65,25 +66,14 @@ class AutoAnalysisDialog(QDialog):
 
     def showEvent(self, event):
         super(AutoAnalysisDialog, self).showEvent(event)
-        self.analyze()
+        self.load_collections()
 
-    def analyze(self):
+    def auto_analysis(self):
         try:
             self._analysis = [0] * len(Analysis)
 
             self.ui.startButton.setEnabled(False)
             self.ui.progressBar.setProperty("value", 0)
-
-            res: Response = reveng_req(post, "collections",
-                                       json_data={"scope": "PUBLIC",
-                                                  "page_size": 1000,
-                                                  "page_number": 1})
-            collections = []
-            for collection in res.json()["collections"]:
-                collections.append([collection["collection_name"], ""])
-
-            self.ui.collectionsTable.model().updateData(collections)
-            self.ui.collectionsTable.resizeColumnsToContents()
 
             res: Response = RE_embeddings(fpath=self.path)
 
@@ -109,6 +99,7 @@ class AutoAnalysisDialog(QDialog):
                     else:
                         try:
                             res = RE_nearest_symbols(embedding=fe["embedding"],
+                                                     collections=self._selected_collections(),
                                                      nns=1, ignore_hashes=self._ignore_hashes,
                                                      model_name=self.state.config.get("model"))
 
@@ -155,7 +146,7 @@ class AutoAnalysisDialog(QDialog):
     def _confidence(self, value):
         self.ui.description.setText(f"Confidence: {value:#02d}")
 
-    def _tabChanged(self, index):
+    def _tab_changed(self, index):
         self.ui.confidenceSlider.setEnabled(index == 0)
 
         if index == 0:
@@ -165,3 +156,34 @@ class AutoAnalysisDialog(QDialog):
                                         f"Successful Analyses: {self._analysis[Analysis.SUCCESSFUL.value]}<br/>"
                                         f"Skipped Analyses: {self._analysis[Analysis.SKIPPED.value]}<br/>"
                                         f"Errored Analyses: {self._analysis[Analysis.UNSUCCESSFUL.value]}")
+
+    def load_collections(self, scope: str = "PUBLIC", page_size: int = 10000, page_number: int = 1):
+        try:
+            self.ui.startButton.setEnabled(False)
+
+            res: Response = reveng_req(post, "collections",
+                                       json_data={"scope": scope,
+                                                  "page_size": page_size,
+                                                  "page_number": page_number})
+
+            collections = []
+            for collection in res.json()["collections"]:
+                collections.append([collection["collection_name"], None])
+
+            self.ui.collectionsTable.model().updateData(collections)
+            self.ui.collectionsTable.resizeColumnsToContents()
+        except HTTPError as e:
+            Dialog.showError("Auto Analysis",
+                             f"Auto Analysis Error: {e.response.json()['error']}")
+        finally:
+            self.ui.startButton.setEnabled(True)
+
+    def _selected_collections(self):
+        model = self.ui.collectionsTable.model()
+
+        regex = []
+        for idx in range(self.ui.collectionsTable.model().rowCount()):
+            if model.index(idx, 1).data(Qt.CheckStateRole) == Qt.Checked:
+                regex.append(model.index(idx, 0).data(Qt.DisplayRole))
+
+        return regex

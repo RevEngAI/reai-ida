@@ -5,7 +5,6 @@ import idc
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIntValidator
 from PyQt5.QtWidgets import QDialog
-from ida_funcs import get_func, update_func
 from ida_nalt import get_imagebase
 from requests import Response, HTTPError
 
@@ -89,10 +88,6 @@ class RenameSymbolsDialog(QDialog):
         rows = self.ui.tableView.selectionModel().selectedRows(column=0)
 
         if len(rows) > 0:
-            if idc.set_name(self.v_addr, self.ui.tableView.model().data(rows[0], Qt.DisplayRole),
-                            ida_name.SN_FORCE | ida_name.SN_NOWARN | ida_name.SN_NOCHECK):
-                func = get_func(self.v_addr)
-                func.flags |= idc.FUNC_LIB
-                update_func(func)
-            else:
+            if not idc.set_name(self.v_addr, self.ui.tableView.model().data(rows[0], Qt.DisplayRole),
+                                ida_name.SN_FORCE | ida_name.SN_NOWARN | ida_name.SN_NOCHECK):
                 Dialog.showError("Rename Function Error", "Symbol already exists.")
