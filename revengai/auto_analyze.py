@@ -40,7 +40,8 @@ class AutoAnalysisDialog(QDialog):
                                                                     data=[], columns=[1], parent=self))
 
         self.ui.resultsTable.setModel(RevEngTableModel(data=[], parent=self,
-                                                       header=["Source Symbol", "Destination Symbol", "Successful", "Reason",]))
+                                                       header=["Source Symbol", "Destination Symbol",
+                                                               "Successful", "Reason",]))
 
         self.ui.startButton.clicked.connect(self.auto_analysis)
 
@@ -157,7 +158,7 @@ class AutoAnalysisDialog(QDialog):
                                         f"Skipped Analyses: {self._analysis[Analysis.SKIPPED.value]}<br/>"
                                         f"Errored Analyses: {self._analysis[Analysis.UNSUCCESSFUL.value]}")
 
-    def load_collections(self, scope: str = "PUBLIC", page_size: int = 10000, page_number: int = 1):
+    def load_collections(self, scope: str = "PUBLIC", page_size: int = 100000, page_number: int = 1):
         try:
             self.ui.startButton.setEnabled(False)
 
@@ -176,7 +177,7 @@ class AutoAnalysisDialog(QDialog):
             Dialog.showError("Auto Analysis",
                              f"Auto Analysis Error: {e.response.json()['error']}")
         finally:
-            self.ui.startButton.setEnabled(True)
+            self.auto_analysis()
 
     def _selected_collections(self):
         model = self.ui.collectionsTable.model()
