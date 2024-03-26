@@ -26,11 +26,8 @@ class RevEngSetupWizard(QWizard):
         self.setOptions(QWizard.CancelButtonOnLeft | QWizard.NoBackButtonOnStartPage)
         self.setWizardStyle(QWizard.MacStyle if platform == 'darwin' else QWizard.ModernStyle)
 
-        self.button(QWizard.FinishButton).clicked.connect(self._finishClicked)
-
-    def _finishClicked(self):
-        self.state.config.save()
-
+        self.button(QWizard.FinishButton).clicked.connect(self.state.config.save)
+        
 
 class BasePage(QWizardPage):
     __metaclass__ = abc.ABCMeta
