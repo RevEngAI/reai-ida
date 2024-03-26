@@ -6,7 +6,7 @@ from requests import get, HTTPError, Response
 
 from PyQt5.QtWidgets import QWizardPage, QFormLayout, QLineEdit, QLabel, QWizard, QComboBox, QLayout
 
-from reait.api import reveng_req, re_conf
+from reait.api import reveng_req
 from revengai.manager import RevEngState
 
 from revengai.logger import plugin_logger
@@ -29,7 +29,7 @@ class RevEngSetupWizard(QWizard):
         self.button(QWizard.FinishButton).clicked.connect(self._finishClicked)
 
     def _finishClicked(self):
-        self.state.config.persistConfig()
+        self.state.config.save()
 
 
 class BasePage(QWizardPage):

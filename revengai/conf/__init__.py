@@ -22,7 +22,7 @@ class RevEngConfiguration(object):
 
         self._config = {}
 
-        self.readConfig()
+        self.restore()
 
     def get(self, name: str) -> any:
         return self.config.get(name)
@@ -33,7 +33,7 @@ class RevEngConfiguration(object):
         else:
             self.config[name] = value
 
-    def persistConfig(self) -> None:
+    def save(self) -> None:
         try:
             if self.is_valid():
                 re_conf["apikey"] = self.config["apikey"]
@@ -43,7 +43,7 @@ class RevEngConfiguration(object):
         except Exception as e:
             plugin_logger.error(f"[EXCEPTION] -> {e}")
 
-    def readConfig(self) -> None:
+    def restore(self) -> None:
         if exists(join(self._dir, self._filename)):
             try:
                 with open(join(self._dir, self._filename), "r") as fd:
