@@ -35,8 +35,8 @@ class Handler(action_handler_t):
     def register(self, name, label, shortcut=None, tooltip=None, icon=-1) -> None:
         action = action_desc_t(
             name,      # The action name. This acts like an ID and must be unique
-            label,     # The action text.
-            self,      # The action handler.
+            label,     # The action text
+            self,      # The action handler
             shortcut,  # Optional: the action shortcut
             tooltip,   # Optional: the action tooltip (available in menus/toolbar)
             icon,      # Optional: the action icon (shows when in menus/toolbars)

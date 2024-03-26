@@ -11,7 +11,7 @@ from requests import Response, HTTPError
 from reait.api import RE_embeddings, RE_nearest_symbols, binary_id
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
-from revengai.table_model import RevEngTableModel
+from revengai.model.table_model import RevEngTableModel
 from revengai.ui.rename_symbols_panel import Ui_RenameSymbolsPanel
 
 

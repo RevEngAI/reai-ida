@@ -10,10 +10,10 @@ from idautils import Functions
 from requests import Response, HTTPError, post
 
 from reait.api import RE_embeddings, binary_id, RE_nearest_symbols, reveng_req
-from revengai.checkable_model import RevEngCheckableTableModel
+from revengai.model.checkable_model import RevEngCheckableTableModel
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
-from revengai.table_model import RevEngTableModel
+from revengai.model.table_model import RevEngTableModel
 from revengai.ui.auto_analysis_panel import Ui_AutoAnalysisPanel
 
 
@@ -141,8 +141,7 @@ class AutoAnalysisDialog(QDialog):
 
         for row in range(table.model().rowCount()):
             item = table.model().index(row, 0)
-            match = filter_text.lower() not in item.sibling(row, 0).data().lower()
-            table.setRowHidden(row, match)
+            table.setRowHidden(row, filter_text.lower() not in item.sibling(row, 0).data().lower())
 
     def _confidence(self, value):
         self.ui.description.setText(f"Confidence: {value:#02d}")
@@ -166,6 +165,8 @@ class AutoAnalysisDialog(QDialog):
                                        json_data={"scope": scope,
                                                   "page_size": page_size,
                                                   "page_number": page_number})
+
+            res.raise_for_status()
 
             collections = []
             for collection in res.json()["collections"]:
