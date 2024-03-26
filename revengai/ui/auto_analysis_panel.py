@@ -14,7 +14,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_AutoAnalysisPanel(object):
     def setupUi(self, AutoAnalysisPanel):
         AutoAnalysisPanel.setObjectName("AutoAnalysisPanel")
-        AutoAnalysisPanel.resize(800, 400)
+        AutoAnalysisPanel.resize(800, 600)
         AutoAnalysisPanel.setContextMenuPolicy(QtCore.Qt.NoContextMenu)
         AutoAnalysisPanel.setLayoutDirection(QtCore.Qt.LeftToRight)
         self.verticalLayout = QtWidgets.QVBoxLayout(AutoAnalysisPanel)
@@ -90,9 +90,8 @@ class Ui_AutoAnalysisPanel(object):
         self.verticalLayout.addWidget(self.tabWidget)
         self.description = QtWidgets.QLabel(AutoAnalysisPanel)
         self.description.setTextFormat(QtCore.Qt.RichText)
-        self.description.setScaledContents(False)
         self.description.setAlignment(QtCore.Qt.AlignCenter)
-        self.description.setWordWrap(False)
+        self.description.setWordWrap(True)
         self.description.setObjectName("description")
         self.verticalLayout.addWidget(self.description)
         self.confidenceSlider = QtWidgets.QSlider(AutoAnalysisPanel)

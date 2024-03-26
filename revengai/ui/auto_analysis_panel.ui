@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>800</width>
-    <height>400</height>
+    <height>600</height>
    </rect>
   </property>
   <property name="contextMenuPolicy">
@@ -207,14 +207,11 @@
      <property name="textFormat">
       <enum>Qt::RichText</enum>
      </property>
-     <property name="scaledContents">
-      <bool>false</bool>
-     </property>
      <property name="alignment">
       <set>Qt::AlignCenter</set>
      </property>
      <property name="wordWrap">
-      <bool>false</bool>
+      <bool>true</bool>
      </property>
      <property name="margin">
       <number>4</number>
