@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-from os import makedirs
-from os.path import exists, basename, dirname
+
+from os.path import exists, basename
 
 import ida_kernwin
 import idaapi
@@ -52,7 +52,7 @@ def check_analyze(state: RevEngState) -> None:
                     Dialog.showInfo("Check Analysis Status", f"Status: {res.json()['status']}")
                 else:
                     Dialog.showError("Check Analysis Status", "No matches found.")
-            except Exception:
+            except HTTPError:
                 Dialog.showError("Check Analysis Status",
                                  "Error getting status\n\nCheck:\n"
                                  "  • You have downloaded your binary id from the portal.\n"
@@ -138,8 +138,6 @@ def export_logs(state: RevEngState) -> None:
                     filename = ida_kernwin.ask_file(1, "*.log", "Output Filename:")
 
                     if filename:
-                        makedirs(dirname(filename), mode=0o755, exist_ok=True)
-
                         with open(filename, "w") as fd:
                             fd.write(res.text)
                 else:
@@ -180,13 +178,13 @@ def function_signature(state: RevEngState) -> None:
 
                                 dump = res.json()[0]
 
+                                # TODO Manage information of function arguments
                                 params = dump["params"]
                                 if dump["returns"]:
                                     return_type = dump["return_type"]
 
                                 break
             except HTTPError as e:
-                print(e)
                 if "error" in e.response.json():
                     Dialog.showError("Binary Analysis Logs",
-                                     f"Unable to export binary analysis logs: {e.response.json()['error']}")
+                                     f"Failed to obtain function argument details: {e.response.json()['error']}")
