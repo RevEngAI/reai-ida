@@ -24,7 +24,13 @@
   {
     "id": "reai:rename",
     "name": "Rename From Similar Functions",
-    "callback": "rename_functions",
+    "callback": "rename_function",
     "shortcut": "Ctrl+Shift+R"
+  },
+  {
+    "id": "reai:explain",
+    "disabled": true,
+    "name": "Explain this function",
+    "callback": "explain_function"
   }
 ]
