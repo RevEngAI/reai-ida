@@ -85,13 +85,12 @@ def explain_function(state: RevEngState) -> None:
     if not state.config.is_valid():
         setup_wizard(state)
     else:
-        # pseudo_code = IDAUtils.disasm_func(idc.here())
-
         pseudo_code = IDAUtils.decompile_func(idc.here())
 
         if len(pseudo_code) > 0:
             try:
-                res: Response = reveng_req(post, "explain", data={pseudo_code})
+                res: Response = reveng_req(post, "explain", data={pseudo_code},
+                                           json_data={"language": idaapi.get_file_type_name()})
 
                 res.raise_for_status()
                 print(res.text)

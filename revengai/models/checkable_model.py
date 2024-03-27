@@ -23,7 +23,6 @@ class RevEngCheckableTableModel(RevEngTableModel):
 
     def setData(self, index, value, role=None):
         if index.isValid() and role == Qt.CheckStateRole and index.column() in self._columns:
-            print(value)
             self._checked[QPersistentModelIndex(index)] = value
             return True
         return super().setData(index, value, role)
