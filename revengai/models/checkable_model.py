@@ -2,7 +2,7 @@
 
 from PyQt5.QtCore import Qt, QPersistentModelIndex
 
-from revengai.model.table_model import RevEngTableModel
+from revengai.models.table_model import RevEngTableModel
 
 
 class RevEngCheckableTableModel(RevEngTableModel):
