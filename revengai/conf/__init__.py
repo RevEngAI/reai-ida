@@ -8,7 +8,6 @@ from os.path import join, exists
 from ida_diskio import get_user_idadir
 
 from reait.api import re_conf
-from revengai.logger import plugin_logger
 
 
 class RevEngConfiguration(object):
@@ -34,25 +33,19 @@ class RevEngConfiguration(object):
             self.config[name] = value
 
     def save(self) -> None:
-        try:
-            if self.is_valid():
-                re_conf["apikey"] = self.config["apikey"]
+        if self.is_valid():
+            re_conf["apikey"] = self.config["apikey"]
 
-            with open(join(self._dir, self._filename), "w") as fd:
-                fd.write(dumps(self.config))
-        except Exception as e:
-            plugin_logger.error(f"[EXCEPTION] -> {e}")
+        with open(join(self._dir, self._filename), "w") as fd:
+            fd.write(dumps(self.config))
 
     def restore(self) -> None:
         if exists(join(self._dir, self._filename)):
-            try:
-                with open(join(self._dir, self._filename), "r") as fd:
-                    self._config = loads(fd.read())
+            with open(join(self._dir, self._filename), "r") as fd:
+                self._config = loads(fd.read())
 
-                if self.is_valid():
-                    re_conf["apikey"] = self.config["apikey"]
-            except Exception as e:
-                plugin_logger.error(f"[EXCEPTION] -> {e}")
+            if self.is_valid():
+                re_conf["apikey"] = self.config["apikey"]
         else:
             self.config["host"] = re_conf["host"]
 
