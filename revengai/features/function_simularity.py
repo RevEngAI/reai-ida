@@ -30,6 +30,7 @@ class FunctionSimularityDialog(BaseDialog):
         self.ui = Ui_FunctionSimularityPanel()
         self.ui.setupUi(self)
 
+        self.ui.checkBox.setVisible(False)
         self.ui.lineEdit.setValidator(QIntValidator(1, 256, self))
         self.ui.tableView.setModel(RevEngTableModel([], ["Function Name", "Confidence", "From"], self))
 
