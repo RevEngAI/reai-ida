@@ -118,16 +118,16 @@ class RevEngConfigForm_t(PluginForm):
                 handler.attach_to_menu("View/RevEng.AI/")
 
                 # Register hotkey actions
-                shortcut = action.get("shortcut")
-                if shortcut and handler.callback:
-                    self._hotkeys.append(add_hotkey(shortcut, handler.callback))
+
+                if hasattr(action, "shortcut") and handler.callback:
+                    self._hotkeys.append(add_hotkey(action.get("shortcut"), handler.callback))
 
     def unregister_actions(self):
         # Remove ui hook
         self._hooks.unhook()
 
         # Unregister hotkey actions
-        for hotkey in list(filter(lambda hk: hk is not None, self._hotkeys)):
+        for hotkey in list(filter(lambda key: key is not None, self._hotkeys)):
             del_hotkey(hotkey)
 
         # Unregister menu actions

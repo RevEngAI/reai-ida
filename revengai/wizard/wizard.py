@@ -7,9 +7,8 @@ from requests import get, HTTPError, Response
 from PyQt5.QtWidgets import QWizardPage, QFormLayout, QLineEdit, QLabel, QWizard, QComboBox, QLayout
 
 from reait.api import reveng_req
+from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
-
-from revengai.logger import plugin_logger
 
 
 class RevEngSetupWizard(QWizard):
@@ -37,11 +36,11 @@ class BasePage(QWizardPage):
 
         self.state = state
 
-        self.setTitle(self._getTitle())
+        self.setTitle(self._get_title())
         self.setLayout(self._get_layout())
 
     @abc.abstractmethod
-    def _getTitle(self) -> str:
+    def _get_title(self) -> str:
         pass
 
     @abc.abstractmethod
@@ -68,10 +67,10 @@ class UserCredentialsPage(BasePage):
                 self.state.config.set("models", res.json()["models"])
                 return True
             except HTTPError as e:
-                plugin_logger.error(f"[EXCEPTION] -> {e}")
+                Dialog.showError("Setup Wizard", f"{e.response.json()['error']}")
         return False
 
-    def _getTitle(self) -> str:
+    def _get_title(self) -> str:
         return "RevEng.AI Credentials"
 
     def _get_layout(self) -> QLayout:
@@ -97,7 +96,7 @@ class UserAvailableModelsPage(BasePage):
 
         self.setFinalPage(True)
 
-    def _getTitle(self) -> str:
+    def _get_title(self) -> str:
         return "Setup Mode"
 
     def _get_layout(self) -> QLayout:

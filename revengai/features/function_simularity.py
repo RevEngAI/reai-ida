@@ -11,11 +11,11 @@ from requests import Response, HTTPError
 from reait.api import RE_embeddings, RE_nearest_symbols, binary_id
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
-from revengai.model.table_model import RevEngTableModel
-from revengai.ui.rename_symbols_panel import Ui_RenameSymbolsPanel
+from revengai.models.table_model import RevEngTableModel
+from revengai.ui.function_simularity_panel import Ui_FunctionSimularityPanel
 
 
-class RenameSymbolsDialog(QDialog):
+class FunctionSimularityDialog(QDialog):
     def __init__(self, state: RevEngState, fpath: str):
         QDialog.__init__(self)
 
@@ -30,7 +30,7 @@ class RenameSymbolsDialog(QDialog):
             self.v_addr = 0
             Dialog.showError("Find Similar Functions", "Cursor position not in a function.")
 
-        self.ui = Ui_RenameSymbolsPanel()
+        self.ui = Ui_FunctionSimularityPanel()
         self.ui.setupUi(self)
 
         self.ui.lineEdit.setValidator(QIntValidator(1, 256, self))
@@ -40,7 +40,7 @@ class RenameSymbolsDialog(QDialog):
         self.ui.renameButton.clicked.connect(self.rename_symbol)
 
     def showEvent(self, event):
-        super(RenameSymbolsDialog, self).showEvent(event)
+        super(FunctionSimularityDialog, self).showEvent(event)
         self.fetch()
 
     def fetch(self):

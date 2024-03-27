@@ -5,11 +5,11 @@ from requests import HTTPError, Response
 
 from idc import get_input_file_path
 from reait.api import RE_upload, RE_analyse, RE_status
-from revengai.auto_analyze import AutoAnalysisDialog
+from revengai.features.auto_analyze import AutoAnalysisDialog
 
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
-from revengai.rename_symbols import RenameSymbolsDialog
+from revengai.features.function_simularity import FunctionSimularityDialog
 from revengai.wizard.wizard import RevEngSetupWizard
 
 
@@ -72,5 +72,5 @@ def rename_functions(state: RevEngState) -> None:
         path = get_input_file_path()
 
         if exists(path):
-            dialog = RenameSymbolsDialog(state, path)
+            dialog = FunctionSimularityDialog(state, path)
             dialog.exec_()

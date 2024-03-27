@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'rename_symbols_panel.ui'
+# Form implementation generated from reading ui file 'function_simularity_panel.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.10
 #
@@ -11,18 +11,18 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 
-class Ui_RenameSymbolsPanel(object):
-    def setupUi(self, RenameSymbolsPanel):
-        RenameSymbolsPanel.setObjectName("RenameSymbolsPanel")
-        RenameSymbolsPanel.resize(800, 400)
-        RenameSymbolsPanel.setContextMenuPolicy(QtCore.Qt.NoContextMenu)
-        RenameSymbolsPanel.setLayoutDirection(QtCore.Qt.LeftToRight)
-        self.gridLayout_5 = QtWidgets.QGridLayout(RenameSymbolsPanel)
+class Ui_FunctionSimularityPanel(object):
+    def setupUi(self, FunctionSimularityPanel):
+        FunctionSimularityPanel.setObjectName("FunctionSimularityPanel")
+        FunctionSimularityPanel.resize(800, 400)
+        FunctionSimularityPanel.setContextMenuPolicy(QtCore.Qt.NoContextMenu)
+        FunctionSimularityPanel.setLayoutDirection(QtCore.Qt.LeftToRight)
+        self.gridLayout_5 = QtWidgets.QGridLayout(FunctionSimularityPanel)
         self.gridLayout_5.setSizeConstraint(QtWidgets.QLayout.SetDefaultConstraint)
         self.gridLayout_5.setContentsMargins(8, 8, 8, 8)
         self.gridLayout_5.setHorizontalSpacing(8)
         self.gridLayout_5.setObjectName("gridLayout_5")
-        self.groupBox = QtWidgets.QGroupBox(RenameSymbolsPanel)
+        self.groupBox = QtWidgets.QGroupBox(FunctionSimularityPanel)
         self.groupBox.setObjectName("groupBox")
         self.verticalLayout = QtWidgets.QVBoxLayout(self.groupBox)
         self.verticalLayout.setObjectName("verticalLayout")
@@ -91,7 +91,7 @@ class Ui_RenameSymbolsPanel(object):
         self.horizontalLayout_2.addItem(spacerItem9)
         self.verticalLayout.addLayout(self.horizontalLayout_2)
         self.gridLayout_5.addWidget(self.groupBox, 0, 0, 1, 1)
-        self.tableView = QtWidgets.QTableView(RenameSymbolsPanel)
+        self.tableView = QtWidgets.QTableView(FunctionSimularityPanel)
         self.tableView.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.tableView.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
         self.tableView.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
@@ -108,12 +108,12 @@ class Ui_RenameSymbolsPanel(object):
         self.gridLayout_5.addWidget(self.tableView, 0, 1, 1, 1)
         self.gridLayout_5.setColumnStretch(1, 1)
 
-        self.retranslateUi(RenameSymbolsPanel)
-        QtCore.QMetaObject.connectSlotsByName(RenameSymbolsPanel)
+        self.retranslateUi(FunctionSimularityPanel)
+        QtCore.QMetaObject.connectSlotsByName(FunctionSimularityPanel)
 
-    def retranslateUi(self, RenameSymbolsPanel):
+    def retranslateUi(self, FunctionSimularityPanel):
         _translate = QtCore.QCoreApplication.translate
-        RenameSymbolsPanel.setWindowTitle(_translate("RenameSymbolsPanel", "RevEng.AI Toolkit: Function Rename"))
+        FunctionSimularityPanel.setWindowTitle(_translate("FunctionSimularityPanel", "RevEng.AI Toolkit: Function Rename"))
         self.groupBox.setTitle(_translate("RenameSymbolsPanel", "Symbol Options"))
         self.checkBox.setText(_translate("RenameSymbolsPanel", "Use Debug Symbol"))
         self.label_2.setText(_translate("RenameSymbolsPanel", "Results"))

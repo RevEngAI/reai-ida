@@ -10,10 +10,10 @@ from idautils import Functions
 from requests import Response, HTTPError, post
 
 from reait.api import RE_embeddings, binary_id, RE_nearest_symbols, reveng_req
-from revengai.model.checkable_model import RevEngCheckableTableModel
+from revengai.models.checkable_model import RevEngCheckableTableModel
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
-from revengai.model.table_model import RevEngTableModel
+from revengai.models.table_model import RevEngTableModel
 from revengai.ui.auto_analysis_panel import Ui_AutoAnalysisPanel
 
 
