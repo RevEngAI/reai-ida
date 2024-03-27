@@ -32,5 +32,10 @@
     "disabled": true,
     "name": "Explain this function",
     "callback": "explain_function"
+  },
+  {
+    "id": "reai:logs",
+    "name": "Export Binary Analysis Logs",
+    "callback": "export_logs"
   }
 ]

@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
+from os import makedirs
+from os.path import exists, basename, dirname
 
-from os.path import exists, basename
-
+import ida_kernwin
 import idc
 from requests import HTTPError, Response, post
 
-from reait.api import RE_upload, RE_analyse, RE_status, reveng_req
+from reait.api import RE_upload, RE_analyse, RE_status, reveng_req, RE_logs
 from revengai.features.auto_analyze import AutoAnalysisDialog
 
 from revengai.gui.dialog import Dialog
@@ -96,5 +97,31 @@ def explain_function(state: RevEngState) -> None:
                 # IDAUtils.set_comment(idc.here(), res.json()["explanation"])
         except HTTPError as e:
             if "error" in e.response.json():
-                Dialog.showError("",
+                Dialog.showError("Function Explanation",
                                  f"Error getting function explanation: {e.response.json()['error']}")
+
+
+def export_logs(state: RevEngState) -> None:
+    if not state.config.is_valid():
+        setup_wizard(state)
+    else:
+        path = idc.get_input_file_path()
+
+        if exists(path):
+            try:
+                res = RE_logs(path)
+
+                if isinstance(res, Response) and len(res.text) > 0:
+                    filename = ida_kernwin.ask_file(1, "*.log", "Output Filename:")
+
+                    if filename:
+                        makedirs(dirname(filename), mode=0o755, exist_ok=True)
+
+                        with open(filename, "w") as fd:
+                            fd.write(res.text)
+                else:
+                    idc.warning(f"No binary analysis logs found for: {basename(path)}.")
+            except HTTPError as e:
+                if "error" in e.response.json():
+                    Dialog.showError("Binary Analysis Logs",
+                                     f"Unable to export binary analysis logs: {e.response.json()['error']}")
