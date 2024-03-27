@@ -3,10 +3,12 @@ from os import makedirs
 from os.path import exists, basename, dirname
 
 import ida_kernwin
+import idaapi
 import idc
-from requests import HTTPError, Response, post
+from ida_nalt import get_imagebase
+from requests import HTTPError, Response, post, get
 
-from reait.api import RE_upload, RE_analyse, RE_status, reveng_req, RE_logs
+from reait.api import RE_upload, RE_analyse, RE_status, reveng_req, RE_logs, binary_id, re_bid_search
 from revengai.features.auto_analyze import AutoAnalysisDialog
 
 from revengai.gui.dialog import Dialog
@@ -83,22 +85,43 @@ def explain_function(state: RevEngState) -> None:
     if not state.config.is_valid():
         setup_wizard(state)
     else:
-        try:
-            # pseudo_code = IDAUtils.disasm_func(idc.here())
+        # pseudo_code = IDAUtils.disasm_func(idc.here())
 
-            pseudo_code = IDAUtils.decompile_func(idc.here())
+        pseudo_code = IDAUtils.decompile_func(idc.here())
 
-            if len(pseudo_code) > 0:
+        if len(pseudo_code) > 0:
+            try:
                 res: Response = reveng_req(post, "explain", data={pseudo_code})
 
                 res.raise_for_status()
                 print(res.text)
 
                 # IDAUtils.set_comment(idc.here(), res.json()["explanation"])
-        except HTTPError as e:
-            if "error" in e.response.json():
-                Dialog.showError("Function Explanation",
-                                 f"Error getting function explanation: {e.response.json()['error']}")
+            except HTTPError as e:
+                if "error" in e.response.json():
+                    Dialog.showError("Function Explanation",
+                                     f"Error getting function explanation: {e.response.json()['error']}")
+        else:
+            info = idaapi.get_inf_structure()
+
+            procname = info.procname.lower()
+            bits = 64 if info.is_64bit() else 32 if info.is_32bit() else 16
+
+            # https://github.com/williballenthin/python-idb/blob/master/idb/idapython.py#L955-L1046
+            if any(procname.startswith(arch) for arch in ["metapc", "athlon", "k62", "p2", "p3", "p4", "80"]):
+                arch = "x86"
+            elif procname.startswith("arm"):
+                arch = "ARM"
+            elif procname.startswith("mips"):
+                arch = "MIPS"
+            elif procname.startswith("ppc"):
+                arch = "PPC"
+            elif procname.startswith("sparc"):
+                arch = "SPARC"
+            else:
+                arch = "unknown arch"
+
+            idc.warning(f"Hex-Rays {arch}_{bits} decompiler is not available.")
 
 
 def export_logs(state: RevEngState) -> None:
@@ -122,6 +145,48 @@ def export_logs(state: RevEngState) -> None:
                 else:
                     idc.warning(f"No binary analysis logs found for: {basename(path)}.")
             except HTTPError as e:
+                if "error" in e.response.json():
+                    Dialog.showError("Binary Analysis Logs",
+                                     f"Unable to export binary analysis logs: {e.response.json()['error']}")
+
+
+def function_signature(state: RevEngState) -> None:
+    if not state.config.is_valid():
+        setup_wizard(state)
+    else:
+        path = idc.get_input_file_path()
+
+        if exists(path):
+            try:
+                start_addr = idc.get_func_attr(idc.here(), idc.FUNCATTR_START)
+
+                if start_addr is not idc.BADADDR:
+                    start_addr -= get_imagebase()
+
+                    bin_id = binary_id(path)
+                    bid = re_bid_search(bin_id)
+
+                    if bid > 0:
+                        res: Response = reveng_req(get, f"analyse/functions/{bid}")
+
+                        res.raise_for_status()
+
+                        for item in res.json():
+                            if item["function_vaddr"] == start_addr:
+                                res: Response = reveng_req(post, "functions/dump",
+                                                           json_data={"function_id_list": [item["function_id"]]})
+
+                                res.raise_for_status()
+
+                                dump = res.json()[0]
+
+                                params = dump["params"]
+                                if dump["returns"]:
+                                    return_type = dump["return_type"]
+
+                                break
+            except HTTPError as e:
+                print(e)
                 if "error" in e.response.json():
                     Dialog.showError("Binary Analysis Logs",
                                      f"Unable to export binary analysis logs: {e.response.json()['error']}")

@@ -28,6 +28,12 @@
     "shortcut": "Ctrl+Shift+R"
   },
   {
+    "id": "reai:signature",
+    "disabled": true,
+    "name": "Update Function Signature",
+    "callback": "function_signature"
+  },
+  {
     "id": "reai:explain",
     "disabled": true,
     "name": "Explain this function",

@@ -34,7 +34,7 @@ class Handler(action_handler_t):
 
     def register(self, name, label, shortcut=None, tooltip=None, icon=-1) -> None:
         action = action_desc_t(
-            name,      # The action name. This acts like an ID and must be unique
+            name,   # The action name. This acts like an ID and must be unique
             label,     # The action text
             self,      # The action handler
             shortcut,  # Optional: the action shortcut
@@ -67,7 +67,8 @@ class Hooks(UI_Hooks):
                     if not action.get("disabled", False):
                         if self.state.config.is_valid():
                             if action["id"] == "reai:wizard" or \
-                               action["id"] == "reai:explain" and get_widget_type(form) != BWN_PSEUDOCODE:
+                                    (get_widget_type(form) != BWN_PSEUDOCODE and
+                                     action["id"] in ["reai:explain", "reai:signature"]):
                                 continue
                         elif action["id"] != "reai:wizard":
                             continue
@@ -115,7 +116,7 @@ class RevEngConfigForm_t(PluginForm):
         with open(join(abspath(dirname(realpath(__file__))), "conf/actions.json"), "r") as fd:
             for action in load(fd):
                 if not action.get("disabled", False) and \
-                   (self.state.config.is_valid() or action["id"] == "reai:wizard"):
+                        (self.state.config.is_valid() or action["id"] == "reai:wizard"):
                     # Register menu actions
                     handler = Handler(action["callback"], self.state)
                     handler.register(action["id"], action["name"],
