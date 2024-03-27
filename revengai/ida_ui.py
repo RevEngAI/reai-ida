@@ -10,6 +10,8 @@ from ida_kernwin import set_dock_pos, PluginForm, DP_TAB, unregister_action, att
 from revengai import actions
 from revengai.manager import RevEngState
 
+MENU = "RevEngAI Toolkit/"
+
 
 class Handler(action_handler_t):
     def __init__(self, callback, state: RevEngState):
@@ -72,7 +74,7 @@ class Hooks(UI_Hooks):
                                 continue
                         elif action["id"] != "reai:wizard":
                             continue
-                        attach_action_to_popup(form, popup, action["id"], "RevEng.AI/", SETMENU_APP)
+                        attach_action_to_popup(form, popup, action["id"], MENU, SETMENU_APP)
 
 
 class RevEngConfigForm_t(PluginForm):
@@ -123,7 +125,7 @@ class RevEngConfigForm_t(PluginForm):
                                      shortcut=action.get("shortcut"),
                                      tooltip=action.get("tooltip"),
                                      icon=action.get("icon", -1))
-                    handler.attach_to_menu("RevEng.AI/")
+                    handler.attach_to_menu(MENU)
 
                     # Register hotkey actions
                     if hasattr(action, "shortcut") and handler.callback:
@@ -148,14 +150,14 @@ class RevEngGUI(object):
         self.state = state
         self.config_form = RevEngConfigForm_t(self.state)
 
-        create_menu("reai:menu", "RevEng.AI", "View")
-        set_dock_pos("RevEng.AI", "IDA View-A", DP_TAB)
+        create_menu("reai:menu", "RevEngAI Toolkit", "View")
+        set_dock_pos("RevEngAI Toolkit", "IDA View-A", DP_TAB)
 
     def show_windows(self):
         if self.state.config.auto_start:
             self.config_form.register_actions()
         else:
-            self.config_form.Show("RevEng.AI Configuration")
+            self.config_form.Show("RevEngAI Toolkit")
 
     def term(self):
         self.config_form.Close(PluginForm.WCLS_SAVE)

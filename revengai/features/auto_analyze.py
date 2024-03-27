@@ -14,7 +14,6 @@ from revengai.misc.utils import IDAUtils
 from revengai.models.checkable_model import RevEngCheckableTableModel
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
-from revengai.models.table_model import RevEngTableModel
 from revengai.ui.auto_analysis_panel import Ui_AutoAnalysisPanel
 
 
@@ -37,9 +36,10 @@ class AutoAnalysisDialog(BaseDialog):
         self.ui.collectionsTable.setModel(RevEngCheckableTableModel(header=["Collection Name", "Include",],
                                                                     data=[], columns=[1], parent=self))
 
-        self.ui.resultsTable.setModel(RevEngTableModel(data=[], parent=self,
-                                                       header=["Source Symbol", "Destination Symbol",
-                                                               "Successful", "Reason",]))
+        self.ui.resultsTable.setModel(RevEngCheckableTableModel(data=[], parent=self, columns=[2],
+                                                                flag=Qt.ItemIsSelectable | Qt.ItemIsUserCheckable,
+                                                                header=["Source Symbol", "Destination Symbol",
+                                                                        "Successful", "Reason",]))
 
         self.ui.startButton.clicked.connect(self.auto_analysis)
 
@@ -95,7 +95,7 @@ class AutoAnalysisDialog(BaseDialog):
 
                     if fe is None:
                         self._analysis[Analysis.SKIPPED.value] += 1
-                        resultsData.append((func["name"], "N/A", "No Function Embedding Found"))
+                        resultsData.append((func["name"], "N/A", None, "No Function Embedding Found"))
                     else:
                         try:
                             res = RE_nearest_symbols(embedding=fe["embedding"],
@@ -107,7 +107,7 @@ class AutoAnalysisDialog(BaseDialog):
 
                             if len(data) == 0:
                                 self._analysis[Analysis.SKIPPED.value] += 1
-                                resultsData.append((func["name"], "N/A", "No Function Embedding Found"))
+                                resultsData.append((func["name"], "N/A", None, "No Function Embedding Found"))
                                 continue
 
                             symbol = data[0]
@@ -115,8 +115,8 @@ class AutoAnalysisDialog(BaseDialog):
                             if symbol["distance"] >= confidence:
                                 # if IDAUtils.set_name(self.v_addr, symbol['name']):
                                 resultsData.append((func["name"],
-                                                    f"{symbol['name']} ({symbol['binary_name']})",
-                                                    f"Renamed with confidence of {symbol['distance']}"))
+                                                    f"{symbol['name']} ({symbol['binary_name']})", None,
+                                                    f"Renamed with confidence of '{symbol['distance']}"))
                                 # else:
                                 #     Dialog.showError("Rename Function Error",
                                 #                      f"Can't rename {func['name']}. Name {symbol['name']} already exists.")
@@ -130,7 +130,7 @@ class AutoAnalysisDialog(BaseDialog):
                             self._analysis[Analysis.SUCCESSFUL.value] += 1
                         except HTTPError as e:
                             self._analysis[Analysis.UNSUCCESSFUL.value] += 1
-                            resultsData.append((func["name"], "N/A", e.response.json()["error"]))
+                            resultsData.append((func["name"], "N/A", None, e.response.json()["error"]))
 
                 self.ui.resultsTable.model().updateData(resultsData)
                 self.ui.resultsTable.resizeColumnsToContents()
