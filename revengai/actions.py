@@ -88,10 +88,10 @@ def explain_function(state: RevEngState) -> None:
             pseudo_code = IDAUtils.decompile_func(idc.here())
 
             if len(pseudo_code) > 0:
-                res: Response = reveng_req(post, "explain", data=pseudo_code)
+                res: Response = reveng_req(post, "explain", data={pseudo_code})
 
-                print(res.text)
                 res.raise_for_status()
+                print(res.text)
 
                 # IDAUtils.set_comment(idc.here(), res.json()["explanation"])
         except HTTPError as e:
