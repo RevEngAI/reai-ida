@@ -2,9 +2,11 @@
 
 import abc
 from sys import platform
+
+from PyQt5.QtCore import QRect
 from requests import get, HTTPError, Response
 
-from PyQt5.QtWidgets import QWizardPage, QFormLayout, QLineEdit, QLabel, QWizard, QComboBox, QLayout
+from PyQt5.QtWidgets import QWizardPage, QFormLayout, QLineEdit, QLabel, QWizard, QComboBox, QLayout, QDesktopWidget
 
 from reait.api import reveng_req
 from revengai.gui.dialog import Dialog
@@ -25,7 +27,22 @@ class RevEngSetupWizard(QWizard):
         self.setOptions(QWizard.CancelButtonOnLeft | QWizard.NoBackButtonOnStartPage)
         self.setWizardStyle(QWizard.MacStyle if platform == 'darwin' else QWizard.ModernStyle)
 
-        self.button(QWizard.FinishButton).clicked.connect(self.state.config.save)
+        self.button(QWizard.FinishButton).clicked.connect(self._save)
+
+    def showEvent(self, event):
+        super(QWizard, self).showEvent(event)
+        
+        screen: QRect = QDesktopWidget().screenGeometry()
+
+        # Center the dialog to screen
+        self.move(screen.width() // 2 - self.width() // 2,
+                  screen.height() // 2 - self.height() // 2)
+
+    def _save(self):
+        self.state.config.save()
+
+        # Refresh menu item actions
+        self.state.gui.config_form.register_actions()
 
 
 class BasePage(QWizardPage):

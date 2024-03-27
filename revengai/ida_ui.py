@@ -42,14 +42,12 @@ class Handler(action_handler_t):
             icon,      # Optional: the action icon (shows when in menus/toolbars)
         )
 
-        if not register_action(action):
-            print(f"Failed to register '{name}'.")
+        register_action(action)
 
         self.name = name
 
     def attach_to_menu(self, menu) -> None:
-        if not attach_action_to_menu(menu, self.name, SETMENU_INS):
-            print(f"Failed to attach to {menu} the action '{self.name}'.")
+        attach_action_to_menu(menu, self.name, SETMENU_INS)
 
 
 class Hooks(UI_Hooks):
@@ -66,9 +64,13 @@ class Hooks(UI_Hooks):
             # Add actions
             with open(join(abspath(dirname(realpath(__file__))), "conf/actions.json"), "r") as fd:
                 for action in load(fd):
-                    if action["id"] == "reai:wizard" and not self.state.config.is_valid():
-                        attach_action_to_popup(form, popup, action["id"], "RevEng.AI/", SETMENU_APP)
-                    elif action["id"] != "reai:wizard" and self.state.config.is_valid():
+                    if not action.get("disabled", False):
+                        if self.state.config.is_valid():
+                            if action["id"] == "reai:wizard" or \
+                               action["id"] == "reai:explain" and get_widget_type(form) != BWN_PSEUDOCODE:
+                                continue
+                        elif action["id"] != "reai:wizard":
+                            continue
                         attach_action_to_popup(form, popup, action["id"], "RevEng.AI/", SETMENU_APP)
 
 
@@ -92,8 +94,10 @@ class RevEngConfigForm_t(PluginForm):
     def Show(self, caption, options=0):
         if not self.shown:
             self.shown = True
+
             return PluginForm.Show(self, caption,
-                                   options=(PluginForm.WOPN_TAB |
+                                   options=(options |
+                                            PluginForm.WOPN_TAB |
                                             PluginForm.WCLS_SAVE |
                                             PluginForm.WOPN_MENU |
                                             PluginForm.WOPN_PERSIST |
@@ -101,6 +105,7 @@ class RevEngConfigForm_t(PluginForm):
 
     def OnCreate(self, form):
         self.created = True
+
         self.register_actions()
 
     def register_actions(self):
@@ -109,18 +114,19 @@ class RevEngConfigForm_t(PluginForm):
 
         with open(join(abspath(dirname(realpath(__file__))), "conf/actions.json"), "r") as fd:
             for action in load(fd):
-                # Register menu actions
-                handler = Handler(action["callback"], self.state)
-                handler.register(action["id"], action["name"],
-                                 shortcut=action.get("shortcut"),
-                                 tooltip=action.get("tooltip"),
-                                 icon=action.get("icon", -1))
-                handler.attach_to_menu("View/RevEng.AI/")
+                if not action.get("disabled", False) and \
+                   (self.state.config.is_valid() or action["id"] == "reai:wizard"):
+                    # Register menu actions
+                    handler = Handler(action["callback"], self.state)
+                    handler.register(action["id"], action["name"],
+                                     shortcut=action.get("shortcut"),
+                                     tooltip=action.get("tooltip"),
+                                     icon=action.get("icon", -1))
+                    handler.attach_to_menu("RevEng.AI/")
 
-                # Register hotkey actions
-
-                if hasattr(action, "shortcut") and handler.callback:
-                    self._hotkeys.append(add_hotkey(action.get("shortcut"), handler.callback))
+                    # Register hotkey actions
+                    if hasattr(action, "shortcut") and handler.callback:
+                        self._hotkeys.append(add_hotkey(action.get("shortcut"), handler.callback))
 
     def unregister_actions(self):
         # Remove ui hook
