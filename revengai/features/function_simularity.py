@@ -1,26 +1,23 @@
 # -*- coding: utf-8 -*-
 
-import ida_name
 import idc
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIntValidator
-from PyQt5.QtWidgets import QDialog
 from ida_nalt import get_imagebase
 from requests import Response, HTTPError
 
 from reait.api import RE_embeddings, RE_nearest_symbols, binary_id
+from revengai.features import BaseDialog
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
+from revengai.misc.utils import IDAUtils
 from revengai.models.table_model import RevEngTableModel
 from revengai.ui.function_simularity_panel import Ui_FunctionSimularityPanel
 
 
-class FunctionSimularityDialog(QDialog):
+class FunctionSimularityDialog(BaseDialog):
     def __init__(self, state: RevEngState, fpath: str):
-        QDialog.__init__(self)
-
-        self.path = fpath
-        self.state = state
+        BaseDialog.__init__(self, state, fpath)
 
         start_addr = idc.get_func_attr(idc.here(), idc.FUNCATTR_START)
 
@@ -88,6 +85,5 @@ class FunctionSimularityDialog(QDialog):
         rows = self.ui.tableView.selectionModel().selectedRows(column=0)
 
         if len(rows) > 0:
-            if not idc.set_name(self.v_addr, self.ui.tableView.model().data(rows[0], Qt.DisplayRole),
-                                ida_name.SN_FORCE | ida_name.SN_NOWARN | ida_name.SN_NOCHECK):
+            if not IDAUtils.set_name(self.v_addr, self.ui.tableView.model().data(rows[0], Qt.DisplayRole)):
                 Dialog.showError("Rename Function Error", "Symbol already exists.")

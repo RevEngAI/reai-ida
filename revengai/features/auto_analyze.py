@@ -4,12 +4,13 @@ from enum import IntEnum
 
 import idc
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QDialog
 from ida_nalt import get_imagebase
 from idautils import Functions
 from requests import Response, HTTPError, post
 
 from reait.api import RE_embeddings, binary_id, RE_nearest_symbols, reveng_req
+from revengai.features import BaseDialog
+from revengai.misc.utils import IDAUtils
 from revengai.models.checkable_model import RevEngCheckableTableModel
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
@@ -24,12 +25,9 @@ class Analysis(IntEnum):
     SUCCESSFUL = 3
 
 
-class AutoAnalysisDialog(QDialog):
+class AutoAnalysisDialog(BaseDialog):
     def __init__(self, state: RevEngState, fpath: str):
-        QDialog.__init__(self)
-
-        self.path = fpath
-        self.state = state
+        BaseDialog.__init__(self, state, fpath)
 
         self._ignore_hashes = [binary_id(self.path)]
 
@@ -84,10 +82,11 @@ class AutoAnalysisDialog(QDialog):
             else:
                 embeddings = res.json()
 
-                resultsData = []
+                collections = self._selected_collections()
                 confidence = (float(self.ui.confidenceSlider.property("value")) /
                               float(self.ui.confidenceSlider.property("maximum")))
 
+                resultsData = []
                 for idx, func in enumerate(self._functions):
                     self._analysis[Analysis.TOTAL.value] += 1
                     self.ui.progressBar.setProperty("value", idx)
@@ -100,7 +99,7 @@ class AutoAnalysisDialog(QDialog):
                     else:
                         try:
                             res = RE_nearest_symbols(embedding=fe["embedding"],
-                                                     collections=self._selected_collections(),
+                                                     collections=collections,
                                                      nns=1, ignore_hashes=self._ignore_hashes,
                                                      model_name=self.state.config.get("model"))
 
@@ -114,18 +113,24 @@ class AutoAnalysisDialog(QDialog):
                             symbol = data[0]
 
                             if symbol["distance"] >= confidence:
-                                # if idc.set_name(self.v_addr, item['name'],
-                                #                 ida_name.SN_FORCE | ida_name.SN_NOWARN | ida_name.SN_NOCHECK):
+                                # if IDAUtils.set_name(self.v_addr, symbol['name']):
                                 resultsData.append((func["name"],
                                                     f"{symbol['name']} ({symbol['binary_name']})",
                                                     f"Renamed with confidence of {symbol['distance']}"))
                                 # else:
-                                #     Dialog.showError("Rename Function Error", "Symbol already exists.")
+                                #     Dialog.showError("Rename Function Error",
+                                #                      f"Can't rename {func['name']}. Name {symbol['name']} already exists.")
+                                #
+                                #     self._analysis[Analysis.UNSUCCESSFUL.value] += 1
+                                #     resultsData.append((func["name"],
+                                #                         f"Can't rename {func['name']}",
+                                #                         f"Name {symbol['name']} already exists."))
+                                #     continue
 
                             self._analysis[Analysis.SUCCESSFUL.value] += 1
                         except HTTPError as e:
                             self._analysis[Analysis.UNSUCCESSFUL.value] += 1
-                            resultsData.append((func["name"], "N/A", e.response.text))
+                            resultsData.append((func["name"], "N/A", e.response.json()["error"]))
 
                 self.ui.resultsTable.model().updateData(resultsData)
                 self.ui.resultsTable.resizeColumnsToContents()
