@@ -57,8 +57,7 @@ class FunctionSimularityDialog(BaseDialog):
             res: Response = RE_embeddings(fpath=self.path)
 
             if res.status_code > 299:
-                inmain(Dialog.showError, "Auto Analysis",
-                       f"Auto Analysis Error: {res.json().get('error')}")
+                inmain(Dialog.showError, "Auto Analysis", f"Auto Analysis Error: {res.json().get('error')}")
             else:
                 fe = next((item for item in res.json() if item["vaddr"] == self.v_addr), None)
 

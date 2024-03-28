@@ -33,9 +33,10 @@ def upload_binary(state: RevEngState) -> None:
         def bg_task(path: str) -> None:
             if RevEngState.LIMIT > (stat(path).st_size // (1024 * 1024)):
                 try:
-                    RE_upload(path)
+                    res = RE_upload(path)
 
-                    RE_analyse(fpath=path, model_name=state.config.get("model"), duplicate=True)
+                    if not isinstance(res, bool):   # Bool if the binary is already uploaded to C2
+                        RE_analyse(fpath=path, model_name=state.config.get("model"))
                 except HTTPError as e:
                     inmain(Dialog.showInfo, "Upload Binary",
                            f"Error analysing {basename(path)}.\nReason: {e.response.json()['error']}")
@@ -52,7 +53,7 @@ def check_analyze(state: RevEngState) -> None:
     else:
         def bg_task(path: str) -> None:
             try:
-                res: Response = RE_status(fpath=path)
+                res: Response = RE_status(path)
 
                 if isinstance(res, Response):
                     inmain(Dialog.showInfo, "Check Analysis Status", f"Status: {res.json()['status']}")
