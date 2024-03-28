@@ -4,11 +4,11 @@ import abc
 from sys import platform
 
 from PyQt5.QtCore import QRect
-from requests import get, HTTPError, Response
+from requests import HTTPError, Response
 
 from PyQt5.QtWidgets import QWizardPage, QFormLayout, QLineEdit, QLabel, QWizard, QComboBox, QLayout, QDesktopWidget
 
-from reait.api import reveng_req
+from revengai.api import RE_models
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
 
@@ -75,9 +75,7 @@ class UserCredentialsPage(BasePage):
     def validatePage(self):
         if not any(c.text() == "" for c in [self.api_key, self.server_url]):
             try:
-                res: Response = reveng_req(get, "models")
-
-                res.raise_for_status()
+                res: Response = RE_models()
 
                 self.state.config.set("apikey", self.api_key.text())
                 self.state.config.set("host", self.server_url.text())

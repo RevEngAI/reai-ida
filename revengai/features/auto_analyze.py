@@ -7,9 +7,11 @@ from PyQt5.QtCore import Qt
 from ida_nalt import get_imagebase
 from idautils import Functions
 from qtutils import inthread, inmain
-from requests import Response, HTTPError, post
+from requests import Response, HTTPError
 
-from reait.api import RE_embeddings, binary_id, RE_nearest_symbols, reveng_req
+from reait.api import RE_embeddings, binary_id, RE_nearest_symbols
+
+from revengai.api import RE_collections
 from revengai.features import BaseDialog
 from revengai.misc.utils import IDAUtils
 from revengai.models.checkable_model import RevEngCheckableTableModel
@@ -168,12 +170,7 @@ class AutoAnalysisDialog(BaseDialog):
         try:
             inmain(self.ui.startButton.setEnabled, False)
 
-            res: Response = reveng_req(post, "collections",
-                                       json_data={"scope": scope,
-                                                  "page_size": page_size,
-                                                  "page_number": page_number})
-
-            res.raise_for_status()
+            res: Response = RE_collections(scope, page_size, page_number)
 
             collections = []
             for collection in res.json()["collections"]:

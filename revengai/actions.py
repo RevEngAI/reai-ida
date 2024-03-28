@@ -8,9 +8,11 @@ import idaapi
 import idc
 from ida_nalt import get_imagebase
 from qtutils import inthread, inmain
-from requests import HTTPError, Response, post, get
+from requests import HTTPError, Response
 
-from reait.api import RE_upload, RE_analyse, RE_status, reveng_req, RE_logs, binary_id, re_bid_search
+from reait.api import RE_upload, RE_analyse, RE_status, RE_logs
+
+from revengai.api import RE_explain, RE_analyze_functions, RE_functions_dump
 from revengai.features.auto_analyze import AutoAnalysisDialog
 
 from revengai.gui.dialog import Dialog
@@ -28,10 +30,9 @@ def upload_binary(state: RevEngState) -> None:
     if not state.config.is_valid():
         setup_wizard(state)
     else:
-        def do_work(path: str) -> None:
+        def bg_task(path: str) -> None:
             if RevEngState.LIMIT > (stat(path).st_size // (1024 * 1024)):
                 try:
-                    inmain(idc.warning)
                     RE_upload(path)
 
                     RE_analyse(fpath=path, model_name=state.config.get("model"), duplicate=True)
@@ -42,14 +43,14 @@ def upload_binary(state: RevEngState) -> None:
                 inmain(idc.warning,
                        f"The maximum size for uploading a binary should not exceed {RevEngState.LIMIT}MB.")
 
-        inthread(do_work, idc.get_input_file_path())
+        inthread(bg_task, idc.get_input_file_path())
 
 
 def check_analyze(state: RevEngState) -> None:
     if not state.config.is_valid():
         setup_wizard(state)
     else:
-        def do_work(path: str) -> None:
+        def bg_task(path: str) -> None:
             try:
                 res: Response = RE_status(fpath=path)
 
@@ -63,7 +64,7 @@ def check_analyze(state: RevEngState) -> None:
                        "  • You have downloaded your binary id from the portal.\n"
                        "  • You have uploaded the current binary to the portal.")
 
-        inthread(do_work, idc.get_input_file_path())
+        inthread(bg_task, idc.get_input_file_path())
 
 
 def auto_analyze(state: RevEngState) -> None:
@@ -86,13 +87,11 @@ def explain_function(state: RevEngState) -> None:
     if not state.config.is_valid():
         setup_wizard(state)
     else:
-        def do_work(pseudo_code: str) -> None:
+        def bg_task(pseudo_code: str) -> None:
             if len(pseudo_code) > 0:
                 try:
-                    res: Response = reveng_req(post, "explain", data=pseudo_code.split("\n"),
-                                               params={"language": inmain(idaapi.get_file_type_name)})
+                    res: Response = RE_explain(pseudo_code, inmain(idaapi.get_file_type_name))
 
-                    res.raise_for_status()
                     print(res.text)
 
                     # inmain(IDAUtils.set_comment, inmain(idc.here), res.json()["explanation"])
@@ -122,14 +121,14 @@ def explain_function(state: RevEngState) -> None:
 
                 inmain(idc.warning, f"Hex-Rays {arch} decompiler is not available.")
 
-        inthread(do_work, IDAUtils.decompile_func(idc.here()))
+        inthread(bg_task, IDAUtils.decompile_func(idc.here()))
 
 
 def download_logs(state: RevEngState) -> None:
     if not state.config.is_valid():
         setup_wizard(state)
     else:
-        def do_work(path: str) -> None:
+        def bg_task(path: str) -> None:
             try:
                 res = RE_logs(path, False)
 
@@ -146,46 +145,37 @@ def download_logs(state: RevEngState) -> None:
                     inmain(Dialog.showError, "Binary Analysis Logs",
                            f"Unable to download binary analysis logs: {e.response.json()['error']}")
 
-        inthread(do_work, idc.get_input_file_path())
+        inthread(bg_task, idc.get_input_file_path())
 
 
 def function_signature(state: RevEngState) -> None:
     if not state.config.is_valid():
         setup_wizard(state)
     else:
-        def do_work(path: str) -> None:
+        def bg_task(path: str) -> None:
             try:
                 start_addr = inmain(idc.get_func_attr(inmain(idc.here()), idc.FUNCATTR_START))
 
                 if start_addr is not idc.BADADDR:
                     start_addr -= inmain(get_imagebase())
 
-                    bin_id = binary_id(path)
-                    bid = re_bid_search(bin_id)
+                    res: Response = RE_analyze_functions()
 
-                    if bid > 0:
-                        res: Response = reveng_req(get, f"analyse/functions/{bid}")
+                    for item in res.json():
+                        if item["function_vaddr"] == start_addr:
+                            res = RE_functions_dump([item["function_id"]])
 
-                        res.raise_for_status()
+                            dump = res.json()[0]
 
-                        for item in res.json():
-                            if item["function_vaddr"] == start_addr:
-                                res = reveng_req(post, "functions/dump",
-                                                 json_data={"function_id_list": [item["function_id"]]})
+                            # TODO Manage information of function arguments
+                            params = dump["params"]
+                            if dump["returns"]:
+                                return_type = dump["return_type"]
 
-                                res.raise_for_status()
-
-                                dump = res.json()[0]
-
-                                # TODO Manage information of function arguments
-                                params = dump["params"]
-                                if dump["returns"]:
-                                    return_type = dump["return_type"]
-
-                                break
+                            break
             except HTTPError as e:
                 if "error" in e.response.json():
                     inmain(Dialog.showError, "Binary Analysis Logs",
                            f"Failed to obtain function argument details: {e.response.json()['error']}")
 
-        inthread(do_work, idc.get_input_file_path())
+        inthread(bg_task, idc.get_input_file_path())
