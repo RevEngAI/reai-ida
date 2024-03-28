@@ -6,6 +6,7 @@ import idc
 from PyQt5.QtCore import Qt
 from ida_nalt import get_imagebase
 from idautils import Functions
+from qtutils import inthread, inmain
 from requests import Response, HTTPError, post
 
 from reait.api import RE_embeddings, binary_id, RE_nearest_symbols, reveng_req
@@ -41,7 +42,7 @@ class AutoAnalysisDialog(BaseDialog):
                                                                 header=["Source Symbol", "Destination Symbol",
                                                                         "Successful", "Reason",]))
 
-        self.ui.startButton.clicked.connect(self.auto_analysis)
+        self.ui.startButton.clicked.connect(self._start_analysis)
 
         self.ui.resultsFilter.textChanged.connect(self._filter)
         self.ui.collectionsFilter.textChanged.connect(self._filter)
@@ -65,31 +66,33 @@ class AutoAnalysisDialog(BaseDialog):
 
     def showEvent(self, event):
         super(AutoAnalysisDialog, self).showEvent(event)
-        self.load_collections()
+        inthread(self._load_collections)
 
-    def auto_analysis(self):
+    def _start_analysis(self):
+        inthread(self._auto_analysis)
+
+    def _auto_analysis(self):
         try:
             self._analysis = [0] * len(Analysis)
 
-            self.ui.startButton.setEnabled(False)
-            self.ui.progressBar.setProperty("value", 0)
+            inmain(self.ui.startButton.setEnabled, False)
+            inmain(self.ui.progressBar.setProperty, "value", 0)
 
             res: Response = RE_embeddings(fpath=self.path)
 
             if res.status_code > 299:
-                Dialog.showError("Auto Analysis",
-                                 f"Auto Analysis Error: {res.json()['error']}")
+                inmain(Dialog.showError, "Auto Analysis", f"Auto Analysis Error: {res.json()['error']}")
             else:
                 embeddings = res.json()
 
-                collections = self._selected_collections()
-                confidence = (float(self.ui.confidenceSlider.property("value")) /
-                              float(self.ui.confidenceSlider.property("maximum")))
+                collections = inmain(self._selected_collections)
+                confidence = (float(inmain(self.ui.confidenceSlider.property, "value")) /
+                              float(inmain(self.ui.confidenceSlider.property, "maximum")))
 
                 resultsData = []
                 for idx, func in enumerate(self._functions):
                     self._analysis[Analysis.TOTAL.value] += 1
-                    self.ui.progressBar.setProperty("value", idx)
+                    inmain(self.ui.progressBar.setProperty, "value", idx)
 
                     fe = next((item for item in embeddings if item["vaddr"] == func["start_addr"]), None)
 
@@ -113,13 +116,13 @@ class AutoAnalysisDialog(BaseDialog):
                             symbol = data[0]
 
                             if symbol["distance"] >= confidence:
-                                # if IDAUtils.set_name(self.v_addr, symbol['name']):
+                                # if inmain(IDAUtils.set_name, self.v_addr, symbol['name'])):
                                 resultsData.append((func["name"],
                                                     f"{symbol['name']} ({symbol['binary_name']})", None,
                                                     f"Renamed with confidence of '{symbol['distance']}"))
                                 # else:
-                                #     Dialog.showError("Rename Function Error",
-                                #                      f"Can't rename {func['name']}. Name {symbol['name']} already exists.")
+                                #     inmain(Dialog.showError, "Rename Function Error",
+                                #            f"Can't rename {func['name']}. Name {symbol['name']} already exists.")
                                 #
                                 #     self._analysis[Analysis.UNSUCCESSFUL.value] += 1
                                 #     resultsData.append((func["name"],
@@ -132,14 +135,13 @@ class AutoAnalysisDialog(BaseDialog):
                             self._analysis[Analysis.UNSUCCESSFUL.value] += 1
                             resultsData.append((func["name"], "N/A", None, e.response.json()["error"]))
 
-                self.ui.resultsTable.model().updateData(resultsData)
-                self.ui.resultsTable.resizeColumnsToContents()
+                inmain(inmain(self.ui.resultsTable.model).updateData, resultsData)
+                inmain(self.ui.resultsTable.resizeColumnsToContents)
         except HTTPError as e:
-            Dialog.showError("Auto Analysis",
-                             f"Auto Analysis Error: {e.response.json()['error']}")
+            inmain(Dialog.showError, "Auto Analysis", f"Auto Analysis Error: {e.response.json()['error']}")
         finally:
-            self.ui.startButton.setEnabled(True)
-            self.ui.progressBar.setProperty("value", len(self._functions))
+            inmain(self.ui.startButton.setEnabled, True)
+            inmain(self.ui.progressBar.setProperty, "value", len(self._functions))
 
     def _filter(self, filter_text):
         table = self.ui.collectionsTable if self.ui.tabWidget.currentIndex() == 0 else self.ui.resultsTable
@@ -162,9 +164,9 @@ class AutoAnalysisDialog(BaseDialog):
                                         f"Skipped Analyses: {self._analysis[Analysis.SKIPPED.value]}<br/>"
                                         f"Errored Analyses: {self._analysis[Analysis.UNSUCCESSFUL.value]}")
 
-    def load_collections(self, scope: str = "PUBLIC", page_size: int = 100000, page_number: int = 1):
+    def _load_collections(self, scope: str = "PUBLIC", page_size: int = 100000, page_number: int = 1):
         try:
-            self.ui.startButton.setEnabled(False)
+            inmain(self.ui.startButton.setEnabled, False)
 
             res: Response = reveng_req(post, "collections",
                                        json_data={"scope": scope,
@@ -177,13 +179,12 @@ class AutoAnalysisDialog(BaseDialog):
             for collection in res.json()["collections"]:
                 collections.append([collection["collection_name"], None])
 
-            self.ui.collectionsTable.model().updateData(collections)
-            self.ui.collectionsTable.resizeColumnsToContents()
+            inmain(inmain(self.ui.collectionsTable.model).updateData, collections)
+            inmain(self.ui.collectionsTable.resizeColumnsToContents)
         except HTTPError as e:
-            Dialog.showError("Auto Analysis",
-                             f"Auto Analysis Error: {e.response.json()['error']}")
+            inmain(Dialog.showError, "Auto Analysis", f"Auto Analysis Error: {e.response.json()['error']}")
         finally:
-            self.auto_analysis()
+            self._auto_analysis()
 
     def _selected_collections(self):
         model = self.ui.collectionsTable.model()

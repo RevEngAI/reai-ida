@@ -4,6 +4,7 @@ import idc
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIntValidator
 from ida_nalt import get_imagebase
+from qtutils import inthread, inmain
 from requests import Response, HTTPError
 
 from reait.api import RE_embeddings, RE_nearest_symbols, binary_id
@@ -34,55 +35,57 @@ class FunctionSimularityDialog(BaseDialog):
         self.ui.lineEdit.setValidator(QIntValidator(1, 256, self))
         self.ui.tableView.setModel(RevEngTableModel([], ["Function Name", "Confidence", "From"], self))
 
-        self.ui.fetchButton.clicked.connect(self.fetch)
-        self.ui.renameButton.clicked.connect(self.rename_symbol)
+        self.ui.fetchButton.clicked.connect(self._fetch)
+        self.ui.renameButton.clicked.connect(self._rename_symbol)
 
     def showEvent(self, event):
         super(FunctionSimularityDialog, self).showEvent(event)
-        self.fetch()
+        self._fetch()
 
-    def fetch(self):
+    def _fetch(self):
         if self.v_addr > 0:
-            self._load()
+            inthread(self._load)
 
     def _load(self):
         try:
-            self.ui.tableView.model().updateData([])
-            self.ui.fetchButton.setEnabled(False)
-            self.ui.progressBar.setProperty("value", 25)
+            model = inmain(self.ui.tableView.model)
+
+            inmain(model.updateData, [])
+            inmain(self.ui.fetchButton.setEnabled, False)
+            inmain(self.ui.progressBar.setProperty, "value", 25)
 
             res: Response = RE_embeddings(fpath=self.path)
 
             if res.status_code > 299:
-                Dialog.showError("Auto Analysis",
-                                 f"Auto Analysis Error: {res.json().get('error')}")
+                inmain(Dialog.showError, "Auto Analysis",
+                       f"Auto Analysis Error: {res.json().get('error')}")
             else:
                 fe = next((item for item in res.json() if item["vaddr"] == self.v_addr), None)
 
                 if fe is None:
-                    Dialog.showError("Find Similar Functions", "No similar functions found.")
+                    inmain(Dialog.showError, "Find Similar Functions", "No similar functions found.")
                 else:
-                    self.ui.progressBar.setProperty("value", 50)
+                    inmain(self.ui.progressBar.setProperty, "value", 50)
 
                     res = RE_nearest_symbols(embedding=fe["embedding"],
-                                             nns=int(self.ui.lineEdit.text()),
+                                             nns=int(inmain(self.ui.lineEdit.text)),
                                              ignore_hashes=[binary_id(self.path)],
                                              model_name=self.state.config.get("model"))
 
-                    self.ui.progressBar.setProperty("value", 75)
+                    inmain(self.ui.progressBar.setProperty, "value", 75)
 
                     data = []
                     for item in res.json():
                         data.append([item["name"], item["distance"], item["binary_name"]])
 
-                    self.ui.tableView.model().updateData(data)
+                    inmain(model.updateData, data)
         except HTTPError as e:
-            Dialog.showError("Auto Analysis", e.response.json()["error"])
+            inmain(Dialog.showError, "Auto Analysis", e.response.json()["error"])
         finally:
-            self.ui.fetchButton.setEnabled(True)
-            self.ui.progressBar.setProperty("value", 0)
+            inmain(self.ui.fetchButton.setEnabled, True)
+            inmain(self.ui.progressBar.setProperty, "value", 0)
 
-    def rename_symbol(self):
+    def _rename_symbol(self):
         rows = self.ui.tableView.selectionModel().selectedRows(column=0)
 
         if len(rows) > 0:

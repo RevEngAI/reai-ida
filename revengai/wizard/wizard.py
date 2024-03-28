@@ -20,7 +20,6 @@ class RevEngSetupWizard(QWizard):
         self.state: RevEngState = state
 
         self.addPage(UserCredentialsPage(self.state))
-
         self.addPage(UserAvailableModelsPage(self.state))
 
         self.setWindowTitle("RevEng.AI Setup Wizard")
@@ -77,6 +76,7 @@ class UserCredentialsPage(BasePage):
         if not any(c.text() == "" for c in [self.api_key, self.server_url]):
             try:
                 res: Response = reveng_req(get, "models")
+
                 res.raise_for_status()
 
                 self.state.config.set("apikey", self.api_key.text())
@@ -92,6 +92,7 @@ class UserCredentialsPage(BasePage):
 
     def _get_layout(self) -> QLayout:
         self.api_key = QLineEdit(self)
+        self.api_key.setClearButtonEnabled(True)
         self.api_key.setToolTip("API key from your account settings")
 
         self.server_url = QLineEdit(self)
