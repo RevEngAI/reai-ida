@@ -90,18 +90,18 @@ def explain_function(state: RevEngState) -> None:
             if len(pseudo_code) > 0:
                 try:
                     res: Response = reveng_req(post, "explain", data=pseudo_code.split("\n"),
-                                               params={"language": inmain(idaapi.get_file_type_name())})
+                                               params={"language": inmain(idaapi.get_file_type_name)})
 
                     res.raise_for_status()
                     print(res.text)
 
-                    # inmain(IDAUtils.set_comment, inmain(idc.here()), res.json()["explanation"])
+                    # inmain(IDAUtils.set_comment, inmain(idc.here), res.json()["explanation"])
                 except HTTPError as e:
                     if "error" in e.response.json():
                         inmain(Dialog.showError, "Function Explanation",
                                f"Error getting function explanation: {e.response.json()['error']}")
             else:
-                info = inmain(idaapi.get_inf_structure())
+                info = inmain(idaapi.get_inf_structure)
 
                 procname = info.procname.lower()
                 bits = 64 if info.is_64bit() else 32 if info.is_32bit() else 16
