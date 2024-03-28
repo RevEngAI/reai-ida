@@ -41,7 +41,7 @@
   },
   {
     "id": "reai:logs",
-    "name": "Export Binary Analysis Logs",
-    "callback": "export_logs"
+    "name": "Download Binary Analysis Logs",
+    "callback": "download_logs"
   }
 ]

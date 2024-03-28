@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
-
+import asyncio
+from asyncio import ensure_future
+from os import stat
 from os.path import exists, basename
 
 import ida_kernwin
@@ -28,7 +30,7 @@ def upload_binary(state: RevEngState) -> None:
     else:
         path = idc.get_input_file_path()
 
-        if exists(path):
+        if exists(path) and RevEngState.LIMIT > (stat(path).st_size // (1024 * 1024)):
             try:
                 RE_upload(path)
 
@@ -36,6 +38,8 @@ def upload_binary(state: RevEngState) -> None:
             except HTTPError as e:
                 Dialog.showInfo("Upload Binary",
                                 f"Error analysing {basename(path)}.\nReason: {e.response.json()['error']}")
+        else:
+            idc.warning(f"The maximum size for uploading a binary should not exceed {RevEngState.LIMIT}MB.")
 
 
 def check_analyze(state: RevEngState) -> None:
@@ -89,8 +93,8 @@ def explain_function(state: RevEngState) -> None:
 
         if len(pseudo_code) > 0:
             try:
-                res: Response = reveng_req(post, "explain", data={pseudo_code},
-                                           json_data={"language": idaapi.get_file_type_name()})
+                res: Response = reveng_req(post, "explain", data=pseudo_code.split("\n"),
+                                           params={"language": idaapi.get_file_type_name()})
 
                 res.raise_for_status()
                 print(res.text)
@@ -108,22 +112,22 @@ def explain_function(state: RevEngState) -> None:
 
             # https://github.com/williballenthin/python-idb/blob/master/idb/idapython.py#L955-L1046
             if any(procname.startswith(arch) for arch in ["metapc", "athlon", "k62", "p2", "p3", "p4", "80"]):
-                arch = "x86"
+                arch = "x86_64" if bits == 64 else "x86"
             elif procname.startswith("arm"):
-                arch = "ARM"
+                arch = "ARM64" if bits == 64 else "ARM"
             elif procname.startswith("mips"):
-                arch = "MIPS"
+                arch = f"MIPS{bits}"
             elif procname.startswith("ppc"):
-                arch = "PPC"
+                arch = f"PPC{bits}"
             elif procname.startswith("sparc"):
-                arch = "SPARC"
+                arch = f"SPARC{bits}"
             else:
                 arch = "unknown arch"
 
-            idc.warning(f"Hex-Rays {arch}_{bits} decompiler is not available.")
+            idc.warning(f"Hex-Rays {arch} decompiler is not available.")
 
 
-def export_logs(state: RevEngState) -> None:
+def download_logs(state: RevEngState) -> None:
     if not state.config.is_valid():
         setup_wizard(state)
     else:
@@ -131,7 +135,7 @@ def export_logs(state: RevEngState) -> None:
 
         if exists(path):
             try:
-                res = RE_logs(path)
+                res = RE_logs(path, False)
 
                 if isinstance(res, Response) and len(res.text) > 0:
                     filename = ida_kernwin.ask_file(1, "*.log", "Output Filename:")
@@ -144,7 +148,7 @@ def export_logs(state: RevEngState) -> None:
             except HTTPError as e:
                 if "error" in e.response.json():
                     Dialog.showError("Binary Analysis Logs",
-                                     f"Unable to export binary analysis logs: {e.response.json()['error']}")
+                                     f"Unable to download binary analysis logs: {e.response.json()['error']}")
 
 
 def function_signature(state: RevEngState) -> None:
