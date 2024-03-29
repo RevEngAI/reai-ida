@@ -209,9 +209,13 @@ def analysis_history(state: RevEngState) -> None:
                     binaries.append([binary["binary_name"], str(binary["binary_id"]),
                                      binary["status"], binary["creation"]])
 
-                f = inmain(StatusForm, binaries)
-                inmain(f.Compile)
-                inmain(f.Execute)
+                if len(binaries):
+                    f = inmain(StatusForm, binaries)
+                    inmain(f.Compile)
+                    inmain(f.Execute)
+                else:
+                    inmain(Dialog.showInfo, "Binary Analysis History",
+                           f"{basename(path)} binary not yet analysed.")
             except HTTPError as e:
                 if "error" in e.response.json():
                     inmain(Dialog.showError, "Binary Analysis History",
