@@ -11,7 +11,7 @@ from ida_nalt import get_imagebase
 from qtutils import inthread, inmain
 from requests import HTTPError, Response
 
-from reait.api import RE_upload, RE_analyse, RE_status, RE_logs
+from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, re_binary_id
 
 from revengai.api import RE_explain, RE_analyze_functions, RE_functions_dump, RE_search
 from revengai.features.auto_analyze import AutoAnalysisDialog
@@ -38,7 +38,18 @@ def upload_binary(state: RevEngState) -> None:
 
                     RE_upload(path)
 
-                    RE_analyse(fpath=path, model_name=state.config.get("model"), symbols=symbols, duplicate=True)
+                    sha_256_hash = re_binary_id(path)
+
+                    inmain(state.config.database.add_upload, path, sha_256_hash)
+
+                    res = RE_analyse(fpath=path, model_name=state.config.get("model"), symbols=symbols, duplicate=True)
+
+                    analysis = res.json()
+
+                    state.config.set("binary_id", analysis["binary_id"])
+
+                    inmain(state.config.database.add_analysis,
+                           sha_256_hash, analysis["binary_id"], analysis["success"])
                 except HTTPError as e:
                     inmain(idaapi.hide_wait_box)
                     inmain(Dialog.showInfo, "Upload Binary",
@@ -72,14 +83,20 @@ def check_analyze(state: RevEngState) -> None:
                 res: Response = RE_status(path)
 
                 if isinstance(res, Response):
-                    inmain(Dialog.showInfo, "Check Analysis Status", f"Status: {res.json()['status']}")
+                    status = res.json()["status"]
+
+                    if state.config.get("binary_id"):
+                        inmain(state.config.database.update_analysis,
+                               int(state.config.get("binary_id")), status)
+
+                    inmain(Dialog.showInfo, "Check Analysis Status", f"Status: {status}")
                 else:
                     inmain(Dialog.showError, "Check Analysis Status", "No matches found.")
             except HTTPError:
                 inmain(Dialog.showError, "Check Analysis Status",
-                       "Error getting status\n\nCheck:\n"
-                       "  • You have downloaded your binary id from the portal.\n"
-                       "  • You have uploaded the current binary to the portal.")
+                       """Error getting status\n\nCheck:\n
+                         • You have downloaded your binary id from the portal.\n
+                         • You have uploaded the current binary to the portal.""")
 
         inthread(bg_task, idc.get_input_file_path())
 
@@ -147,7 +164,9 @@ def download_logs(state: RevEngState) -> None:
     else:
         def bg_task(path: str) -> None:
             try:
-                res = RE_logs(path, console=False)
+                binary_id = state.config.get("binary_id")
+
+                res = RE_logs(path, console=False, binary_id=(binary_id if binary_id else 0))
 
                 if isinstance(res, Response) and len(res.text) > 0:
                     filename = inmain(ida_kernwin.ask_file, 1, "*.log", "Output Filename:")
@@ -209,8 +228,11 @@ def analysis_history(state: RevEngState) -> None:
                     binaries.append([binary["binary_name"], str(binary["binary_id"]),
                                      binary["status"], binary["creation"]])
 
+                    inmain(state.config.database.add_analysis,
+                           binary["sha_256_hash"], binary["binary_id"], binary["status"], binary["creation"])
+
                 if len(binaries):
-                    f = inmain(StatusForm, binaries)
+                    f = inmain(StatusForm, state, binaries)
                     inmain(f.Compile)
                     inmain(f.Execute)
                 else:

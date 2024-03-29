@@ -4,10 +4,11 @@ from os import makedirs
 from json import loads, dumps
 from os.path import join, exists
 
-
 from ida_diskio import get_user_idadir
 
 from reait.api import re_conf
+
+from revengai.conf.database import RevEngDatabase
 
 
 class RevEngConfiguration(object):
@@ -20,6 +21,8 @@ class RevEngConfiguration(object):
         makedirs(RevEngConfiguration._dir, mode=0o755, exist_ok=True)
 
         self._config = {}
+
+        self._database = RevEngDatabase()
 
         self.restore()
 
@@ -55,3 +58,7 @@ class RevEngConfiguration(object):
 
     def is_valid(self) -> bool:
         return all(self.get(name) is not None for name in ["apikey", "host", "model"])
+
+    @property
+    def database(self) -> RevEngDatabase:
+        return self._database
