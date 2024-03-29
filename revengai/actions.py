@@ -5,6 +5,7 @@ from os.path import basename
 
 import ida_kernwin
 import idaapi
+import idautils
 import idc
 from ida_nalt import get_imagebase
 from qtutils import inthread, inmain
@@ -12,10 +13,10 @@ from requests import HTTPError, Response
 
 from reait.api import RE_upload, RE_analyse, RE_status, RE_logs
 
-from revengai.api import RE_explain, RE_analyze_functions, RE_functions_dump
+from revengai.api import RE_explain, RE_analyze_functions, RE_functions_dump, RE_search
 from revengai.features.auto_analyze import AutoAnalysisDialog
 
-from revengai.gui.dialog import Dialog
+from revengai.gui.dialog import Dialog, StatusForm
 from revengai.manager import RevEngState
 from revengai.features.function_simularity import FunctionSimularityDialog
 from revengai.misc.utils import IDAUtils
@@ -30,15 +31,14 @@ def upload_binary(state: RevEngState) -> None:
     if not state.config.is_valid():
         setup_wizard(state)
     else:
-        def bg_task(path: str) -> None:
+        def bg_task(path: str, symbols: dict) -> None:
             if RevEngState.LIMIT > (stat(path).st_size // (1024 * 1024)):
                 try:
                     inmain(idaapi.show_wait_box, "HIDECANCEL\nUploading binary for analysis…")
 
-                    res = RE_upload(path)
+                    RE_upload(path)
 
-                    if not isinstance(res, bool):   # Bool if the binary is already uploaded to C2
-                        RE_analyse(fpath=path, model_name=state.config.get("model"))
+                    RE_analyse(fpath=path, model_name=state.config.get("model"), symbols=symbols, duplicate=True)
                 except HTTPError as e:
                     inmain(idaapi.hide_wait_box)
                     inmain(Dialog.showInfo, "Upload Binary",
@@ -49,7 +49,18 @@ def upload_binary(state: RevEngState) -> None:
                 inmain(idc.warning,
                        f"The maximum size for uploading a binary should not exceed {RevEngState.LIMIT}MB.")
 
-        inthread(bg_task, idc.get_input_file_path())
+        symbols: dict = {"base_addr": get_imagebase()}
+
+        functions = []
+
+        for func_ea in idautils.Functions():
+            functions.append({"name": idc.get_func_name(func_ea),
+                              "start_addr": idc.get_func_attr(func_ea, idc.FUNCATTR_START),
+                              "end_addr": idc.get_func_attr(func_ea, idc.FUNCATTR_END)})
+
+        symbols["functions"] = functions
+
+        inthread(bg_task, idc.get_input_file_path(), symbols)
 
 
 def check_analyze(state: RevEngState) -> None:
@@ -136,7 +147,7 @@ def download_logs(state: RevEngState) -> None:
     else:
         def bg_task(path: str) -> None:
             try:
-                res = RE_logs(path, False)
+                res = RE_logs(path, console=False)
 
                 if isinstance(res, Response) and len(res.text) > 0:
                     filename = inmain(ida_kernwin.ask_file, 1, "*.log", "Output Filename:")
@@ -183,3 +194,27 @@ def function_signature(state: RevEngState) -> None:
                            f"Failed to obtain function argument details: {e.response.json()['error']}")
 
         inthread(bg_task, idc.get_input_file_path(), idc.get_func_attr(idc.here(), idc.FUNCATTR_START))
+
+
+def analysis_history(state: RevEngState) -> None:
+    if not state.config.is_valid():
+        setup_wizard(state)
+    else:
+        def bg_task(path: str) -> None:
+            try:
+                res = RE_search(path)
+
+                binaries = []
+                for binary in res.json()["binaries"]:
+                    binaries.append([binary["binary_name"], str(binary["binary_id"]),
+                                     binary["status"], binary["creation"]])
+
+                f = inmain(StatusForm, binaries)
+                inmain(f.Compile)
+                inmain(f.Execute)
+            except HTTPError as e:
+                if "error" in e.response.json():
+                    inmain(Dialog.showError, "Binary Analysis History",
+                           f"Failed to obtain binary analysis history: {e.response.json()['error']}")
+
+        inthread(bg_task, idc.get_input_file_path())

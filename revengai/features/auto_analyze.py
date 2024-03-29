@@ -10,7 +10,7 @@ from idautils import Functions
 from qtutils import inthread, inmain
 from requests import Response, HTTPError
 
-from reait.api import RE_embeddings, binary_id, RE_nearest_symbols
+from reait.api import re_binary_id, RE_embeddings, RE_nearest_symbols
 
 from revengai.api import RE_collections
 from revengai.features import BaseDialog
@@ -32,7 +32,7 @@ class AutoAnalysisDialog(BaseDialog):
     def __init__(self, state: RevEngState, fpath: str):
         BaseDialog.__init__(self, state, fpath)
 
-        self._ignore_hashes = [binary_id(self.path)]
+        self._ignore_hashes = [re_binary_id(self.path)]
 
         self.ui = Ui_AutoAnalysisPanel()
         self.ui.setupUi(self)

@@ -43,5 +43,10 @@
     "id": "reai:logs",
     "name": "Download Binary Analysis Logs",
     "callback": "download_logs"
+  },
+  {
+    "id": "reai:history",
+    "name": "Binary Analysis History",
+    "callback": "analysis_history"
   }
 ]

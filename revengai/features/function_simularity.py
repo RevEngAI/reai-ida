@@ -7,7 +7,7 @@ from ida_nalt import get_imagebase
 from qtutils import inthread, inmain
 from requests import Response, HTTPError
 
-from reait.api import RE_embeddings, RE_nearest_symbols, binary_id
+from reait.api import re_binary_id, RE_embeddings, RE_nearest_symbols
 from revengai.features import BaseDialog
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
@@ -68,7 +68,7 @@ class FunctionSimularityDialog(BaseDialog):
 
                     res = RE_nearest_symbols(embedding=fe["embedding"],
                                              nns=int(inmain(self.ui.lineEdit.text)),
-                                             ignore_hashes=[binary_id(self.path)],
+                                             ignore_hashes=[re_binary_id(self.path)],
                                              model_name=self.state.config.get("model"))
 
                     inmain(self.ui.progressBar.setProperty, "value", 75)

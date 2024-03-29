@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import idaapi
 from requests import post, Response, get
 
-from reait.api import reveng_req, binary_id, re_bid_search
+from reait.api import reveng_req, re_binary_id, re_bid_search
 
 
 def RE_collections(scope: str = "PUBLIC", page_size: int = 100000, page_number: int = 1) -> Response:
@@ -18,9 +17,9 @@ def RE_collections(scope: str = "PUBLIC", page_size: int = 100000, page_number: 
     return res
 
 
-def RE_analyze_functions(fpath: str) -> Response | None:
-    bin_id = binary_id(fpath)
-    bid = re_bid_search(bin_id)
+def RE_analyze_functions(fpath: str, binary_id: int = 0) -> Response | None:
+    bin_id = re_binary_id(fpath)
+    bid = re_bid_search(bin_id) if binary_id == 0 else binary_id
 
     if bid == -1:
         return
@@ -53,7 +52,7 @@ def RE_explain(pseudo_code: str, language: str) -> Response:
 
 
 def RE_search(fpath: str) -> Response:
-    bin_id = binary_id(fpath)
+    bin_id = re_binary_id(fpath)
 
     res = reveng_req(get, f"search?search=sha_256_hash:{bin_id}&state=All")
 
