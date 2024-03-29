@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import idaapi
 from requests import post, Response, get
 
 from reait.api import reveng_req, binary_id, re_bid_search
@@ -45,8 +46,16 @@ def RE_functions_dump(function_ids: list) -> Response:
 
 
 def RE_explain(pseudo_code: str, language: str) -> Response:
-    res: Response = reveng_req(post, "explain", data=pseudo_code.encode("utf-8"),
-                               json_data={"language": language})
+    res: Response = reveng_req(post, "explain", data=pseudo_code, json_data={"language": language})
+
+    res.raise_for_status()
+    return res
+
+
+def RE_search(fpath: str) -> Response:
+    bin_id = binary_id(fpath)
+
+    res = reveng_req(get, f"search?search=sha_256_hash:{bin_id}&state=All")
 
     res.raise_for_status()
     return res

@@ -2,6 +2,7 @@
 
 from enum import IntEnum
 
+import idaapi
 import idc
 from PyQt5.QtCore import Qt
 from ida_nalt import get_imagebase
@@ -168,6 +169,8 @@ class AutoAnalysisDialog(BaseDialog):
 
     def _load_collections(self, scope: str = "PUBLIC", page_size: int = 100000, page_number: int = 1):
         try:
+            inmain(idaapi.show_wait_box, "HIDECANCEL\nGetting RevEng.AI collections…")
+
             inmain(self.ui.startButton.setEnabled, False)
 
             res: Response = RE_collections(scope, page_size, page_number)
@@ -179,9 +182,11 @@ class AutoAnalysisDialog(BaseDialog):
             inmain(inmain(self.ui.collectionsTable.model).updateData, collections)
             inmain(self.ui.collectionsTable.resizeColumnsToContents)
         except HTTPError as e:
+            inmain(idaapi.hide_wait_box)
             inmain(Dialog.showError, "Auto Analysis", f"Auto Analysis Error: {e.response.json()['error']}")
-        finally:
+        else:
             self._auto_analysis()
+            inmain(idaapi.hide_wait_box)
 
     def _selected_collections(self):
         model = self.ui.collectionsTable.model()

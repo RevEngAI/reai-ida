@@ -33,13 +33,18 @@ def upload_binary(state: RevEngState) -> None:
         def bg_task(path: str) -> None:
             if RevEngState.LIMIT > (stat(path).st_size // (1024 * 1024)):
                 try:
+                    inmain(idaapi.show_wait_box, "HIDECANCEL\nUploading binary for analysis…")
+
                     res = RE_upload(path)
 
                     if not isinstance(res, bool):   # Bool if the binary is already uploaded to C2
                         RE_analyse(fpath=path, model_name=state.config.get("model"))
                 except HTTPError as e:
+                    inmain(idaapi.hide_wait_box)
                     inmain(Dialog.showInfo, "Upload Binary",
                            f"Error analysing {basename(path)}.\nReason: {e.response.json()['error']}")
+                else:
+                    inmain(idaapi.hide_wait_box)
             else:
                 inmain(idc.warning,
                        f"The maximum size for uploading a binary should not exceed {RevEngState.LIMIT}MB.")
@@ -153,14 +158,12 @@ def function_signature(state: RevEngState) -> None:
     if not state.config.is_valid():
         setup_wizard(state)
     else:
-        def bg_task(path: str) -> None:
+        def bg_task(path: str, start_addr: int) -> None:
             try:
-                start_addr = inmain(idc.get_func_attr(inmain(idc.here()), idc.FUNCATTR_START))
-
                 if start_addr is not idc.BADADDR:
                     start_addr -= inmain(get_imagebase())
 
-                    res: Response = RE_analyze_functions()
+                    res: Response = RE_analyze_functions(path)
 
                     for item in res.json():
                         if item["function_vaddr"] == start_addr:
@@ -179,4 +182,4 @@ def function_signature(state: RevEngState) -> None:
                     inmain(Dialog.showError, "Binary Analysis Logs",
                            f"Failed to obtain function argument details: {e.response.json()['error']}")
 
-        inthread(bg_task, idc.get_input_file_path())
+        inthread(bg_task, idc.get_input_file_path(), idc.get_func_attr(idc.here(), idc.FUNCATTR_START))
