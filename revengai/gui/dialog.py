@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import logging
 
 from idc import get_input_file_path
 from idaapi import CH_CAN_DEL, CH_MULTI, CH_MODAL, CH_NO_STATUS_BAR, CHCOL_DEC, CHCOL_PLAIN, Choose, Form
@@ -11,6 +12,8 @@ from reait.api import RE_delete
 from revengai.manager import RevEngState
 from revengai.misc.qtutils import inthread
 
+
+logger = logging.getLogger("REAI")
 
 
 class Dialog(object):
@@ -54,6 +57,8 @@ class StatusForm(Form):
 
         def OnDeleteLine(self, sel) -> tuple:
             for idx in sel:
+                logger.info("Delete analysis %s", self.OnGetLine(idx)[1])
+
                 inthread(RE_delete, self.fpath, self.OnGetLine(idx)[1])
 
                 if self.state.config.get("binary_id") == self.OnGetLine(idx)[1]:

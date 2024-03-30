@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import abc
+import logging
 from sys import platform
 
 from PyQt5.QtCore import QRect
@@ -11,6 +12,8 @@ from PyQt5.QtWidgets import QWizardPage, QFormLayout, QLineEdit, QLabel, QWizard
 from revengai.api import RE_models
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
+
+logger = logging.getLogger("REAI")
 
 
 class RevEngSetupWizard(QWizard):
@@ -82,6 +85,7 @@ class UserCredentialsPage(BasePage):
                 self.state.config.set("models", res.json()["models"])
                 return True
             except HTTPError as e:
+                logger.error("Unable to retrieve all models used.")
                 Dialog.showError("Setup Wizard", f"{e.response.json()['error']}")
         return False
 

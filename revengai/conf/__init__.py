@@ -9,9 +9,12 @@ from ida_diskio import get_user_idadir
 from reait.api import re_conf
 
 from revengai.conf.database import RevEngDatabase
+from revengai.log.log import configure_loggers
 
 
 class RevEngConfiguration(object):
+    _logdir = "reai_logs"
+
     _filename = ".reai.cfg"
     _dir = join(get_user_idadir(), "plugins")
 
@@ -23,6 +26,8 @@ class RevEngConfiguration(object):
         self._config = {}
 
         self._database = RevEngDatabase()
+
+        configure_loggers(join(self._dir, self._logdir))
 
         self.restore()
 

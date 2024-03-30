@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-
+import logging
 from os import stat
 from os.path import basename
 
@@ -23,6 +23,9 @@ from revengai.misc.utils import IDAUtils
 from revengai.wizard.wizard import RevEngSetupWizard
 
 
+logger = logging.getLogger("REAI")
+
+
 def setup_wizard(state: RevEngState) -> None:
     RevEngSetupWizard(state).exec_()
 
@@ -31,18 +34,20 @@ def upload_binary(state: RevEngState) -> None:
     if not state.config.is_valid():
         setup_wizard(state)
     else:
-        def bg_task(path: str, symbols: dict) -> None:
+        def bg_task(path: str, syms: dict) -> None:
             if RevEngState.LIMIT > (stat(path).st_size // (1024 * 1024)):
                 try:
                     inmain(idaapi.show_wait_box, "HIDECANCEL\nUploading binary for analysis…")
 
                     RE_upload(path)
 
+                    logger.info("Upload succeed for: %s.", basename(path))
+
                     sha_256_hash = re_binary_id(path)
 
                     inmain(state.config.database.add_upload, path, sha_256_hash)
 
-                    res = RE_analyse(fpath=path, model_name=state.config.get("model"), symbols=symbols, duplicate=True)
+                    res = RE_analyse(fpath=path, model_name=state.config.get("model"), symbols=syms, duplicate=True)
 
                     analysis = res.json()
 
@@ -50,7 +55,10 @@ def upload_binary(state: RevEngState) -> None:
 
                     inmain(state.config.database.add_analysis,
                            sha_256_hash, analysis["binary_id"], analysis["success"])
+
+                    logger.info("Binary analysis succeed for: %s.", analysis["binary_id"])
                 except HTTPError as e:
+                    logger.error("Error analyzing %s. Reason: %s", basename(path), e)
                     inmain(idaapi.hide_wait_box)
                     inmain(Dialog.showInfo, "Upload Binary",
                            f"Error analysing {basename(path)}.\nReason: {e.response.json()['error']}")
@@ -89,10 +97,12 @@ def check_analyze(state: RevEngState) -> None:
                         inmain(state.config.database.update_analysis,
                                int(state.config.get("binary_id")), status)
 
+                    logger.info("Got status: %s", status)
                     inmain(Dialog.showInfo, "Check Analysis Status", f"Status: {status}")
                 else:
                     inmain(Dialog.showError, "Check Analysis Status", "No matches found.")
-            except HTTPError:
+            except HTTPError as e:
+                logger.error("Error getting binary analysis status: %s", e)
                 inmain(Dialog.showError, "Check Analysis Status",
                        """Error getting status\n\nCheck:\n
                          • You have downloaded your binary id from the portal.\n
@@ -130,6 +140,7 @@ def explain_function(state: RevEngState) -> None:
 
                     # inmain(IDAUtils.set_comment, inmain(idc.here), res.json()["explanation"])
                 except HTTPError as e:
+                    logger.error("Error with function explanation: %s", e)
                     if "error" in e.response.json():
                         inmain(Dialog.showError, "Function Explanation",
                                f"Error getting function explanation: {e.response.json()['error']}")
@@ -153,6 +164,7 @@ def explain_function(state: RevEngState) -> None:
                 else:
                     arch = "unknown arch"
 
+                logger.warning("Hex-Rays %s decompiler is not available.", arch)
                 inmain(idc.warning, f"Hex-Rays {arch} decompiler is not available.")
 
         inthread(bg_task, IDAUtils.decompile_func(idc.here()))
@@ -174,9 +186,14 @@ def download_logs(state: RevEngState) -> None:
                     if filename:
                         with open(filename, "w") as fd:
                             fd.write(res.text)
+                    else:
+                        logger.warning("No output directory provided to export logs to.")
+                        inmain(idc.warning, "No output directory provided to export logs to.")
                 else:
+                    logger.warning("No binary analysis logs found for: %s", basename(path))
                     inmain(idc.warning, f"No binary analysis logs found for: {basename(path)}.")
             except HTTPError as e:
+                logger.error("Unable to download binary analysis log %s", e)
                 if "error" in e.response.json():
                     inmain(Dialog.showError, "Binary Analysis Logs",
                            f"Unable to download binary analysis logs: {e.response.json()['error']}")
@@ -208,6 +225,7 @@ def function_signature(state: RevEngState) -> None:
 
                             break
             except HTTPError as e:
+                logger.error("Unable to obtain function argument details. %s", e)
                 if "error" in e.response.json():
                     inmain(Dialog.showError, "Binary Analysis Logs",
                            f"Failed to obtain function argument details: {e.response.json()['error']}")
@@ -236,9 +254,11 @@ def analysis_history(state: RevEngState) -> None:
                     inmain(f.Compile)
                     inmain(f.Execute)
                 else:
+                    logger.info("%s not yet analyzed.", basename(path))
                     inmain(Dialog.showInfo, "Binary Analysis History",
-                           f"{basename(path)} binary not yet analysed.")
+                           f"{basename(path)} binary not yet analyzed.")
             except HTTPError as e:
+                logger.error("Unable to obtain binary analysis history. %s", e)
                 if "error" in e.response.json():
                     inmain(Dialog.showError, "Binary Analysis History",
                            f"Failed to obtain binary analysis history: {e.response.json()['error']}")

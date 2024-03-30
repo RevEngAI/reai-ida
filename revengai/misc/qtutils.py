@@ -53,7 +53,7 @@ class Caller(QObject):
 caller = Caller()
 
 
-def inmain(fn, *args, **kwargs) -> Queue:
+def inmain(fn, *args, **kwargs) -> any:
     """Execute a function in the main thread. Wait for it to complete
     and return its return value.
 

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-
+import logging
 from enum import IntEnum
 
 import idaapi
@@ -20,6 +20,9 @@ from revengai.models.checkable_model import RevEngCheckableTableModel
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
 from revengai.ui.auto_analysis_panel import Ui_AutoAnalysisPanel
+
+
+logger = logging.getLogger("REAI")
 
 
 class Analysis(IntEnum):
@@ -85,6 +88,7 @@ class AutoAnalysisDialog(BaseDialog):
             res: Response = RE_embeddings(fpath=self.path)
 
             if res.status_code > 299:
+                logger.error("Auto Analysis Error: %s", res.json()["error"])
                 inmain(Dialog.showError, "Auto Analysis", f"Auto Analysis Error: {res.json()['error']}")
             else:
                 embeddings = res.json()
@@ -94,7 +98,11 @@ class AutoAnalysisDialog(BaseDialog):
                               float(inmain(self.ui.confidenceSlider.property, "maximum")))
 
                 resultsData = []
+                max = len(self._functions)
                 for idx, func in enumerate(self._functions):
+                    idx += 1
+                    logger.info("Searching for %s [%d/%d]", func["name"], idx, max)
+
                     self._analysis[Analysis.TOTAL.value] += 1
                     inmain(self.ui.progressBar.setProperty, "value", idx)
 
@@ -120,11 +128,15 @@ class AutoAnalysisDialog(BaseDialog):
                             symbol = data[0]
 
                             if symbol["distance"] >= confidence:
+                                logger.info("Found symbol '%s' with a confidence of %f",
+                                            symbol['name'], symbol["distance"])
+
                                 # if inmain(IDAUtils.set_name, self.v_addr, symbol['name'])):
                                 resultsData.append((func["name"],
                                                     f"{symbol['name']} ({symbol['binary_name']})", None,
                                                     f"Renamed with confidence of '{symbol['distance']}"))
                                 # else:
+                                #     logger.error("Symbol already exists")
                                 #     inmain(Dialog.showError, "Rename Function Error",
                                 #            f"Can't rename {func['name']}. Name {symbol['name']} already exists.")
                                 #

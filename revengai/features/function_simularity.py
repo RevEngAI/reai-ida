@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import logging
 
 import idc
 from PyQt5.QtCore import Qt
@@ -17,6 +18,9 @@ from revengai.models.table_model import RevEngTableModel
 from revengai.ui.function_simularity_panel import Ui_FunctionSimularityPanel
 
 
+logger = logging.getLogger("REAI")
+
+
 class FunctionSimularityDialog(BaseDialog):
     def __init__(self, state: RevEngState, fpath: str):
         BaseDialog.__init__(self, state, fpath)
@@ -27,6 +31,7 @@ class FunctionSimularityDialog(BaseDialog):
             self.v_addr = start_addr - get_imagebase()
         else:
             self.v_addr = 0
+            logger.error("Pointer location not in valid function.")
             Dialog.showError("Find Similar Functions", "Cursor position not in a function.")
 
         self.ui = Ui_FunctionSimularityPanel()
@@ -58,11 +63,13 @@ class FunctionSimularityDialog(BaseDialog):
             res: Response = RE_embeddings(fpath=self.path)
 
             if res.status_code > 299:
+                logger.error("Function Simularity: %s", res.json().get("error"))
                 inmain(Dialog.showError, "Auto Analysis", f"Auto Analysis Error: {res.json().get('error')}")
             else:
                 fe = next((item for item in res.json() if item["vaddr"] == self.v_addr), None)
 
                 if fe is None:
+                    logger.error("No similar functions found")
                     inmain(Dialog.showError, "Find Similar Functions", "No similar functions found.")
                 else:
                     inmain(self.ui.progressBar.setProperty, "value", 50)
