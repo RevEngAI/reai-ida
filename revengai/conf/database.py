@@ -86,6 +86,17 @@ class RevEngDatabase(object):
         finally:
             self.conn.commit()
 
+    def get_last_analysis(self, sha_256_hash) -> int:
+        try:
+            cursor = self.conn.cursor()
+
+            cursor.execute("SELECT binary_id FROM analysis WHERE sha_256_hash = ? ORDER BY binary_id DESC",
+                           (sha_256_hash,))
+
+            return cursor.fetchone()
+        except Error:
+            pass
+
     def add_analysis(self, sha_256_hash: str, bid: int, status: str = "", submitted: str = "") -> None:
         try:
             self.conn.cursor().execute("INSERT OR REPLACE INTO analysis(sha_256_hash, binary_id, status, submitted) VALUES(?, ?, ?, ?)",
