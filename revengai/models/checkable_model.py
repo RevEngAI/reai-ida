@@ -7,7 +7,7 @@ from revengai.models.table_model import RevEngTableModel
 
 class RevEngCheckableTableModel(RevEngTableModel):
     def __init__(self, data: list, header: list, columns: list, parent=None,
-                 flag: int = Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsUserCheckable):
+                 flag: int = (Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsUserCheckable)):
         RevEngTableModel.__init__(self, data, header, parent)
 
         self._checked = {}
@@ -17,8 +17,14 @@ class RevEngCheckableTableModel(RevEngTableModel):
 
     def data(self, index, role=None):
         if index.isValid() and role == Qt.CheckStateRole and index.column() in self._columns:
-            if role == Qt.CheckStateRole:
-                return self._check_state(QPersistentModelIndex(index))
+            if self._data[index.row()][index.column()]:
+                self._checked[QPersistentModelIndex(index)] = Qt.Checked
+
+                row_data = list(self._data[index.row()])
+                row_data[index.column()] = None
+                self._data[index.row()] = row_data
+
+            return self._check_state(QPersistentModelIndex(index))
         return super().data(index, role)
 
     def setData(self, index, value, role=None):

@@ -45,7 +45,7 @@ class AutoAnalysisDialog(BaseDialog):
                                                                     data=[], columns=[1], parent=self))
 
         self.ui.resultsTable.setModel(RevEngCheckableTableModel(data=[], parent=self, columns=[2],
-                                                                flag=Qt.ItemIsSelectable | Qt.ItemIsUserCheckable,
+                                                                flag=(Qt.ItemIsSelectable | Qt.ItemIsUserCheckable),
                                                                 header=["Source Symbol", "Destination Symbol",
                                                                         "Successful", "Reason",]))
 
@@ -133,7 +133,7 @@ class AutoAnalysisDialog(BaseDialog):
 
                                 # if inmain(IDAUtils.set_name, self.v_addr, symbol['name'])):
                                 resultsData.append((func["name"],
-                                                    f"{symbol['name']} ({symbol['binary_name']})", None,
+                                                    f"{symbol['name']} ({symbol['binary_name']})", True,
                                                     f"Renamed with confidence of '{symbol['distance']}"))
                                 # else:
                                 #     logger.error("Symbol already exists")
@@ -198,8 +198,8 @@ class AutoAnalysisDialog(BaseDialog):
             inmain(idaapi.hide_wait_box)
             inmain(Dialog.showError, "Auto Analysis", f"Auto Analysis Error: {e.response.json()['error']}")
         else:
-            self._auto_analysis()
             inmain(idaapi.hide_wait_box)
+            self._auto_analysis()
 
     def _selected_collections(self):
         model = self.ui.collectionsTable.model()
