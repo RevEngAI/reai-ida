@@ -98,10 +98,10 @@ class AutoAnalysisDialog(BaseDialog):
                               float(inmain(self.ui.confidenceSlider.property, "maximum")))
 
                 resultsData = []
-                max = len(self._functions)
+                nb_func = len(self._functions)
                 for idx, func in enumerate(self._functions):
                     idx += 1
-                    logger.info("Searching for %s [%d/%d]", func["name"], idx, max)
+                    logger.info("Searching for %s [%d/%d]", func["name"], idx, nb_func)
 
                     self._analysis[Analysis.TOTAL.value] += 1
                     inmain(self.ui.progressBar.setProperty, "value", idx)

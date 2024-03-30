@@ -40,6 +40,7 @@ class CallEvent(QEvent):
 
 class Caller(QObject):
     """An event handler which calls the function held within a CallEvent."""
+
     def event(self, event: CallEvent) -> bool:
         event.accept()
 
@@ -149,12 +150,13 @@ def get_inmain_result(queue: Queue) -> any:
     """
     result, exception = queue.get()
     if exception is not None:
-        type, value, traceback = exception
+        _, value, traceback = exception
         raise value.with_traceback(traceback)
     return result
 
 
 cont = itertools.count()
+
 
 def inthread(f, *args, **kwargs) -> Thread:
     """A convenience function for starting a Python thread.
@@ -211,6 +213,7 @@ def inmain_decorator(wait_for_return=True, exceptions_in_main=True):
         or a Python Queue to be used with
         :func:`qtutils.invoke_in_main.get_inmain_result` at a later time.
     """
+
     def wrap(fn):
         """A decorator which sets any function to always run in the main thread."""
 
