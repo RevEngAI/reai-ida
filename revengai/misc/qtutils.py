@@ -1,5 +1,16 @@
 # -*- coding: utf-8 -*-
 
+#################################################################
+#                                                               #
+# Copyright 2013, Christopher Billington, Philip Starkey        #
+#                                                               #
+# This file is part of the qtutils project                      #
+# (see https://github.com/philipstarkey/qtutils )               #
+# and is licensed under the 2-clause, or 3-clause, BSD License. #
+#                                                               #
+#################################################################
+
+
 import functools
 import itertools
 
@@ -16,6 +27,7 @@ class CallEvent(QEvent):
 
     def __init__(self, queue, exceptions_in_main, fn, *args, **kwargs):
         QEvent.__init__(self, self.EVENT_TYPE)
+
         self.fn = fn
         self.args = args
         self.kwargs = kwargs
@@ -28,7 +40,6 @@ class CallEvent(QEvent):
 
 class Caller(QObject):
     """An event handler which calls the function held within a CallEvent."""
-
     def event(self, event: CallEvent) -> bool:
         event.accept()
 
@@ -43,7 +54,7 @@ class Caller(QObject):
 
             if event._exceptions_in_main:
                 # Or, if nobody is listening for this exception,
-                # better raise it here so it doesn't pass silently:
+                # better raise it here, so it doesn't pass silently:
                 raise
         finally:
             event._returnval.put([result, exception])
@@ -109,7 +120,7 @@ def inmain_later(fn, *args, **kwargs) -> Queue:
     return _in_main_later(fn, True, *args, **kwargs)
 
 
-def _in_main_later(fn, exceptions_in_main, *args, **kwargs) -> Queue:
+def _in_main_later(fn, exceptions_in_main: bool, *args, **kwargs) -> Queue:
     """Asks the mainloop to call a function when it has time. Immediately
     returns the queue that was sent to the mainloop.  A call to queue.get()
     will return a list of [result,exception] where exception=[type,value,traceback]
@@ -200,7 +211,6 @@ def inmain_decorator(wait_for_return=True, exceptions_in_main=True):
         or a Python Queue to be used with
         :func:`qtutils.invoke_in_main.get_inmain_result` at a later time.
     """
-
     def wrap(fn):
         """A decorator which sets any function to always run in the main thread."""
 
