@@ -60,7 +60,7 @@ class FunctionSimularityDialog(BaseDialog):
             inmain(self.ui.fetchButton.setEnabled, False)
             inmain(self.ui.progressBar.setProperty, "value", 25)
 
-            res: Response = RE_embeddings(fpath=self.path)
+            res: Response = RE_embeddings(self.path, self.state.config.get("binary_id", 0))
 
             if res.status_code > 299:
                 logger.error("Function Simularity: %s", res.json().get("error"))

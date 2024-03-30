@@ -31,8 +31,8 @@ class RevEngConfiguration(object):
 
         self.restore()
 
-    def get(self, name: str) -> any:
-        return self.config.get(name)
+    def get(self, name: str, default_val: any = None) -> any:
+        return self.config.get(name, default_val)
 
     def set(self, name: str, value: any = None) -> None:
         if value is None:

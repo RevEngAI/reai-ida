@@ -88,14 +88,15 @@ def check_analyze(state: RevEngState) -> None:
     else:
         def bg_task(path: str) -> None:
             try:
-                res: Response = RE_status(path)
+                bid = state.config.get("binary_id", 0)
+
+                res: Response = RE_status(path, bid)
 
                 if isinstance(res, Response):
                     status = res.json()["status"]
 
-                    if state.config.get("binary_id"):
-                        inmain(state.config.database.update_analysis,
-                               int(state.config.get("binary_id")), status)
+                    if bid:
+                        inmain(state.config.database.update_analysis, bid, status)
 
                     logger.info("Got status: %s", status)
                     inmain(Dialog.showInfo, "Check Analysis Status", f"Status: {status}")
@@ -176,9 +177,8 @@ def download_logs(state: RevEngState) -> None:
     else:
         def bg_task(path: str) -> None:
             try:
-                binary_id = state.config.get("binary_id")
-
-                res = RE_logs(path, console=False, binary_id=(binary_id if binary_id else 0))
+                res = RE_logs(path, console=False,
+                              binary_id=state.config.get("binary_id", 0))
 
                 if isinstance(res, Response) and len(res.text) > 0:
                     filename = inmain(ida_kernwin.ask_file, 1, "*.log", "Output Filename:")
@@ -210,7 +210,7 @@ def function_signature(state: RevEngState) -> None:
                 if start_addr is not idc.BADADDR:
                     start_addr -= inmain(get_imagebase())
 
-                    res: Response = RE_analyze_functions(path)
+                    res: Response = RE_analyze_functions(path, state.config.get("binary_id", 0))
 
                     for item in res.json():
                         if item["function_vaddr"] == start_addr:
