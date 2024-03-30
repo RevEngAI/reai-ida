@@ -7,7 +7,7 @@ import idc
 from PyQt5.QtCore import Qt
 from ida_nalt import get_imagebase
 from idautils import Functions
-from qtutils import inthread, inmain
+
 from requests import Response, HTTPError
 
 from reait.api import re_binary_id, RE_embeddings, RE_nearest_symbols
@@ -15,6 +15,7 @@ from reait.api import re_binary_id, RE_embeddings, RE_nearest_symbols
 from revengai.api import RE_collections
 from revengai.features import BaseDialog
 from revengai.misc.utils import IDAUtils
+from revengai.misc.qtutils import inthread, inmain
 from revengai.models.checkable_model import RevEngCheckableTableModel
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState

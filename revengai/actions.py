@@ -8,14 +8,14 @@ import idaapi
 import idautils
 import idc
 from ida_nalt import get_imagebase
-from qtutils import inthread, inmain
+
 from requests import HTTPError, Response
 
 from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, re_binary_id
 
 from revengai.api import RE_explain, RE_analyze_functions, RE_functions_dump, RE_search
 from revengai.features.auto_analyze import AutoAnalysisDialog
-
+from revengai.misc.qtutils import inthread, inmain
 from revengai.gui.dialog import Dialog, StatusForm
 from revengai.manager import RevEngState
 from revengai.features.function_simularity import FunctionSimularityDialog

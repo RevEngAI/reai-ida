@@ -5,12 +5,12 @@ from idaapi import CH_CAN_DEL, CH_MULTI, CH_MODAL, CH_NO_STATUS_BAR, CHCOL_DEC, 
 
 from PyQt5.QtWidgets import QMessageBox
 
-from qtutils import inthread
 from itertools import filterfalse
 
 from reait.api import RE_delete
-
 from revengai.manager import RevEngState
+from revengai.misc.qtutils import inthread
+
 
 
 class Dialog(object):
