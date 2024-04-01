@@ -31,7 +31,7 @@ class RevEngPlugin(plugin_t):
             return PLUGIN_SKIP
 
         logger.info("REAI initialized")
-        
+
         if self.state.config.auto_start and idc.get_input_file_path():
             self.run()
             return PLUGIN_KEEP
