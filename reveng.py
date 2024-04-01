@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 
+import idc
 from ida_kernwin import get_kernel_version
 from idaapi import plugin_t, PLUGIN_FIX, PLUGIN_SKIP, PLUGIN_OK, PLUGIN_KEEP
 
@@ -30,8 +31,8 @@ class RevEngPlugin(plugin_t):
             return PLUGIN_SKIP
 
         logger.info("REAI initialized")
-
-        if self.state.config.auto_start:
+        
+        if self.state.config.auto_start and idc.get_input_file_path():
             self.run()
             return PLUGIN_KEEP
         return PLUGIN_OK

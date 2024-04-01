@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 
 from json import load
-from os.path import abspath, dirname, join, realpath
+from os.path import abspath, dirname, isfile, join, realpath
 
+from idc import get_input_file_path
 from ida_kernwin import set_dock_pos, PluginForm, DP_TAB, unregister_action, attach_action_to_menu, register_action, \
     action_desc_t, action_handler_t, AST_ENABLE_ALWAYS, create_menu, SETMENU_APP, SETMENU_INS, UI_Hooks, \
     attach_action_to_popup, add_hotkey, del_hotkey, get_widget_type, BWN_DISASM, BWN_PSEUDOCODE
@@ -59,7 +60,9 @@ class Hooks(UI_Hooks):
         self.state = state
 
     def populating_widget_popup(self, form, popup):
-        if get_widget_type(form) in [BWN_DISASM, BWN_PSEUDOCODE]:
+        fpath = get_input_file_path()
+
+        if fpath and isfile(fpath) and get_widget_type(form) in [BWN_DISASM, BWN_PSEUDOCODE]:
             # Add separator
             attach_action_to_popup(form, popup, None, None)
 

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 from os import stat
-from os.path import basename
+from os.path import basename, isfile
 
 import ida_kernwin
 import idaapi
@@ -31,8 +31,12 @@ def setup_wizard(state: RevEngState) -> None:
 
 
 def upload_binary(state: RevEngState) -> None:
+    fpath = idc.get_input_file_path()
+
     if not state.config.is_valid():
         setup_wizard(state)
+    elif not fpath or not isfile(fpath):
+        idc.warning("No input file provided")
     else:
         def bg_task(path: str, syms: dict) -> None:
             if RevEngState.LIMIT > (stat(path).st_size // (1024 * 1024)):
@@ -79,12 +83,16 @@ def upload_binary(state: RevEngState) -> None:
 
         symbols["functions"] = functions
 
-        inthread(bg_task, idc.get_input_file_path(), symbols)
+        inthread(bg_task, fpath, symbols)
 
 
 def check_analyze(state: RevEngState) -> None:
+    fpath = idc.get_input_file_path()
+
     if not state.config.is_valid():
         setup_wizard(state)
+    elif not fpath or not isfile(fpath):
+        idc.warning("No input file provided")
     else:
         def bg_task(path: str) -> None:
             try:
@@ -109,28 +117,40 @@ def check_analyze(state: RevEngState) -> None:
                          • You have downloaded your binary id from the portal.\n
                          • You have uploaded the current binary to the portal.""")
 
-        inthread(bg_task, idc.get_input_file_path())
+        inthread(bg_task, fpath)
 
 
 def auto_analyze(state: RevEngState) -> None:
+    fpath = idc.get_input_file_path()
+
     if not state.config.is_valid():
         setup_wizard(state)
+    elif not fpath or not isfile(fpath):
+        idc.warning("No input file provided")
     else:
-        dialog = AutoAnalysisDialog(state, idc.get_input_file_path())
+        dialog = AutoAnalysisDialog(state, fpath)
         dialog.exec_()
 
 
 def rename_function(state: RevEngState) -> None:
+    fpath = idc.get_input_file_path()
+
     if not state.config.is_valid():
         setup_wizard(state)
+    elif not isfile(fpath):
+        idc.warning("No input file provided")
     else:
-        dialog = FunctionSimularityDialog(state, idc.get_input_file_path())
+        dialog = FunctionSimularityDialog(state, fpath)
         dialog.exec_()
 
 
 def explain_function(state: RevEngState) -> None:
+    fpath = idc.get_input_file_path()
+
     if not state.config.is_valid():
         setup_wizard(state)
+    elif not fpath or not isfile(fpath):
+        idc.warning("No input file provided")
     else:
         def bg_task(pseudo_code: str) -> None:
             if len(pseudo_code) > 0:
@@ -172,8 +192,12 @@ def explain_function(state: RevEngState) -> None:
 
 
 def download_logs(state: RevEngState) -> None:
+    fpath = idc.get_input_file_path()
+
     if not state.config.is_valid():
         setup_wizard(state)
+    elif not fpath or not isfile(fpath):
+        idc.warning("No input file provided")
     else:
         def bg_task(path: str) -> None:
             try:
@@ -198,12 +222,16 @@ def download_logs(state: RevEngState) -> None:
                     inmain(Dialog.showError, "Binary Analysis Logs",
                            f"Unable to download binary analysis logs: {e.response.json()['error']}")
 
-        inthread(bg_task, idc.get_input_file_path())
+        inthread(bg_task, fpath)
 
 
 def function_signature(state: RevEngState) -> None:
+    fpath = idc.get_input_file_path()
+
     if not state.config.is_valid():
         setup_wizard(state)
+    elif not fpath or not isfile(fpath):
+        idc.warning("No input file provided")
     else:
         def bg_task(path: str, start_addr: int) -> None:
             try:
@@ -230,12 +258,16 @@ def function_signature(state: RevEngState) -> None:
                     inmain(Dialog.showError, "Binary Analysis Logs",
                            f"Failed to obtain function argument details: {e.response.json()['error']}")
 
-        inthread(bg_task, idc.get_input_file_path(), idc.get_func_attr(idc.here(), idc.FUNCATTR_START))
+        inthread(bg_task, fpath, idc.get_func_attr(idc.here(), idc.FUNCATTR_START))
 
 
 def analysis_history(state: RevEngState) -> None:
+    fpath = idc.get_input_file_path()
+
     if not state.config.is_valid():
         setup_wizard(state)
+    elif not fpath or not isfile(fpath):
+        idc.warning("No input file provided")
     else:
         def bg_task(path: str) -> None:
             try:
@@ -263,4 +295,4 @@ def analysis_history(state: RevEngState) -> None:
                     inmain(Dialog.showError, "Binary Analysis History",
                            f"Failed to obtain binary analysis history: {e.response.json()['error']}")
 
-        inthread(bg_task, idc.get_input_file_path())
+        inthread(bg_task, fpath)
