@@ -68,6 +68,13 @@ def RE_search(fpath: str) -> Response:
     return res
 
 
+def RE_quick_search(model: str, collection: str = "") -> Response:
+    res = reveng_req(get, f"collections/quick/search?model_name={model}&collection_name={collection}")
+
+    res.raise_for_status()
+    return res
+
+
 def RE_recent_analysis(page_size: int = 100, page_number: int = 1) -> Response:
     res = reveng_req(post, "analyse/recent",
                      json_data={"page_size": page_size, "scope": "USER",

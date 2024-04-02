@@ -12,7 +12,7 @@ from requests import Response, HTTPError
 
 from reait.api import re_binary_id, RE_embeddings, RE_nearest_symbols
 
-from revengai.api import RE_collections
+from revengai.api import RE_collections, RE_collections_count
 from revengai.features import BaseDialog
 from revengai.misc.utils import IDAUtils
 from revengai.misc.qtutils import inthread, inmain
@@ -134,7 +134,7 @@ class AutoAnalysisDialog(BaseDialog):
                                 # if inmain(IDAUtils.set_name, self.v_addr, symbol['name'])):
                                 resultsData.append((func["name"],
                                                     f"{symbol['name']} ({symbol['binary_name']})", True,
-                                                    f"Renamed with confidence of '{symbol['distance']}"))
+                                                    f"Can be renamed with confidence of '{symbol['distance']}"))
                                 # else:
                                 #     logger.error("Symbol already exists")
                                 #     inmain(Dialog.showError, "Rename Function Error",
@@ -186,7 +186,9 @@ class AutoAnalysisDialog(BaseDialog):
 
             inmain(self.ui.startButton.setEnabled, False)
 
-            res: Response = RE_collections(scope, page_size, page_number)
+            res: Response = RE_collections_count(scope)
+
+            res = RE_collections(scope, min(page_size, res.json()["count"]), page_number)
 
             collections = []
             for collection in res.json()["collections"]:
@@ -194,12 +196,13 @@ class AutoAnalysisDialog(BaseDialog):
 
             inmain(inmain(self.ui.collectionsTable.model).updateData, collections)
             inmain(self.ui.collectionsTable.resizeColumnsToContents)
+
+            inmain(self.ui.startButton.setEnabled, len(collections) > 0)
         except HTTPError as e:
             inmain(idaapi.hide_wait_box)
             inmain(Dialog.showError, "Auto Analysis", f"Auto Analysis Error: {e.response.json()['error']}")
         else:
             inmain(idaapi.hide_wait_box)
-            self._auto_analysis()
 
     def _selected_collections(self):
         model = self.ui.collectionsTable.model()

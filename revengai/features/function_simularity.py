@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 import logging
 
-import idaapi
 import idc
+from idaapi import ASKBTN_YES
+
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIntValidator
 from ida_nalt import get_imagebase
@@ -11,7 +12,7 @@ from requests import Response, HTTPError
 
 from reait.api import re_binary_id, RE_embeddings, RE_nearest_symbols
 
-from revengai.actions import function_signature
+from revengai.api import RE_quick_search
 from revengai.features import BaseDialog
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
@@ -40,43 +41,54 @@ class FunctionSimularityDialog(BaseDialog):
         self.ui = Ui_FunctionSimularityPanel()
         self.ui.setupUi(self)
 
-        self.ui.checkBox.setVisible(False)
+        self.ui.renameButton.setEnabled(False)
+
         self.ui.lineEdit.setValidator(QIntValidator(1, 256, self))
         self.ui.tableView.setModel(RevEngTableModel([], ["Function Name", "Confidence", "From"], self))
 
+        self.ui.fetchButton.setFocus()
         self.ui.fetchButton.clicked.connect(self._fetch)
         self.ui.renameButton.clicked.connect(self._rename_symbol)
 
+    def showEvent(self, event):
+        super(FunctionSimularityDialog, self).showEvent(event)
+        inthread(self._quick_search)
+
     def _fetch(self):
         if self.v_addr > 0:
-            inthread(self._load)
+            inthread(self._load, self.ui.comboBox.currentData(),
+                     float(self.ui.doubleSpinBox.text().replace("%", "").replace(",", ".")))
 
-    def _load(self):
+    def _load(self, collections, distance):
         try:
             model = inmain(self.ui.tableView.model)
 
             inmain(model.updateData, [])
             inmain(self.ui.fetchButton.setEnabled, False)
+            inmain(self.ui.renameButton.setEnabled, False)
             inmain(self.ui.progressBar.setProperty, "value", 25)
 
             res: Response = RE_embeddings(self.path, self.state.config.get("binary_id", 0))
 
             if res.status_code > 299:
-                logger.error("Function Simularity: %s", res.json().get("error"))
+                logger.error("Function Similarity: %s", res.json().get("error"))
                 inmain(Dialog.showError, "Auto Analysis", f"Auto Analysis Error: {res.json().get('error')}")
             else:
                 fe = next((item for item in res.json() if item["vaddr"] == self.v_addr), None)
 
                 if fe is None:
-                    logger.error("No similar functions found.")
-                    inmain(Dialog.showError, "Find Similar Functions", "No similar functions found.")
+                    inmain(idc.warning, "No similar functions found.")
+                    logger.error("No similar functions found for: %s",
+                                 inmain(idc.get_func_name, inmain(idc.here)))
                 else:
                     inmain(self.ui.progressBar.setProperty, "value", 50)
 
                     res = RE_nearest_symbols(embedding=fe["embedding"],
                                              nns=int(inmain(self.ui.lineEdit.text)),
                                              ignore_hashes=[re_binary_id(self.path)],
-                                             model_name=self.state.config.get("model"))
+                                             model_name=self.state.config.get("model"),
+                                             distance=distance, collections=collections,
+                                             debug_enabled=inmain(self.ui.checkBox.isChecked))
 
                     inmain(self.ui.progressBar.setProperty, "value", 75)
 
@@ -85,9 +97,13 @@ class FunctionSimularityDialog(BaseDialog):
                         data.append([item["name"], item["distance"], item["binary_name"]])
 
                     inmain(model.updateData, data)
+                    inmain(self.ui.progressBar.setProperty, "value", 100)
+                    inmain(self.ui.renameButton.setEnabled, len(data) > 0)
 
                     if len(data) == 0:
                         inmain(idc.warning, "No similar functions found.")
+                        logger.error("No similar functions found for: %s",
+                                     inmain(idc.get_func_name, inmain(idc.here)))
         except HTTPError as e:
             inmain(Dialog.showError, "Auto Analysis", e.response.json()["error"])
         finally:
@@ -101,6 +117,28 @@ class FunctionSimularityDialog(BaseDialog):
             if not IDAUtils.set_name(self.v_addr, self.ui.tableView.model().data(rows[0], Qt.DisplayRole)):
                 Dialog.showError("Rename Function Error", "Symbol already exists.")
 
-            if idaapi.ASKBTN_YES == idc.ask_yn(idaapi.ASKBTN_YES,
-                                               "Do you also want to rename the function arguments?"):
+            if ASKBTN_YES == idc.ask_yn(ASKBTN_YES,
+                                        "Do you also want to rename the function arguments?"):
+                from revengai.actions import function_signature
+
                 function_signature(self.state, self.v_addr)
+
+    def _quick_search(self):
+        try:
+            inmain(self.ui.comboBox.clear)
+
+            res: Response = RE_quick_search(self.state.config.get("model"))
+
+            names = []
+
+            for collection in res.json():
+                names.append(collection["collection_name"])
+
+            if len(names) == 0:
+                inmain(self.ui.label.setVisible, False)
+                inmain(self.ui.comboBox.setVisible, False)
+            else:
+                inmain(self.ui.comboBox.addItems, names)
+                inmain(self.ui.comboBox.setCurrentIndex, -1)
+        except HTTPError as e:
+            logger.error("Getting collections failed: %s", e)
