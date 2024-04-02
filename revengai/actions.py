@@ -93,6 +93,8 @@ def check_analyze(state: RevEngState) -> None:
     elif not fpath or not isfile(fpath):
         idc.warning("No input file provided")
     else:
+        state.config.init_current_analysis()
+
         def bg_task(path: str) -> None:
             try:
                 bid = state.config.get("binary_id", 0)
@@ -151,6 +153,8 @@ def explain_function(state: RevEngState) -> None:
     elif not fpath or not isfile(fpath):
         idc.warning("No input file provided")
     else:
+        state.config.init_current_analysis()
+
         def bg_task(pseudo_code: str) -> None:
             if len(pseudo_code) > 0:
                 try:
@@ -198,6 +202,8 @@ def download_logs(state: RevEngState) -> None:
     elif not fpath or not isfile(fpath):
         idc.warning("No input file provided")
     else:
+        state.config.init_current_analysis()
+
         def bg_task(path: str) -> None:
             try:
                 res = RE_logs(path, console=False,
@@ -234,6 +240,8 @@ def function_signature(state: RevEngState, func_addr: int = 0) -> None:
     elif not fpath or not isfile(fpath):
         idc.warning("No input file provided")
     else:
+        state.config.init_current_analysis()
+
         def bg_task(path: str, start_addr: int) -> None:
             try:
                 if start_addr is not idc.BADADDR:
@@ -271,6 +279,8 @@ def analysis_history(state: RevEngState) -> None:
     elif not fpath or not isfile(fpath):
         idc.warning("No input file provided")
     else:
+        state.config.init_current_analysis()
+
         def bg_task(path: str) -> None:
             try:
                 res = RE_search(path)

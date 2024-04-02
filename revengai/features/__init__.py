@@ -17,6 +17,8 @@ class BaseDialog(QDialog):
         self.path = fpath
         self.state = state
 
+        state.config.init_current_analysis()
+
     def showEvent(self, event):
         super(BaseDialog, self).showEvent(event)
 

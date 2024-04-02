@@ -93,7 +93,8 @@ class RevEngDatabase(object):
             cursor.execute("SELECT binary_id FROM analysis WHERE sha_256_hash = ? ORDER BY binary_id DESC LIMIT 1",
                            (sha_256_hash,))
 
-            return cursor.fetchone()
+            result = cursor.fetchone()
+            return result[0] if len(result) > 0 else 0
         except Error:
             pass
 

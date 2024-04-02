@@ -4,9 +4,10 @@ from os import makedirs
 from json import loads, dumps
 from os.path import join, exists
 
+import idc
 from ida_diskio import get_user_idadir
 
-from reait.api import re_conf
+from reait.api import re_conf, re_binary_id
 
 from revengai.conf.database import RevEngDatabase
 from revengai.log.log import configure_loggers
@@ -67,3 +68,7 @@ class RevEngConfiguration(object):
     @property
     def database(self) -> RevEngDatabase:
         return self._database
+
+    def init_current_analysis(self):
+        self.set("binary_id",
+                 self.database.get_last_analysis(re_binary_id(idc.get_input_file_path())))

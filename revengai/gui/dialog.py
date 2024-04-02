@@ -61,9 +61,9 @@ class StatusForm(Form):
 
                 inthread(RE_delete, self.fpath, self.OnGetLine(idx)[1])
 
-                if self.state.config.get("binary_id") == self.OnGetLine(idx)[1]:
-                    self.state.config.set("binary_id")
                 self.state.config.database.delete_analysis(self.OnGetLine(idx)[1])
+
+                self.state.config.init_current_analysis()
 
             self.items = [*filterfalse(lambda i: i in (self.OnGetLine(j) for j in sel), self.items)]
             return Choose.ALL_CHANGED, sel[0]
