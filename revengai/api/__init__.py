@@ -7,6 +7,14 @@ from requests import post, Response, get
 from reait.api import reveng_req, re_binary_id, re_bid_search
 
 
+def RE_collections_count(scope: str = "PUBLIC") -> Response:
+    res: Response = reveng_req(post, "collections/count",
+                               json_data={"scope": scope})
+
+    res.raise_for_status()
+    return res
+
+
 def RE_collections(scope: str = "PUBLIC", page_size: int = 100000, page_number: int = 1) -> Response:
     res: Response = reveng_req(post, "collections",
                                json_data={"scope": scope,
