@@ -30,6 +30,7 @@ class Analysis(IntEnum):
     SKIPPED = 1
     UNSUCCESSFUL = 2
     SUCCESSFUL = 3
+    CANDIDATE = 4
 
 
 class AutoAnalysisDialog(BaseDialog):
@@ -49,7 +50,7 @@ class AutoAnalysisDialog(BaseDialog):
                                                                 header=["Source Symbol", "Destination Symbol",
                                                                         "Successful", "Reason",]))
 
-        self.ui.startButton.clicked.connect(self._start_analysis)
+        self.ui.fetchButton.clicked.connect(self._start_analysis)
 
         self.ui.resultsFilter.textChanged.connect(self._filter)
         self.ui.collectionsFilter.textChanged.connect(self._filter)
@@ -82,7 +83,9 @@ class AutoAnalysisDialog(BaseDialog):
         try:
             self._analysis = [0] * len(Analysis)
 
-            inmain(self.ui.startButton.setEnabled, False)
+            inmain(self.ui.fetchButton.setEnabled, False)
+            inmain(self.ui.renameButton.setEnabled, False)
+            inmain(self.ui.confidenceSlider.setEnabled, False)
             inmain(self.ui.progressBar.setProperty, "value", 0)
 
             res: Response = RE_embeddings(self.path, self.state.config.get("binary_id", 0))
@@ -128,6 +131,7 @@ class AutoAnalysisDialog(BaseDialog):
                             symbol = data[0]
 
                             if symbol["distance"] >= confidence:
+                                self._analysis[Analysis.CANDIDATE.value] += 1
                                 logger.info("Found symbol '%s' with a confidence of %f",
                                             symbol['name'], symbol["distance"])
 
@@ -156,8 +160,11 @@ class AutoAnalysisDialog(BaseDialog):
         except HTTPError as e:
             inmain(Dialog.showError, "Auto Analysis", f"Auto Analysis Error: {e.response.json()['error']}")
         finally:
-            inmain(self.ui.startButton.setEnabled, True)
+            inmain(self.ui.fetchButton.setEnabled, True)
+            inmain(self.ui.confidenceSlider.setEnabled, True)
             inmain(self.ui.progressBar.setProperty, "value", len(self._functions))
+            inmain(self.ui.renameButton.setEnabled,
+                   self._analysis[Analysis.CANDIDATE.value] > 0 and inmain(self.ui.tabWidget.currentIndex) != 0)
 
     def _filter(self, filter_text):
         table = self.ui.collectionsTable if self.ui.tabWidget.currentIndex() == 0 else self.ui.resultsTable
@@ -170,11 +177,13 @@ class AutoAnalysisDialog(BaseDialog):
         self.ui.description.setText(f"Confidence: {value:#02d}")
 
     def _tab_changed(self, index):
-        self.ui.confidenceSlider.setEnabled(index == 0)
-
         if index == 0:
+            self.ui.description.setVisible(True)
+            self.ui.renameButton.setEnabled(False)
             self._confidence(self.ui.confidenceSlider.sliderPosition())
         else:
+            self.ui.description.setVisible(self._analysis[Analysis.TOTAL.value] > 0)
+            self.ui.renameButton.setEnabled(self._analysis[Analysis.CANDIDATE.value] > 0)
             self.ui.description.setText(f"Total Functions Analysed: {self._analysis[Analysis.TOTAL.value]}<br/>"
                                         f"Successful Analyses: {self._analysis[Analysis.SUCCESSFUL.value]}<br/>"
                                         f"Skipped Analyses: {self._analysis[Analysis.SKIPPED.value]}<br/>"
@@ -184,7 +193,7 @@ class AutoAnalysisDialog(BaseDialog):
         try:
             inmain(idaapi.show_wait_box, "HIDECANCEL\nGetting RevEng.AI collections…")
 
-            inmain(self.ui.startButton.setEnabled, False)
+            inmain(self.ui.fetchButton.setEnabled, False)
 
             res: Response = RE_collections_count(scope)
 
@@ -196,13 +205,13 @@ class AutoAnalysisDialog(BaseDialog):
 
             inmain(inmain(self.ui.collectionsTable.model).updateData, collections)
             inmain(self.ui.collectionsTable.resizeColumnsToContents)
-
-            inmain(self.ui.startButton.setEnabled, len(collections) > 0)
         except HTTPError as e:
             inmain(idaapi.hide_wait_box)
             inmain(Dialog.showError, "Auto Analysis", f"Auto Analysis Error: {e.response.json()['error']}")
         else:
             inmain(idaapi.hide_wait_box)
+        finally:
+            inmain(self.ui.fetchButton.setEnabled, True)
 
     def _selected_collections(self):
         model = self.ui.collectionsTable.model()

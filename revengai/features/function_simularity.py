@@ -2,6 +2,7 @@
 import logging
 
 import idc
+from PyQt5.QtWidgets import QAction
 from idaapi import ASKBTN_YES
 
 from PyQt5.QtCore import Qt
@@ -46,6 +47,10 @@ class FunctionSimularityDialog(BaseDialog):
         self.ui.lineEdit.setValidator(QIntValidator(1, 256, self))
         self.ui.tableView.setModel(RevEngTableModel([], ["Function Name", "Confidence", "From"], self))
 
+        self.renameAction = QAction(self.ui.renameButton.text(), self.ui.tableView)
+        self.renameAction.triggered.connect(self._rename_symbol)
+        self.ui.tableView.addAction(self.renameAction)
+
         self.ui.fetchButton.setFocus()
         self.ui.fetchButton.clicked.connect(self._fetch)
         self.ui.renameButton.clicked.connect(self._rename_symbol)
@@ -57,13 +62,14 @@ class FunctionSimularityDialog(BaseDialog):
     def _fetch(self):
         if self.v_addr > 0:
             inthread(self._load, self.ui.comboBox.currentData(),
-                     float(self.ui.doubleSpinBox.text().replace("%", "").replace(",", ".")))
+                     (100 - int(self.ui.doubleSpinBox.text().replace("%", "").replace(",", "."))) / 100.0)
 
     def _load(self, collections, distance):
         try:
             model = inmain(self.ui.tableView.model)
 
             inmain(model.updateData, [])
+            inmain(self.renameAction.setVisible, False)
             inmain(self.ui.fetchButton.setEnabled, False)
             inmain(self.ui.renameButton.setEnabled, False)
             inmain(self.ui.progressBar.setProperty, "value", 25)
@@ -100,7 +106,9 @@ class FunctionSimularityDialog(BaseDialog):
                     inmain(self.ui.progressBar.setProperty, "value", 100)
                     inmain(self.ui.renameButton.setEnabled, len(data) > 0)
 
-                    if len(data) == 0:
+                    if len(data) > 0:
+                        inmain(self.renameAction.setVisible, True)
+                    else:
                         inmain(idc.warning, "No similar functions found.")
                         logger.error("No similar functions found for: %s",
                                      inmain(idc.get_func_name, inmain(idc.here)))

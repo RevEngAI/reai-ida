@@ -68,8 +68,8 @@ def RE_search(fpath: str) -> Response:
     return res
 
 
-def RE_quick_search(model: str, collection: str = "") -> Response:
-    res = reveng_req(get, f"collections/quick/search?model_name={model}&collection_name={collection}")
+def RE_quick_search(model: str) -> Response:
+    res = reveng_req(get, f"collections/quick/search?model_name={model}")
 
     res.raise_for_status()
     return res

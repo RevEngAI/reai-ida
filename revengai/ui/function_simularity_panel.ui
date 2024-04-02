@@ -120,8 +120,11 @@
           <property name="suffix">
            <string>%</string>
           </property>
+          <property name="decimals">
+           <number>0</number>
+          </property>
           <property name="value">
-           <double>90.00</double>
+           <double>90.000000000000000</double>
           </property>
          </widget>
         </item>
@@ -262,6 +265,9 @@
    </item>
    <item row="0" column="1">
     <widget class="QTableView" name="tableView">
+     <property name="contextMenuPolicy">
+      <enum>Qt::ActionsContextMenu</enum>
+     </property>
      <property name="editTriggers">
       <set>QAbstractItemView::NoEditTriggers</set>
      </property>
