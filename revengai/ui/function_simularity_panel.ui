@@ -120,6 +120,9 @@
           <property name="suffix">
            <string>%</string>
           </property>
+          <property name="value">
+           <double>90.00</double>
+          </property>
          </widget>
         </item>
        </layout>

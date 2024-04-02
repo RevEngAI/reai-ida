@@ -10,6 +10,8 @@
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
+from revengai.gui.checkable_combobox import CheckableComboBox
+
 
 class Ui_FunctionSimularityPanel(object):
     def setupUi(self, FunctionSimularityPanel):
@@ -45,7 +47,7 @@ class Ui_FunctionSimularityPanel(object):
         self.label.setFont(font)
         self.label.setObjectName("label")
         self.horizontalLayout_4.addWidget(self.label)
-        self.comboBox = QtWidgets.QComboBox(self.groupBox)
+        self.comboBox = CheckableComboBox(self.groupBox)
         self.comboBox.setObjectName("comboBox")
         self.horizontalLayout_4.addWidget(self.comboBox)
         self.horizontalLayout_4.setStretch(1, 1)
@@ -57,6 +59,7 @@ class Ui_FunctionSimularityPanel(object):
         self.horizontalLayout_5.addWidget(self.label_3)
         self.doubleSpinBox = QtWidgets.QDoubleSpinBox(self.groupBox)
         self.doubleSpinBox.setObjectName("doubleSpinBox")
+        self.doubleSpinBox.setProperty("value", 90.00)
         self.horizontalLayout_5.addWidget(self.doubleSpinBox)
         self.horizontalLayout_5.setStretch(1, 1)
         self.verticalLayout.addLayout(self.horizontalLayout_5)
