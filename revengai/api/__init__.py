@@ -58,3 +58,12 @@ def RE_search(fpath: str) -> Response:
 
     res.raise_for_status()
     return res
+
+
+def RE_recent_analysis(page_size: int = 100, page_number: int = 1) -> Response:
+    res = reveng_req(post, "analyse/recent",
+                     json_data={"page_size": page_size, "scope": "USER",
+                                "page_number": page_number, "status": "All"})
+
+    res.raise_for_status()
+    return res

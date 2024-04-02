@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 
+import idaapi
 import idc
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIntValidator
@@ -9,6 +10,8 @@ from ida_nalt import get_imagebase
 from requests import Response, HTTPError
 
 from reait.api import re_binary_id, RE_embeddings, RE_nearest_symbols
+
+from revengai.actions import function_signature
 from revengai.features import BaseDialog
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
@@ -44,10 +47,6 @@ class FunctionSimularityDialog(BaseDialog):
         self.ui.fetchButton.clicked.connect(self._fetch)
         self.ui.renameButton.clicked.connect(self._rename_symbol)
 
-    def showEvent(self, event):
-        super(FunctionSimularityDialog, self).showEvent(event)
-        self._fetch()
-
     def _fetch(self):
         if self.v_addr > 0:
             inthread(self._load)
@@ -69,7 +68,7 @@ class FunctionSimularityDialog(BaseDialog):
                 fe = next((item for item in res.json() if item["vaddr"] == self.v_addr), None)
 
                 if fe is None:
-                    logger.error("No similar functions found")
+                    logger.error("No similar functions found.")
                     inmain(Dialog.showError, "Find Similar Functions", "No similar functions found.")
                 else:
                     inmain(self.ui.progressBar.setProperty, "value", 50)
@@ -86,6 +85,9 @@ class FunctionSimularityDialog(BaseDialog):
                         data.append([item["name"], item["distance"], item["binary_name"]])
 
                     inmain(model.updateData, data)
+
+                    if len(data) == 0:
+                        inmain(idc.warning, "No similar functions found.")
         except HTTPError as e:
             inmain(Dialog.showError, "Auto Analysis", e.response.json()["error"])
         finally:
@@ -98,3 +100,7 @@ class FunctionSimularityDialog(BaseDialog):
         if len(rows) > 0:
             if not IDAUtils.set_name(self.v_addr, self.ui.tableView.model().data(rows[0], Qt.DisplayRole)):
                 Dialog.showError("Rename Function Error", "Symbol already exists.")
+
+            if idaapi.ASKBTN_YES == idc.ask_yn(idaapi.ASKBTN_YES,
+                                               "Do you also want to rename the function arguments?"):
+                function_signature(self.state, self.v_addr)

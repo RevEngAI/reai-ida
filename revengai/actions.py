@@ -13,7 +13,7 @@ from requests import HTTPError, Response
 
 from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, re_binary_id
 
-from revengai.api import RE_explain, RE_analyze_functions, RE_functions_dump, RE_search
+from revengai.api import RE_explain, RE_analyze_functions, RE_functions_dump, RE_search, RE_recent_analysis
 from revengai.features.auto_analyze import AutoAnalysisDialog
 from revengai.misc.qtutils import inthread, inmain
 from revengai.gui.dialog import Dialog, StatusForm
@@ -21,7 +21,6 @@ from revengai.manager import RevEngState
 from revengai.features.function_simularity import FunctionSimularityDialog
 from revengai.misc.utils import IDAUtils
 from revengai.wizard.wizard import RevEngSetupWizard
-
 
 logger = logging.getLogger("REAI")
 
@@ -169,7 +168,7 @@ def explain_function(state: RevEngState) -> None:
                 info = inmain(idaapi.get_inf_structure)
 
                 procname = info.procname.lower()
-                bits = 64 if info.is_64bit() else 32 if info.is_32bit() else 16
+                bits = 64 if inmain(info.is_64bit) else 32 if inmain(info.is_32bit) else 16
 
                 # https://github.com/williballenthin/python-idb/blob/master/idb/idapython.py#L955-L1046
                 if any(procname.startswith(arch) for arch in ["metapc", "athlon", "k62", "p2", "p3", "p4", "80"]):
@@ -204,7 +203,9 @@ def download_logs(state: RevEngState) -> None:
                 res = RE_logs(path, console=False,
                               binary_id=state.config.get("binary_id", 0))
 
-                if isinstance(res, Response) and len(res.text) > 0:
+                if isinstance(res, Response) and \
+                        ("text" in res.headers.get("Content-Type") and len(res.text) > 0 or
+                         "json" in res.headers.get("Content-Type") and "error" not in res.json()):
                     filename = inmain(ida_kernwin.ask_file, 1, "*.log", "Output Filename:")
 
                     if filename:
@@ -225,7 +226,7 @@ def download_logs(state: RevEngState) -> None:
         inthread(bg_task, fpath)
 
 
-def function_signature(state: RevEngState) -> None:
+def function_signature(state: RevEngState, func_addr: int = 0) -> None:
     fpath = idc.get_input_file_path()
 
     if not state.config.is_valid():
@@ -236,7 +237,7 @@ def function_signature(state: RevEngState) -> None:
         def bg_task(path: str, start_addr: int) -> None:
             try:
                 if start_addr is not idc.BADADDR:
-                    start_addr -= inmain(get_imagebase())
+                    start_addr -= inmain(get_imagebase)
 
                     res: Response = RE_analyze_functions(path, state.config.get("binary_id", 0))
 
@@ -258,7 +259,8 @@ def function_signature(state: RevEngState) -> None:
                     inmain(Dialog.showError, "Binary Analysis Logs",
                            f"Failed to obtain function argument details: {e.response.json()['error']}")
 
-        inthread(bg_task, fpath, idc.get_func_attr(idc.here(), idc.FUNCATTR_START))
+        inthread(bg_task, fpath,
+                 func_addr if func_addr > 0 else idc.get_func_attr(idc.here(), idc.FUNCATTR_START))
 
 
 def analysis_history(state: RevEngState) -> None:
@@ -296,3 +298,25 @@ def analysis_history(state: RevEngState) -> None:
                            f"Failed to obtain binary analysis history: {e.response.json()['error']}")
 
         inthread(bg_task, fpath)
+
+
+def load_recent_analyses(state: RevEngState):
+    if state.config.is_valid():
+        def bg_task(fpath: str) -> None:
+            try:
+                res: Response = RE_recent_analysis()
+
+                for analysis in res.json()["analyses"]:
+                    inmain(state.config.database.add_upload, analysis["binary_name"], analysis["sha_256_hash"])
+                    inmain(state.config.database.add_analysis, analysis["sha_256_hash"],
+                           analysis["binary_id"], analysis["status"], analysis["creation"])
+
+                if fpath and isfile(fpath):
+                    state.config.set("binary_id",
+                                     inmain(state.config.database.get_last_analysis, re_binary_id(fpath)))
+                else:
+                    state.config.set("binary_id", None)
+            except HTTPError as e:
+                logger.error("Error getting recent analyses: %s", e)
+
+        inthread(bg_task, idc.get_input_file_path())

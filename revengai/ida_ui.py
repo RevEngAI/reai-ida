@@ -9,6 +9,7 @@ from ida_kernwin import set_dock_pos, PluginForm, DP_TAB, unregister_action, att
     attach_action_to_popup, add_hotkey, del_hotkey, get_widget_type, BWN_DISASM, BWN_PSEUDOCODE
 
 from revengai import actions
+from revengai.actions import load_recent_analyses
 from revengai.manager import RevEngState
 
 MENU = "RevEngAI Toolkit/"
@@ -115,6 +116,8 @@ class RevEngConfigForm_t(PluginForm):
         self.register_actions()
 
     def register_actions(self):
+        load_recent_analyses(self.state)
+
         # Add ui hook
         self._hooks.hook()
 
