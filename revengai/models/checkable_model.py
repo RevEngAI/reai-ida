@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from PyQt5.QtCore import Qt, QPersistentModelIndex
+from PyQt5.QtGui import QStandardItem
 
 from revengai.models.table_model import RevEngTableModel
 
@@ -17,13 +18,8 @@ class RevEngCheckableTableModel(RevEngTableModel):
 
     def data(self, index, role=None):
         if index.isValid() and role == Qt.CheckStateRole and index.column() in self._columns:
-            if self._data[index.row()][index.column()]:
-                self._checked[QPersistentModelIndex(index)] = Qt.Checked
-
-                row_data = list(self._data[index.row()])
-                row_data[index.column()] = None
-                self._data[index.row()] = row_data
-
+            if isinstance(self._data[index.row()][index.column()], QStandardItem):
+                return self._data[index.row()][index.column()].checkState()
             return self._check_state(QPersistentModelIndex(index))
         return super().data(index, role)
 
@@ -35,6 +31,8 @@ class RevEngCheckableTableModel(RevEngTableModel):
 
     def flags(self, index):
         if index.isValid() and index.column() in self._columns:
+            if isinstance(self._data[index.row()][index.column()], QStandardItem):
+                return self._data[index.row()][index.column()].flags()
             return self.flag
         return super().flags(index)
 

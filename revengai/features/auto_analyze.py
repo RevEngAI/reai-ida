@@ -5,6 +5,8 @@ from enum import IntEnum
 import idaapi
 import idc
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QStandardItem, QCursor
+from PyQt5.QtWidgets import QMenu
 from ida_nalt import get_imagebase
 from idautils import Functions
 
@@ -30,7 +32,6 @@ class Analysis(IntEnum):
     SKIPPED = 1
     UNSUCCESSFUL = 2
     SUCCESSFUL = 3
-    CANDIDATE = 4
 
 
 class AutoAnalysisDialog(BaseDialog):
@@ -50,7 +51,10 @@ class AutoAnalysisDialog(BaseDialog):
                                                                 header=["Source Symbol", "Destination Symbol",
                                                                         "Successful", "Reason",]))
 
+        self.ui.resultsTable.customContextMenuRequested.connect(self._table_menu)
+
         self.ui.fetchButton.clicked.connect(self._start_analysis)
+        self.ui.renameButton.clicked.connect(self._rename_function)
 
         self.ui.resultsFilter.textChanged.connect(self._filter)
         self.ui.collectionsFilter.textChanged.connect(self._filter)
@@ -76,10 +80,20 @@ class AutoAnalysisDialog(BaseDialog):
         super(AutoAnalysisDialog, self).showEvent(event)
         inthread(self._load_collections)
 
-    def _start_analysis(self):
+    def _table_menu(self) -> None:
+        selected = self.ui.resultsTable.selectedIndexes()
+
+        if selected and self.ui.renameButton.isEnabled() and \
+                isinstance(self.ui.resultsTable.selectionModel().selectedRows(column=2)[0].data(), QStandardItem):
+            menu = QMenu()
+            renameAction = menu.addAction(self.ui.renameButton.text())
+            renameAction.triggered.connect(lambda: self._rename_function(selected))
+            menu.exec_(QCursor.pos())
+
+    def _start_analysis(self) -> None:
         inthread(self._auto_analysis)
 
-    def _auto_analysis(self):
+    def _auto_analysis(self) -> None:
         try:
             self._analysis = [0] * len(Analysis)
 
@@ -97,16 +111,17 @@ class AutoAnalysisDialog(BaseDialog):
                 embeddings = res.json()
 
                 collections = inmain(self._selected_collections)
-                confidence = (float(inmain(self.ui.confidenceSlider.property, "value")) /
-                              float(inmain(self.ui.confidenceSlider.property, "maximum")))
+                confidence = 1 - (int(inmain(self.ui.confidenceSlider.property, "value")) /
+                                  int(inmain(self.ui.confidenceSlider.property, "maximum")))
 
                 resultsData = []
                 nb_func = len(self._functions)
+                self._analysis[Analysis.TOTAL.value] = nb_func
+
                 for idx, func in enumerate(self._functions):
                     idx += 1
                     logger.info("Searching for %s [%d/%d]", func["name"], idx, nb_func)
 
-                    self._analysis[Analysis.TOTAL.value] += 1
                     inmain(self.ui.progressBar.setProperty, "value", idx)
 
                     fe = next((item for item in embeddings if item["vaddr"] == func["start_addr"]), None)
@@ -117,7 +132,7 @@ class AutoAnalysisDialog(BaseDialog):
                     else:
                         try:
                             res = RE_nearest_symbols(embedding=fe["embedding"],
-                                                     collections=collections,
+                                                     distance=confidence, collections=collections,
                                                      nns=1, ignore_hashes=self._ignore_hashes,
                                                      model_name=self.state.config.get("model"))
 
@@ -130,25 +145,21 @@ class AutoAnalysisDialog(BaseDialog):
 
                             symbol = data[0]
 
-                            if symbol["distance"] >= confidence:
-                                self._analysis[Analysis.CANDIDATE.value] += 1
-                                logger.info("Found symbol '%s' with a confidence of %f",
-                                            symbol['name'], symbol["distance"])
+                            symbol["func_name"] = func["name"]
+                            symbol["func_addr"] = func["start_addr"]
 
-                                # if inmain(IDAUtils.set_name, self.v_addr, symbol['name'])):
-                                resultsData.append((func["name"],
-                                                    f"{symbol['name']} ({symbol['binary_name']})", True,
-                                                    f"Can be renamed with confidence of '{symbol['distance']}"))
-                                # else:
-                                #     logger.error("Symbol already exists")
-                                #     inmain(Dialog.showError, "Rename Function Error",
-                                #            f"Can't rename {func['name']}. Name {symbol['name']} already exists.")
-                                #
-                                #     self._analysis[Analysis.UNSUCCESSFUL.value] += 1
-                                #     resultsData.append((func["name"],
-                                #                         f"Can't rename {func['name']}",
-                                #                         f"Name {symbol['name']} already exists."))
-                                #     continue
+                            logger.info("Found symbol '%s' with a confidence of %f",
+                                        symbol['name'], symbol["distance"])
+
+                            item = QStandardItem()
+
+                            item.setData(symbol)
+                            item.setCheckState(Qt.Checked)
+                            item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsUserCheckable)
+
+                            resultsData.append((func["name"],
+                                                f"{symbol['name']} ({symbol['binary_name']})", item,
+                                                f"Can be renamed with confidence of '{symbol['distance']}"))
 
                             self._analysis[Analysis.SUCCESSFUL.value] += 1
                         except HTTPError as e:
@@ -160,36 +171,37 @@ class AutoAnalysisDialog(BaseDialog):
         except HTTPError as e:
             inmain(Dialog.showError, "Auto Analysis", f"Auto Analysis Error: {e.response.json()['error']}")
         finally:
+            inmain(self._tab_changed, 1)
+            inmain(self.ui.tabWidget.setCurrentIndex, 1)
             inmain(self.ui.fetchButton.setEnabled, True)
             inmain(self.ui.confidenceSlider.setEnabled, True)
-            inmain(self.ui.progressBar.setProperty, "value", len(self._functions))
-            inmain(self.ui.renameButton.setEnabled,
-                   self._analysis[Analysis.CANDIDATE.value] > 0 and inmain(self.ui.tabWidget.currentIndex) != 0)
+            inmain(self.ui.progressBar.setProperty, "value", 0)
 
-    def _filter(self, filter_text):
+    def _filter(self, filter_text) -> None:
         table = self.ui.collectionsTable if self.ui.tabWidget.currentIndex() == 0 else self.ui.resultsTable
 
         for row in range(table.model().rowCount()):
             item = table.model().index(row, 0)
             table.setRowHidden(row, filter_text.lower() not in item.sibling(row, 0).data().lower())
 
-    def _confidence(self, value):
-        self.ui.description.setText(f"Confidence: {value:#02d}")
+    def _confidence(self, value) -> None:
+        if self.ui.tabWidget.currentIndex() == 0:
+            self.ui.description.setText(f"Confidence: {value:#02d}")
 
-    def _tab_changed(self, index):
+    def _tab_changed(self, index) -> None:
         if index == 0:
             self.ui.description.setVisible(True)
             self.ui.renameButton.setEnabled(False)
-            self._confidence(self.ui.confidenceSlider.sliderPosition())
+            self.ui.description.setText(f"Confidence: {self.ui.confidenceSlider.sliderPosition():#02d}")
         else:
             self.ui.description.setVisible(self._analysis[Analysis.TOTAL.value] > 0)
-            self.ui.renameButton.setEnabled(self._analysis[Analysis.CANDIDATE.value] > 0)
+            self.ui.renameButton.setEnabled(self._analysis[Analysis.SUCCESSFUL.value] > 0)
             self.ui.description.setText(f"Total Functions Analysed: {self._analysis[Analysis.TOTAL.value]}<br/>"
                                         f"Successful Analyses: {self._analysis[Analysis.SUCCESSFUL.value]}<br/>"
                                         f"Skipped Analyses: {self._analysis[Analysis.SKIPPED.value]}<br/>"
                                         f"Errored Analyses: {self._analysis[Analysis.UNSUCCESSFUL.value]}")
 
-    def _load_collections(self, scope: str = "PUBLIC", page_size: int = 100000, page_number: int = 1):
+    def _load_collections(self, scope: str = "PUBLIC", page_size: int = 100000, page_number: int = 1) -> None:
         try:
             inmain(idaapi.show_wait_box, "HIDECANCEL\nGetting RevEng.AI collections…")
 
@@ -211,13 +223,37 @@ class AutoAnalysisDialog(BaseDialog):
         else:
             inmain(idaapi.hide_wait_box)
         finally:
+            inmain(self._tab_changed, 0)
+            inmain(self.ui.tabWidget.setCurrentIndex, 0)
             inmain(self.ui.fetchButton.setEnabled, True)
+            inmain(self.ui.fetchButton.setFocus)
 
-    def _selected_collections(self):
+    def _rename_function(self, selected: list = None) -> None:
+        if selected:
+            symbol = selected[2].data().data()
+            
+            if IDAUtils.set_name(symbol["func_addr"], symbol['name']):
+                logger.info(f"Renowned {symbol['func_name']} in {symbol['name']} "
+                            f"with confidence of '{symbol['distance']}")
+            else:
+                logger.error("Symbol %s already exists.", symbol['name'])
+                Dialog.showError("Rename Function Error",
+                                 f"Can't rename {symbol['func_name']}. "
+                                 f"Name {symbol['name']} already exists.")
+        else:
+            model = self.ui.resultsTable.model()
+
+            for idx in range(model.rowCount()):
+                if isinstance(model.index(idx, 2).data(), QStandardItem) and \
+                        model.index(idx, 2).data().checkState() == Qt.Checked:
+                    self._rename_function([None, None, model.index(idx, 2), None])
+
+
+    def _selected_collections(self) -> list:
         model = self.ui.collectionsTable.model()
 
         regex = []
-        for idx in range(self.ui.collectionsTable.model().rowCount()):
+        for idx in range(model.rowCount()):
             if model.index(idx, 1).data(Qt.CheckStateRole) == Qt.Checked:
                 regex.append(model.index(idx, 0).data(Qt.DisplayRole))
 

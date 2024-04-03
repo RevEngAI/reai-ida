@@ -65,7 +65,7 @@ class Ui_AutoAnalysisPanel(object):
         self.vboxlayout1.setContentsMargins(2, 0, 2, 2)
         self.vboxlayout1.setObjectName("vboxlayout1")
         self.resultsTable = QtWidgets.QTableView(self.tab_2)
-        self.resultsTable.setContextMenuPolicy(QtCore.Qt.ActionsContextMenu)
+        self.resultsTable.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.resultsTable.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.resultsTable.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
         self.resultsTable.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)

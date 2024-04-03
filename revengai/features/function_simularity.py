@@ -2,11 +2,11 @@
 import logging
 
 import idc
-from PyQt5.QtWidgets import QAction
+from PyQt5.QtWidgets import QMenu
 from idaapi import ASKBTN_YES
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIntValidator
+from PyQt5.QtGui import QIntValidator, QCursor
 from ida_nalt import get_imagebase
 
 from requests import Response, HTTPError
@@ -47,9 +47,7 @@ class FunctionSimularityDialog(BaseDialog):
         self.ui.lineEdit.setValidator(QIntValidator(1, 256, self))
         self.ui.tableView.setModel(RevEngTableModel([], ["Function Name", "Confidence", "From"], self))
 
-        self.renameAction = QAction(self.ui.renameButton.text(), self.ui.tableView)
-        self.renameAction.triggered.connect(self._rename_symbol)
-        self.ui.tableView.addAction(self.renameAction)
+        self.ui.tableView.customContextMenuRequested.connect(self._table_menu)
 
         self.ui.fetchButton.setFocus()
         self.ui.fetchButton.clicked.connect(self._fetch)
@@ -69,7 +67,6 @@ class FunctionSimularityDialog(BaseDialog):
             model = inmain(self.ui.tableView.model)
 
             inmain(model.updateData, [])
-            inmain(self.renameAction.setVisible, False)
             inmain(self.ui.fetchButton.setEnabled, False)
             inmain(self.ui.renameButton.setEnabled, False)
             inmain(self.ui.progressBar.setProperty, "value", 25)
@@ -106,9 +103,7 @@ class FunctionSimularityDialog(BaseDialog):
                     inmain(self.ui.progressBar.setProperty, "value", 100)
                     inmain(self.ui.renameButton.setEnabled, len(data) > 0)
 
-                    if len(data) > 0:
-                        inmain(self.renameAction.setVisible, True)
-                    else:
+                    if len(data) == 0:
                         inmain(idc.warning, "No similar functions found.")
                         logger.error("No similar functions found for: %s",
                                      inmain(idc.get_func_name, inmain(idc.here)))
@@ -150,3 +145,10 @@ class FunctionSimularityDialog(BaseDialog):
                 inmain(self.ui.comboBox.setCurrentIndex, -1)
         except HTTPError as e:
             logger.error("Getting collections failed: %s", e)
+
+    def _table_menu(self) -> None:
+        if self.ui.tableView.selectedIndexes() and self.ui.renameButton.isEnabled():
+            menu = QMenu()
+            renameAction = menu.addAction(self.ui.renameButton.text())
+            renameAction.triggered.connect(self._rename_symbol)
+            menu.exec_(QCursor.pos())

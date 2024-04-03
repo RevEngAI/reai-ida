@@ -114,7 +114,7 @@ class Ui_FunctionSimularityPanel(object):
         self.verticalLayout.addLayout(self.horizontalLayout_2)
         self.gridLayout_5.addWidget(self.groupBox, 0, 0, 1, 1)
         self.tableView = QtWidgets.QTableView(FunctionSimularityPanel)
-        self.tableView.setContextMenuPolicy(QtCore.Qt.ActionsContextMenu)
+        self.tableView.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.tableView.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.tableView.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
         self.tableView.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
