@@ -19,6 +19,7 @@ setup(
     long_description_content_type="text/markdown",
     url="https://github.com/RevEngAI/reai-ida",
     classifiers=[
+        "Operating System :: OS Independent",
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: GNU General Public License v2 or later (GPLv2+)",
     ],

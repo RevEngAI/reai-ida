@@ -63,8 +63,7 @@ def upload_binary(state: RevEngState) -> None:
                 except HTTPError as e:
                     logger.error("Error analyzing %s. Reason: %s", basename(path), e)
                     inmain(idaapi.hide_wait_box)
-                    inmain(Dialog.showInfo, "Upload Binary",
-                           f"Error analysing {basename(path)}.\nReason: {e.response.json()['error']}")
+                    inmain(idc.warning, f"Error analysing {basename(path)}.\nReason: {e.response.json()['error']}")
                 else:
                     inmain(idaapi.hide_wait_box)
             else:
