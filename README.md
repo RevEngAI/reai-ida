@@ -58,7 +58,7 @@ Currently all available functions from all binaries are displayed in order of si
 
 ![rename_function_dialog](assets/img/6.png)
 
-Selecting an entry from the list and then pressing `Rename Function` will cause the function to be renamed within IDA.
+Selecting an entry from the list and then pressing `Rename` will cause the function to be renamed within IDA.
 
 #### Auto Analysis
 You can also batch analyse the binary to rename functions using the `Auto Analyze Binary Symbol`.
