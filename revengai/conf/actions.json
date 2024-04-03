@@ -13,7 +13,8 @@
   {
     "id": "reai:check_analyze",
     "name": "Check Analysis Status",
-    "callback": "check_analyze"
+    "callback": "check_analyze",
+    "shortcut": "Ctrl+Shift+S"
   },
   {
     "id": "reai:auto_analyze",
@@ -24,8 +25,7 @@
   {
     "id": "reai:rename",
     "name": "Rename From Similar Functions",
-    "callback": "rename_function",
-    "shortcut": "Ctrl+Shift+R"
+    "callback": "rename_function"
   },
   {
     "id": "reai:signature",
@@ -42,11 +42,13 @@
   {
     "id": "reai:logs",
     "name": "Download Binary Analysis Logs",
-    "callback": "download_logs"
+    "callback": "download_logs",
+    "shortcut": "Ctrl+Shift+L"
   },
   {
     "id": "reai:history",
     "name": "Binary Analysis History",
-    "callback": "analysis_history"
+    "callback": "analysis_history",
+    "shortcut": "Ctrl+Shift+H"
   }
 ]

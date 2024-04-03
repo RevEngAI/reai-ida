@@ -87,7 +87,7 @@ class AutoAnalysisDialog(BaseDialog):
                 isinstance(self.ui.resultsTable.selectionModel().selectedRows(column=2)[0].data(), QStandardItem):
             menu = QMenu()
             renameAction = menu.addAction(self.ui.renameButton.text())
-            renameAction.triggered.connect(lambda: self._rename_function(selected))
+            renameAction.triggered.connect(self._rename_function(selected))
             menu.exec_(QCursor.pos())
 
     def _start_analysis(self) -> None:
@@ -234,12 +234,10 @@ class AutoAnalysisDialog(BaseDialog):
             
             if IDAUtils.set_name(symbol["func_addr"], symbol['name']):
                 logger.info(f"Renowned {symbol['func_name']} in {symbol['name']} "
-                            f"with confidence of '{symbol['distance']}")
+                            f"with confidence of '{symbol['distance']}.")
             else:
-                logger.error("Symbol %s already exists.", symbol['name'])
-                Dialog.showError("Rename Function Error",
-                                 f"Can't rename {symbol['func_name']}. "
-                                 f"Name {symbol['name']} already exists.")
+                logger.warning("Symbol name %s already exists.", symbol["name"])
+                idc.warning(f"Can't rename {symbol['func_name']}. Name {symbol['name']} already exists.")
         else:
             model = self.ui.resultsTable.model()
 
@@ -247,7 +245,6 @@ class AutoAnalysisDialog(BaseDialog):
                 if isinstance(model.index(idx, 2).data(), QStandardItem) and \
                         model.index(idx, 2).data().checkState() == Qt.Checked:
                     self._rename_function([None, None, model.index(idx, 2), None])
-
 
     def _selected_collections(self) -> list:
         model = self.ui.collectionsTable.model()
