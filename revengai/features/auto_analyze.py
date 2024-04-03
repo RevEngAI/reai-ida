@@ -87,7 +87,7 @@ class AutoAnalysisDialog(BaseDialog):
                 isinstance(self.ui.resultsTable.selectionModel().selectedRows(column=2)[0].data(), QStandardItem):
             menu = QMenu()
             renameAction = menu.addAction(self.ui.renameButton.text())
-            renameAction.triggered.connect(self._rename_function(selected))
+            renameAction.triggered.connect(lambda: self._rename_function(selected))
             menu.exec_(QCursor.pos())
 
     def _start_analysis(self) -> None:
