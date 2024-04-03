@@ -47,8 +47,7 @@ class CheckableComboBox(QComboBox):
                     self.showPopup()
                 return True
             return False
-
-        if watched == self.view().viewport():
+        elif watched == self.view().viewport():
             if event.type() == QEvent.MouseButtonRelease:
                 index = self.view().indexAt(event.pos())
                 item = self.model().item(index.row())
@@ -97,8 +96,8 @@ class CheckableComboBox(QComboBox):
     def addItem(self, text: str, data=None) -> None:
         item = QStandardItem(text)
 
+        item.setCheckState(Qt.Unchecked)
         item.setData(data if data else text)
-        item.setData(Qt.Unchecked, Qt.CheckStateRole)
         item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
 
         self.model().appendRow(item)
