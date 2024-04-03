@@ -36,7 +36,7 @@
   {
     "id": "reai:explain",
     "disabled": true,
-    "name": "Explain this function",
+    "name": "Explain this Function",
     "callback": "explain_function"
   },
   {
