@@ -45,7 +45,7 @@ class FunctionSimularityDialog(BaseDialog):
         self.ui.renameButton.setEnabled(False)
 
         self.ui.lineEdit.setValidator(QIntValidator(1, 256, self))
-        self.ui.tableView.setModel(RevEngTableModel([], ["Function Name", "Confidence", "From"], self))
+        self.ui.tableView.setModel(RevEngTableModel([], ["Function Name", "Confidence", "From",], self))
 
         self.ui.tableView.customContextMenuRequested.connect(self._table_menu)
 
@@ -120,8 +120,7 @@ class FunctionSimularityDialog(BaseDialog):
             if not IDAUtils.set_name(self.v_addr, self.ui.tableView.model().data(rows[0], Qt.DisplayRole)):
                 Dialog.showError("Rename Function Error", "Symbol already exists.")
 
-            if ASKBTN_YES == idc.ask_yn(ASKBTN_YES,
-                                        "Do you also want to rename the function arguments?"):
+            if False and ASKBTN_YES == idc.ask_yn(ASKBTN_YES, "Do you also want to rename the function arguments?"):
                 from revengai.actions import function_signature
 
                 function_signature(self.state, self.v_addr)
