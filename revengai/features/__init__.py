@@ -62,10 +62,10 @@ class BaseDialog(QDialog):
                 logger.info(res.json()['success'])
             except HTTPError as e:
                 if "error" in e.response.json():
-                    logger.error("Failed to rename functionId %d by %s: %s",
+                    logger.error("Failed to rename functionId %d by '%s'. %s",
                                  func_id, new_func_name, e.response.json()['error'])
                 else:
-                    logger.error("Failed to rename functionId %d by %s: %s",
+                    logger.error("Failed to rename functionId %d by '%s'. %s",
                                  func_id, new_func_name, e.response.reason)
         else:
             logger.error('Not found functionId at address: 0x%X.', func_addr)

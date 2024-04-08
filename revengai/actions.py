@@ -11,16 +11,17 @@ from ida_nalt import get_imagebase
 
 from requests import HTTPError, Response
 
-from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, re_binary_id
+from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, re_binary_id, RE_functions_rename
 
 from revengai.api import RE_explain, RE_analyze_functions, RE_functions_dump, RE_search, RE_recent_analysis
-from revengai.features.auto_analyze import AutoAnalysisDialog
 from revengai.misc.qtutils import inthread, inmain
 from revengai.gui.dialog import Dialog, StatusForm
 from revengai.manager import RevEngState
+from revengai.features.auto_analyze import AutoAnalysisDialog
 from revengai.features.function_similarity import FunctionSimilarityDialog
 from revengai.misc.utils import IDAUtils
 from revengai.wizard.wizard import RevEngSetupWizard
+
 
 logger = logging.getLogger("REAI")
 
@@ -317,7 +318,7 @@ def analysis_history(state: RevEngState) -> None:
         inthread(bg_task, fpath)
 
 
-def load_recent_analyses(state: RevEngState):
+def load_recent_analyses(state: RevEngState) -> None:
     if state.config.is_valid():
         def bg_task(fpath: str) -> None:
             try:
@@ -335,5 +336,36 @@ def load_recent_analyses(state: RevEngState):
                     state.config.set("binary_id", None)
             except HTTPError as e:
                 logger.error("Error getting recent analyses: %s", e)
+            else:
+                inmain(sync_functions_name, state)
 
         inthread(bg_task, idc.get_input_file_path())
+
+
+def sync_functions_name(state: RevEngState) -> None:
+    fpath = idc.get_input_file_path()
+
+    if state.config.is_valid() and fpath and isfile(fpath):
+        def bg_task() -> None:
+            try:
+                res: Response = RE_analyze_functions(fpath, state.config.get("binary_id", 0))
+
+                for function in res.json():
+                    fe = next((func for func in functions if function["function_vaddr"] == func["start_addr"]), None)
+
+                    if fe and fe["name"] != function["function_name"]:
+                        try:
+                            RE_functions_rename(function["function_id"], fe["name"])
+                        except HTTPError as e:
+                            logger.warning("Failed to sync functionId %d. %s",
+                                           function["function_id"], e.response.reason)
+            except HTTPError as e:
+                logger.warning("Error syncing functions: %s", e)
+
+        functions = []
+
+        for func_ea in idautils.Functions():
+            functions.append({"name": idc.get_func_name(func_ea),
+                              "start_addr": idc.get_func_attr(func_ea, idc.FUNCATTR_START)})
+
+        inthread(bg_task)

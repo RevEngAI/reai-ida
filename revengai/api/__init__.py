@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from requests import post, Response, get
+from requests import get, post, Response
 
 from reait.api import reveng_req, re_binary_id, re_bid_search
 
 
 def RE_collections_count(scope: str = "PUBLIC") -> Response:
-    res: Response = reveng_req(post, "collections/count",
-                               json_data={"scope": scope})
+    res: Response = reveng_req(post, "collections/count", json_data={"scope": scope})
 
     res.raise_for_status()
     return res
@@ -45,7 +44,7 @@ def RE_models() -> Response:
     return res
 
 
-def RE_functions_dump(function_ids: list) -> Response:
+def RE_functions_dump(function_ids: list[int]) -> Response:
     res = reveng_req(post, "functions/dump", json_data={"function_id_list": function_ids})
 
     res.raise_for_status()
@@ -53,7 +52,8 @@ def RE_functions_dump(function_ids: list) -> Response:
 
 
 def RE_explain(pseudo_code: str, language: str) -> Response:
-    res: Response = reveng_req(post, "explain", data=pseudo_code, json_data={"language": language})
+    res: Response = reveng_req(post, "explain", data=pseudo_code,
+                               json_data={"language": language} if language else None)
 
     res.raise_for_status()
     return res
