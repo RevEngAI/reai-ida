@@ -12,10 +12,8 @@ class IDAUtils(object):
         If the name already exists, check the `anyway` parameter:
             True - Add `_COUNTER` to the name (default IDA behaviour)
         """
-        if idaapi.set_name(func_addr, func_name, idaapi.SN_NOWARN | idaapi.SN_NOCHECK):
-            return True
-
-        return anyway and idaapi.force_name(func_addr, func_name)
+        return idaapi.set_name(func_addr, func_name, idaapi.SN_NOWARN | idaapi.SN_NOCHECK) or \
+            anyway and idaapi.force_name(func_addr, func_name)
 
     @staticmethod
     def set_comment(func_addr, comment: str) -> None:

@@ -233,6 +233,8 @@ class AutoAnalysisDialog(BaseDialog):
             symbol = selected[2].data().data()
             
             if IDAUtils.set_name(symbol["func_addr"], symbol['name']):
+                inthread(self._set_function_renamed, symbol["func_addr"], symbol['name'])
+
                 logger.info(f"Renowned {symbol['func_name']} in {symbol['name']} "
                             f"with confidence of '{symbol['distance']}.")
             else:

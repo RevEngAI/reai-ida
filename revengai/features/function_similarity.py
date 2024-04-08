@@ -117,13 +117,17 @@ class FunctionSimilarityDialog(BaseDialog):
         rows = self.ui.tableView.selectionModel().selectedRows(column=0)
 
         if len(rows) > 0:
-            if not IDAUtils.set_name(self.v_addr, self.ui.tableView.model().data(rows[0], Qt.DisplayRole)):
+            new_func_name = self.ui.tableView.model().data(rows[0], Qt.DisplayRole)
+
+            if not IDAUtils.set_name(self.v_addr, new_func_name):
                 Dialog.showError("Rename Function Error", "Symbol already exists.")
+            else:
+                inthread(self._set_function_renamed, self.v_addr, new_func_name)
 
-            if False and ASKBTN_YES == idc.ask_yn(ASKBTN_YES, "Do you also want to rename the function arguments?"):
-                from revengai.actions import function_signature
+                if False and ASKBTN_YES == idc.ask_yn(ASKBTN_YES, "Do you also want to rename the function arguments?"):
+                    from revengai.actions import function_signature
 
-                function_signature(self.state, self.v_addr)
+                    function_signature(self.state, self.v_addr)
 
     def _quick_search(self):
         try:

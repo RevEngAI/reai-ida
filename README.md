@@ -1,10 +1,10 @@
 # RevEng.AI IDA PRO Plugin
 
-IDA Pro Plugin for RevEng.AI
+IDA Pro Plugin for [RevEng.AI](https://reveng.ai/).
 
 ### Supported Functionality:
 
-- Uploading of binaries for analysis to [RevEng.AI](https://reveng.ai/) platform
+- Uploading of binaries for analysis to RevEng.AI platform
 - Downloading logs for analysis from RevEng.AI platform
 - Removing analysis from RevEng.AI platform
 - Renaming of function names given with similar binaries
