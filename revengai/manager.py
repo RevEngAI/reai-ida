@@ -4,11 +4,9 @@ from revengai.conf import RevEngConfiguration
 
 
 class RevEngState(object):
-    LIMIT = 100     # File size limit to upload 100MB
-
-    def __init__(self, config: RevEngConfiguration):
+    def __init__(self):
         self.gui = None
-        self.config = config
+        self.config = RevEngConfiguration()
 
     def start_plugin(self):
         from revengai.ida_ui import RevEngGUI

@@ -19,7 +19,9 @@ class RevEngConfiguration(object):
     _filename = ".reai.cfg"
     _dir = join(get_user_idadir(), "plugins")
 
-    auto_start = True
+    auto_start = True   # Enable RevEng.AI plugin automatically
+
+    LIMIT = 100  # File size limit to upload 100MB
 
     def __init__(self) -> None:
         makedirs(RevEngConfiguration._dir, mode=0o755, exist_ok=True)

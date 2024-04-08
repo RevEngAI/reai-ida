@@ -1,36 +1,35 @@
 # -*- coding: utf-8 -*-
 import logging
 
-import idc
 from ida_kernwin import get_kernel_version
 from idaapi import plugin_t, PLUGIN_FIX, PLUGIN_SKIP, PLUGIN_OK, PLUGIN_KEEP
 
-from revengai.conf import RevEngConfiguration
 from revengai.manager import RevEngState
+
 
 logger = logging.getLogger("REAI")
 
 
 class RevEngPlugin(plugin_t):
-    # variables required by IDA
-    flags = PLUGIN_FIX  # normal plugin
-    wanted_name = "RevEng.AI"
-    help = "Configure IDA plugin for RevEng.AI"
-    comment = "AI-assisted reverse engineering from RevEng.AI"
-    initialized = False
+    # Variables required by IDA
+    flags = PLUGIN_FIX  # Normal plugin
+    wanted_name = "RevEng.AI Toolkit"
+    help = f"Configure IDA plugin for {wanted_name}"
+    comment = f"AI-assisted reverse engineering from {wanted_name}"
 
     def __init__(self):
         super(RevEngPlugin, self).__init__()
 
-        self.state = RevEngState(RevEngConfiguration())
+        self.initialized = False
+        self.state = RevEngState()
 
     def init(self):
         kv = get_kernel_version().split(".")
         if int(kv[0]) < 8:
-            logger.info("REAI need IDA version >= 8.0. Skipping")
+            logger.info("%s need IDA version >= 8.0 => skipping...", self.wanted_name)
             return PLUGIN_SKIP
 
-        logger.info("REAI initialized")
+        logger.info("%s initialized", self.wanted_name)
 
         if self.state.config.auto_start:
             self.run()
@@ -41,7 +40,7 @@ class RevEngPlugin(plugin_t):
         if self.initialized:
             self.term()
 
-        logger.info("REAI reloading...")
+        logger.info("%s reloading...", self.wanted_name)
 
         self.state.start_plugin()
         self.initialized = True
@@ -50,7 +49,7 @@ class RevEngPlugin(plugin_t):
         self.reload_plugin()
 
     def term(self):
-        logger.info("Terminating REAI...")
+        logger.info("Terminating %s...", self.wanted_name)
         if self.state is not None:
             self.state.stop_plugin()
 

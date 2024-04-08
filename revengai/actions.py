@@ -39,7 +39,7 @@ def upload_binary(state: RevEngState) -> None:
         idc.warning("No input file provided.")
     else:
         def bg_task(path: str, syms: dict) -> None:
-            if RevEngState.LIMIT > (stat(path).st_size // (1024 * 1024)):
+            if state.config.LIMIT > (stat(path).st_size // (1024 * 1024)):
                 try:
                     inmain(idaapi.show_wait_box, "HIDECANCEL\nUploading binary for analysis…")
 
@@ -69,7 +69,7 @@ def upload_binary(state: RevEngState) -> None:
                     inmain(idaapi.hide_wait_box)
             else:
                 inmain(idc.warning,
-                       f"The maximum size for uploading a binary should not exceed {RevEngState.LIMIT}MB.")
+                       f"The maximum size for uploading a binary should not exceed {state.config.LIMIT}MB.")
 
         symbols: dict = {"base_addr": get_imagebase()}
 
