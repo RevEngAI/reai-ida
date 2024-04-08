@@ -166,7 +166,7 @@ class AutoAnalysisDialog(BaseDialog):
                             self._analysis[Analysis.UNSUCCESSFUL.value] += 1
                             resultsData.append((func["name"], "N/A", None, e.response.json()["error"]))
 
-                inmain(inmain(self.ui.resultsTable.model).updateData, resultsData)
+                inmain(inmain(self.ui.resultsTable.model).fill_table, resultsData)
                 inmain(self.ui.resultsTable.resizeColumnsToContents)
         except HTTPError as e:
             inmain(Dialog.showError, "Auto Analysis", f"Auto Analysis Error: {e.response.json()['error']}")
@@ -215,7 +215,7 @@ class AutoAnalysisDialog(BaseDialog):
             for collection in res.json()["collections"]:
                 collections.append([collection["collection_name"], None])
 
-            inmain(inmain(self.ui.collectionsTable.model).updateData, collections)
+            inmain(inmain(self.ui.collectionsTable.model).fill_table, collections)
             inmain(self.ui.collectionsTable.resizeColumnsToContents)
         except HTTPError as e:
             inmain(idaapi.hide_wait_box)

@@ -27,7 +27,7 @@ class RevEngTableModel(QAbstractTableModel):
             return self._header[col]
         return None
 
-    def updateData(self, data: list):
+    def fill_table(self, data: list):
         self.beginResetModel()
         self._data = data
         self.endResetModel()

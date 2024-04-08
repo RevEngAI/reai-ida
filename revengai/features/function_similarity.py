@@ -66,7 +66,7 @@ class FunctionSimilarityDialog(BaseDialog):
         try:
             model = inmain(self.ui.tableView.model)
 
-            inmain(model.updateData, [])
+            inmain(model.fill_table, [])
             inmain(self.ui.fetchButton.setEnabled, False)
             inmain(self.ui.renameButton.setEnabled, False)
             inmain(self.ui.progressBar.setProperty, "value", 25)
@@ -99,7 +99,7 @@ class FunctionSimilarityDialog(BaseDialog):
                     for item in res.json():
                         data.append([item["name"], item["distance"], item["binary_name"]])
 
-                    inmain(model.updateData, data)
+                    inmain(model.fill_table, data)
                     inmain(self.ui.progressBar.setProperty, "value", 100)
                     inmain(self.ui.renameButton.setEnabled, len(data) > 0)
 
