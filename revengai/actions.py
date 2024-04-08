@@ -35,7 +35,7 @@ def upload_binary(state: RevEngState) -> None:
     if not state.config.is_valid():
         setup_wizard(state)
     elif not fpath or not isfile(fpath):
-        idc.warning("No input file provided")
+        idc.warning("No input file provided.")
     else:
         def bg_task(path: str, syms: dict) -> None:
             if RevEngState.LIMIT > (stat(path).st_size // (1024 * 1024)):
@@ -90,7 +90,7 @@ def check_analyze(state: RevEngState) -> None:
     if not state.config.is_valid():
         setup_wizard(state)
     elif not fpath or not isfile(fpath):
-        idc.warning("No input file provided")
+        idc.warning("No input file provided.")
     else:
         state.config.init_current_analysis()
 
@@ -126,7 +126,7 @@ def auto_analyze(state: RevEngState) -> None:
     if not state.config.is_valid():
         setup_wizard(state)
     elif not fpath or not isfile(fpath):
-        idc.warning("No input file provided")
+        idc.warning("No input file provided.")
     else:
         dialog = AutoAnalysisDialog(state, fpath)
         dialog.exec_()
@@ -138,7 +138,7 @@ def rename_function(state: RevEngState) -> None:
     if not state.config.is_valid():
         setup_wizard(state)
     elif not isfile(fpath):
-        idc.warning("No input file provided")
+        idc.warning("No input file provided.")
     else:
         dialog = FunctionSimilarityDialog(state, fpath)
         dialog.exec_()
@@ -150,7 +150,7 @@ def explain_function(state: RevEngState) -> None:
     if not state.config.is_valid():
         setup_wizard(state)
     elif not fpath or not isfile(fpath):
-        idc.warning("No input file provided")
+        idc.warning("No input file provided.")
     else:
         state.config.init_current_analysis()
 
@@ -199,7 +199,7 @@ def download_logs(state: RevEngState) -> None:
     if not state.config.is_valid():
         setup_wizard(state)
     elif not fpath or not isfile(fpath):
-        idc.warning("No input file provided")
+        idc.warning("No input file provided.")
     else:
         state.config.init_current_analysis()
 
@@ -237,7 +237,7 @@ def function_signature(state: RevEngState, func_addr: int = 0) -> None:
     if not state.config.is_valid():
         setup_wizard(state)
     elif not fpath or not isfile(fpath):
-        idc.warning("No input file provided")
+        idc.warning("No input file provided.")
     else:
         state.config.init_current_analysis()
 
@@ -259,6 +259,14 @@ def function_signature(state: RevEngState, func_addr: int = 0) -> None:
                             if dump["returns"]:
                                 return_type = dump["return_type"]
 
+                                # newtype = return_type
+                                #
+                                # if idc.SetType(start_addr, ""):
+                                #     logger.info("Succeed to set function type '%s' defined at address 0x%X",
+                                #                    newtype, start_addr)
+                                # else:
+                                #     logger.warning("Failed to set function type '%s' defined at address 0x%X",
+                                #                    newtype, start_addr)
                             break
             except HTTPError as e:
                 logger.error("Unable to obtain function argument details. %s", e)
@@ -276,7 +284,7 @@ def analysis_history(state: RevEngState) -> None:
     if not state.config.is_valid():
         setup_wizard(state)
     elif not fpath or not isfile(fpath):
-        idc.warning("No input file provided")
+        idc.warning("No input file provided.")
     else:
         state.config.init_current_analysis()
 

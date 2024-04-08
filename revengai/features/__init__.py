@@ -35,7 +35,7 @@ class BaseDialog(QDialog):
         screen: QRect = QDesktopWidget().screenGeometry()
 
         # Center the dialog to screen
-        self.move(screen.width()  // 2 - self.width()  // 2,
+        self.move(screen.width() // 2 - self.width() // 2,
                   screen.height() // 2 - self.height() // 2)
 
         inthread(self._get_analyze_functions)

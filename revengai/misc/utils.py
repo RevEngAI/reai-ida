@@ -52,7 +52,6 @@ class IDAUtils(object):
                 lines = []
                 for sline in cfunc.get_pseudocode():
                     lines.append(idaapi.tag_remove(sline.line))
-
                 return "\n".join(lines)
         return ''
 
