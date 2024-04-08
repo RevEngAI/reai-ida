@@ -18,7 +18,7 @@ from revengai.features.auto_analyze import AutoAnalysisDialog
 from revengai.misc.qtutils import inthread, inmain
 from revengai.gui.dialog import Dialog, StatusForm
 from revengai.manager import RevEngState
-from revengai.features.function_simularity import FunctionSimularityDialog
+from revengai.features.function_similarity import FunctionSimilarityDialog
 from revengai.misc.utils import IDAUtils
 from revengai.wizard.wizard import RevEngSetupWizard
 
@@ -140,7 +140,7 @@ def rename_function(state: RevEngState) -> None:
     elif not isfile(fpath):
         idc.warning("No input file provided")
     else:
-        dialog = FunctionSimularityDialog(state, fpath)
+        dialog = FunctionSimilarityDialog(state, fpath)
         dialog.exec_()
 
 
@@ -248,9 +248,9 @@ def function_signature(state: RevEngState, func_addr: int = 0) -> None:
 
                     res: Response = RE_analyze_functions(path, state.config.get("binary_id", 0))
 
-                    for item in res.json():
-                        if item["function_vaddr"] == start_addr:
-                            res = RE_functions_dump([item["function_id"]])
+                    for function in res.json():
+                        if function["function_vaddr"] == start_addr:
+                            res = RE_functions_dump([function["function_id"]])
 
                             dump = res.json()[0]
 

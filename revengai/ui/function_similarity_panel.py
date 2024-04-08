@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'function_simularity_panel.ui'
+# Form implementation generated from reading ui file 'function_similarity_panel.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.10
 #
@@ -13,18 +13,18 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from revengai.gui.checkable_combobox import CheckableComboBox
 
 
-class Ui_FunctionSimularityPanel(object):
-    def setupUi(self, FunctionSimularityPanel):
-        FunctionSimularityPanel.setObjectName("FunctionSimularityPanel")
-        FunctionSimularityPanel.resize(800, 400)
-        FunctionSimularityPanel.setContextMenuPolicy(QtCore.Qt.NoContextMenu)
-        FunctionSimularityPanel.setLayoutDirection(QtCore.Qt.LeftToRight)
-        self.gridLayout_5 = QtWidgets.QGridLayout(FunctionSimularityPanel)
+class Ui_FunctionSimilarityPanel(object):
+    def setupUi(self, FunctionSimilarityPanel):
+        FunctionSimilarityPanel.setObjectName("FunctionSimilarityPanel")
+        FunctionSimilarityPanel.resize(800, 400)
+        FunctionSimilarityPanel.setContextMenuPolicy(QtCore.Qt.NoContextMenu)
+        FunctionSimilarityPanel.setLayoutDirection(QtCore.Qt.LeftToRight)
+        self.gridLayout_5 = QtWidgets.QGridLayout(FunctionSimilarityPanel)
         self.gridLayout_5.setSizeConstraint(QtWidgets.QLayout.SetDefaultConstraint)
         self.gridLayout_5.setContentsMargins(6, 6, 6, 8)
         self.gridLayout_5.setHorizontalSpacing(6)
         self.gridLayout_5.setObjectName("gridLayout_5")
-        self.groupBox = QtWidgets.QGroupBox(FunctionSimularityPanel)
+        self.groupBox = QtWidgets.QGroupBox(FunctionSimilarityPanel)
         self.groupBox.setObjectName("groupBox")
         self.verticalLayout = QtWidgets.QVBoxLayout(self.groupBox)
         self.verticalLayout.setObjectName("verticalLayout")
@@ -115,7 +115,7 @@ class Ui_FunctionSimularityPanel(object):
         self.horizontalLayout_2.addItem(spacerItem5)
         self.verticalLayout.addLayout(self.horizontalLayout_2)
         self.gridLayout_5.addWidget(self.groupBox, 0, 0, 1, 1)
-        self.tableView = QtWidgets.QTableView(FunctionSimularityPanel)
+        self.tableView = QtWidgets.QTableView(FunctionSimilarityPanel)
         self.tableView.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.tableView.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.tableView.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
@@ -133,18 +133,18 @@ class Ui_FunctionSimularityPanel(object):
         self.gridLayout_5.addWidget(self.tableView, 0, 1, 1, 1)
         self.gridLayout_5.setColumnStretch(1, 1)
 
-        self.retranslateUi(FunctionSimularityPanel)
-        QtCore.QMetaObject.connectSlotsByName(FunctionSimularityPanel)
+        self.retranslateUi(FunctionSimilarityPanel)
+        QtCore.QMetaObject.connectSlotsByName(FunctionSimilarityPanel)
 
-    def retranslateUi(self, FunctionSimularityPanel):
+    def retranslateUi(self, FunctionSimilarityPanel):
         _translate = QtCore.QCoreApplication.translate
-        FunctionSimularityPanel.setWindowTitle(_translate("FunctionSimularityPanel", "RevEng.AI Toolkit: Function Rename"))
-        self.groupBox.setTitle(_translate("FunctionSimularityPanel", "Symbol Options"))
-        self.checkBox.setText(_translate("FunctionSimularityPanel", "Use Debug Symbol"))
-        self.label.setText(_translate("FunctionSimularityPanel", "Collections:"))
-        self.label_3.setText(_translate("FunctionSimularityPanel", "Confidence:"))
-        self.doubleSpinBox.setSuffix(_translate("FunctionSimularityPanel", "%"))
-        self.label_2.setText(_translate("FunctionSimularityPanel", "Results:"))
-        self.lineEdit.setText(_translate("FunctionSimularityPanel", "5"))
-        self.renameButton.setText(_translate("FunctionSimularityPanel", "Rename"))
-        self.fetchButton.setText(_translate("FunctionSimularityPanel", "Fetch Results"))
+        FunctionSimilarityPanel.setWindowTitle(_translate("FunctionSimilarityPanel", "RevEng.AI Toolkit: Function Rename"))
+        self.groupBox.setTitle(_translate("FunctionSimilarityPanel", "Symbol Options"))
+        self.checkBox.setText(_translate("FunctionSimilarityPanel", "Use Debug Symbol"))
+        self.label.setText(_translate("FunctionSimilarityPanel", "Collections:"))
+        self.label_3.setText(_translate("FunctionSimilarityPanel", "Confidence:"))
+        self.doubleSpinBox.setSuffix(_translate("FunctionSimilarityPanel", "%"))
+        self.label_2.setText(_translate("FunctionSimilarityPanel", "Results:"))
+        self.lineEdit.setText(_translate("FunctionSimilarityPanel", "5"))
+        self.renameButton.setText(_translate("FunctionSimilarityPanel", "Rename"))
+        self.fetchButton.setText(_translate("FunctionSimilarityPanel", "Fetch Results"))

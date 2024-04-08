@@ -20,13 +20,13 @@ from revengai.manager import RevEngState
 from revengai.misc.utils import IDAUtils
 from revengai.misc.qtutils import inthread, inmain
 from revengai.models.table_model import RevEngTableModel
-from revengai.ui.function_simularity_panel import Ui_FunctionSimularityPanel
+from revengai.ui.function_similarity_panel import Ui_FunctionSimilarityPanel
 
 
 logger = logging.getLogger("REAI")
 
 
-class FunctionSimularityDialog(BaseDialog):
+class FunctionSimilarityDialog(BaseDialog):
     def __init__(self, state: RevEngState, fpath: str):
         BaseDialog.__init__(self, state, fpath)
 
@@ -39,7 +39,7 @@ class FunctionSimularityDialog(BaseDialog):
             logger.error("Pointer location not in valid function.")
             Dialog.showError("Find Similar Functions", "Cursor position not in a function.")
 
-        self.ui = Ui_FunctionSimularityPanel()
+        self.ui = Ui_FunctionSimilarityPanel()
         self.ui.setupUi(self)
 
         self.ui.renameButton.setEnabled(False)
@@ -54,7 +54,7 @@ class FunctionSimularityDialog(BaseDialog):
         self.ui.renameButton.clicked.connect(self._rename_symbol)
 
     def showEvent(self, event):
-        super(FunctionSimularityDialog, self).showEvent(event)
+        super(FunctionSimilarityDialog, self).showEvent(event)
         inthread(self._quick_search)
 
     def _fetch(self):
