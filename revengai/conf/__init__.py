@@ -23,7 +23,7 @@ class RevEngConfiguration(object):
 
     LIMIT = 100  # File size limit to upload 100MB
 
-    def __init__(self) -> None:
+    def __init__(self):
         makedirs(RevEngConfiguration._dir, mode=0o755, exist_ok=True)
 
         self._config = {}
