@@ -48,7 +48,7 @@ class BaseDialog(QDialog):
                 self.analyzed_functions[function["function_vaddr"]] = function["function_id"]
         except HTTPError as e:
             if "error" in e.response.json():
-                logger.error("Error getting analysed functions: %s", e.response.json()['error'])
+                logger.error("Error getting analysed functions: %s", e.response.json()["error"])
             else:
                 logger.error("Error getting analysed functions: %s", e.response.reason)
 
@@ -59,11 +59,11 @@ class BaseDialog(QDialog):
             try:
                 res: Response = RE_functions_rename(func_id, new_func_name)
 
-                logger.info(res.json()['success'])
+                logger.info(res.json()["success"])
             except HTTPError as e:
                 if "error" in e.response.json():
                     logger.error("Failed to rename functionId %d by '%s'. %s",
-                                 func_id, new_func_name, e.response.json()['error'])
+                                 func_id, new_func_name, e.response.json()["error"])
                 else:
                     logger.error("Failed to rename functionId %d by '%s'. %s",
                                  func_id, new_func_name, e.response.reason)

@@ -149,7 +149,7 @@ class AutoAnalysisDialog(BaseDialog):
                             symbol["func_addr"] = func["start_addr"]
 
                             logger.info("Found symbol '%s' with a confidence of %f",
-                                        symbol['name'], symbol["distance"])
+                                        symbol["name"], symbol["distance"])
 
                             item = QStandardItem()
 
@@ -232,11 +232,11 @@ class AutoAnalysisDialog(BaseDialog):
         if selected:
             symbol = selected[2].data().data()
             
-            if IDAUtils.set_name(symbol["func_addr"], symbol['name']):
-                inthread(self._set_function_renamed, symbol["func_addr"], symbol['name'])
+            if IDAUtils.set_name(symbol["func_addr"], symbol["name"]):
+                inthread(self._set_function_renamed, symbol["func_addr"], symbol["name"])
 
-                logger.info(f"Renowned {symbol['func_name']} in {symbol['name']} "
-                            f"with confidence of '{symbol['distance']}.")
+                logger.info("Renowned %s in %s with confidence of '%s.",
+                            symbol["func_name"], symbol["name"], symbol["distance"])
             else:
                 logger.warning("Symbol name %s already exists.", symbol["name"])
                 idc.warning(f"Can't rename {symbol['func_name']}. Name {symbol['name']} already exists.")

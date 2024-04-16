@@ -124,7 +124,8 @@ class FunctionSimilarityDialog(BaseDialog):
             else:
                 inthread(self._set_function_renamed, self.v_addr, new_func_name)
 
-                if False and ASKBTN_YES == idc.ask_yn(ASKBTN_YES, "Do you also want to rename the function arguments?"):
+                if False and ASKBTN_YES == idc.ask_yn(ASKBTN_YES,
+                                                      "Do you also want to rename the function arguments?"):
                     from revengai.actions import function_signature
 
                     function_signature(self.state, self.v_addr)
