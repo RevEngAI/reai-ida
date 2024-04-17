@@ -85,7 +85,7 @@ class UserCredentialsPage(BasePage):
                 self.state.config.set("models", res.json()["models"])
                 return True
             except HTTPError as e:
-                logger.error("Unable to retrieve all models used.")
+                logger.error("Unable to retrieve all models used")
                 Dialog.showError("Setup Wizard", f"{e.response.json()['error']}")
         return False
 

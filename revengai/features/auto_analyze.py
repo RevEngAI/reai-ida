@@ -235,10 +235,10 @@ class AutoAnalysisDialog(BaseDialog):
             if IDAUtils.set_name(symbol["func_addr"], symbol["name"]):
                 inthread(self._set_function_renamed, symbol["func_addr"], symbol["name"])
 
-                logger.info("Renowned %s in %s with confidence of '%s.",
+                logger.info("Renowned %s in %s with confidence of '%s",
                             symbol["func_name"], symbol["name"], symbol["distance"])
             else:
-                logger.warning("Symbol name %s already exists.", symbol["name"])
+                logger.warning("Symbol name %s already exists", symbol["name"])
                 idc.warning(f"Can't rename {symbol['func_name']}. Name {symbol['name']} already exists.")
         else:
             model = self.ui.resultsTable.model()

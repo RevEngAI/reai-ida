@@ -36,7 +36,7 @@ class FunctionSimilarityDialog(BaseDialog):
             self.v_addr = start_addr - get_imagebase()
         else:
             self.v_addr = 0
-            logger.error("Pointer location not in valid function.")
+            logger.error("Pointer location not in valid function")
             Dialog.showError("Find Similar Functions", "Cursor position not in a function.")
 
         self.ui = Ui_FunctionSimilarityPanel()

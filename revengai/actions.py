@@ -45,7 +45,7 @@ def upload_binary(state: RevEngState) -> None:
 
                     RE_upload(path)
 
-                    logger.info("Upload succeed for: %s.", basename(path))
+                    logger.info("Upload succeed for: %s", basename(path))
 
                     sha_256_hash = re_binary_id(path)
 
@@ -60,7 +60,7 @@ def upload_binary(state: RevEngState) -> None:
                     inmain(state.config.database.add_analysis,
                            sha_256_hash, analysis["binary_id"], analysis["success"])
 
-                    logger.info("Binary analysis succeed for: %s.", analysis["binary_id"])
+                    logger.info("Binary analysis succeed for: %s", analysis["binary_id"])
                 except HTTPError as e:
                     logger.error("Error analyzing %s. Reason: %s", basename(path), e)
                     inmain(idaapi.hide_wait_box)
@@ -69,7 +69,7 @@ def upload_binary(state: RevEngState) -> None:
                     inmain(idaapi.hide_wait_box)
             else:
                 inmain(idc.warning,
-                       f"The maximum size for uploading a binary should not exceed {state.config.LIMIT}MB.")
+                       f"The maximum size for uploading a binary should not exceed {state.config.LIMIT}MB")
 
         symbols: dict = {"base_addr": get_imagebase()}
 
@@ -188,7 +188,7 @@ def explain_function(state: RevEngState) -> None:
                 else:
                     arch = "unknown arch"
 
-                logger.warning("Hex-Rays %s decompiler is not available.", arch)
+                logger.warning("Hex-Rays %s decompiler is not available", arch)
                 inmain(idc.warning, f"Hex-Rays {arch} decompiler is not available.")
 
         inthread(bg_task, IDAUtils.decompile_func(idc.here()))
@@ -218,7 +218,7 @@ def download_logs(state: RevEngState) -> None:
                         with open(filename, "w") as fd:
                             fd.write(res.text)
                     else:
-                        logger.warning("No output directory provided to export logs to.")
+                        logger.warning("No output directory provided to export logs to")
                         inmain(idc.warning, "No output directory provided to export logs to.")
                 else:
                     logger.warning("No binary analysis logs found for: %s", basename(path))
@@ -307,7 +307,7 @@ def analysis_history(state: RevEngState) -> None:
                     inmain(f.Compile)
                     inmain(f.Execute)
                 else:
-                    logger.info("%s not yet analyzed.", basename(path))
+                    logger.info("%s not yet analyzed", basename(path))
                     inmain(Dialog.showInfo, "Binary Analysis History",
                            f"{basename(path)} binary not yet analyzed.")
             except HTTPError as e:
