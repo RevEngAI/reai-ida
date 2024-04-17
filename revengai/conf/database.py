@@ -94,7 +94,7 @@ class RevEngDatabase(object):
                            (sha_256_hash,))
 
             result = cursor.fetchone()
-            return result[0] if len(result) > 0 else 0
+            return result[0] if result and len(result) > 0 else 0
         except Error:
             pass
 
