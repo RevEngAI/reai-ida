@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from requests import get, post, Response
+from requests import get, post, Response, HTTPError
 
 from reait.api import reveng_req, re_binary_id, re_bid_search
 
@@ -24,12 +24,12 @@ def RE_collections(scope: str = "PUBLIC", page_size: int = 100000, page_number: 
     return res
 
 
-def RE_analyze_functions(fpath: str, binary_id: int = 0) -> Response | None:
+def RE_analyze_functions(fpath: str, binary_id: int = 0) -> Response:
     bin_id = re_binary_id(fpath)
     bid = re_bid_search(bin_id) if binary_id == 0 else binary_id
 
     if bid == -1:
-        return
+        raise HTTPError(f"No matches found for hash: {bin_id}")
 
     res: Response = reveng_req(get, f"analyse/functions/{bid}")
 

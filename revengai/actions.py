@@ -271,6 +271,7 @@ def function_signature(state: RevEngState, func_addr: int = 0) -> None:
                             break
             except HTTPError as e:
                 logger.error("Unable to obtain function argument details. %s", e)
+
                 if "error" in e.response.json():
                     inmain(Dialog.showError, "Binary Analysis Logs",
                            f"Failed to obtain function argument details: {e.response.json()['error']}")
@@ -360,7 +361,7 @@ def sync_functions_name(state: RevEngState) -> None:
                             logger.warning("Failed to sync functionId %d. %s",
                                            function["function_id"], e.response.reason)
             except HTTPError as e:
-                logger.warning("Error syncing functions: %s", e)
+                logger.error("Error syncing functions: %s", e)
 
         functions = []
 
