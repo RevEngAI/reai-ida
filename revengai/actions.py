@@ -1,0 +1,372 @@
+# -*- coding: utf-8 -*-
+import logging
+from os import stat
+from os.path import basename, isfile
+
+import ida_kernwin
+import idaapi
+import idautils
+import idc
+from ida_nalt import get_imagebase
+
+from requests import HTTPError, Response
+
+from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, re_binary_id, RE_functions_rename
+
+from revengai.api import RE_explain, RE_analyze_functions, RE_functions_dump, RE_search, RE_recent_analysis
+from revengai.misc.qtutils import inthread, inmain
+from revengai.gui.dialog import Dialog, StatusForm
+from revengai.manager import RevEngState
+from revengai.features.auto_analyze import AutoAnalysisDialog
+from revengai.features.function_similarity import FunctionSimilarityDialog
+from revengai.misc.utils import IDAUtils
+from revengai.wizard.wizard import RevEngSetupWizard
+
+
+logger = logging.getLogger("REAI")
+
+
+def setup_wizard(state: RevEngState) -> None:
+    RevEngSetupWizard(state).exec_()
+
+
+def upload_binary(state: RevEngState) -> None:
+    fpath = idc.get_input_file_path()
+
+    if not state.config.is_valid():
+        setup_wizard(state)
+    elif not fpath or not isfile(fpath):
+        idc.warning("No input file provided.")
+    else:
+        def bg_task(path: str, syms: dict) -> None:
+            if state.config.LIMIT > (stat(path).st_size // (1024 * 1024)):
+                try:
+                    inmain(idaapi.show_wait_box, "HIDECANCEL\nUploading binary for analysis…")
+
+                    RE_upload(path)
+
+                    logger.info("Upload succeed for: %s", basename(path))
+
+                    sha_256_hash = re_binary_id(path)
+
+                    inmain(state.config.database.add_upload, path, sha_256_hash)
+
+                    res = RE_analyse(fpath=path, model_name=state.config.get("model"), symbols=syms, duplicate=True)
+
+                    analysis = res.json()
+
+                    state.config.set("binary_id", analysis["binary_id"])
+
+                    inmain(state.config.database.add_analysis,
+                           sha_256_hash, analysis["binary_id"], analysis["success"])
+
+                    logger.info("Binary analysis succeed for: %s", analysis["binary_id"])
+                except HTTPError as e:
+                    logger.error("Error analyzing %s. Reason: %s", basename(path), e)
+                    inmain(idaapi.hide_wait_box)
+                    inmain(idc.warning, f"Error analysing {basename(path)}.\nReason: {e.response.json()['error']}")
+                else:
+                    inmain(idaapi.hide_wait_box)
+            else:
+                inmain(idc.warning,
+                       f"The maximum size for uploading a binary should not exceed {state.config.LIMIT}MB")
+
+        symbols: dict = {"base_addr": get_imagebase()}
+
+        functions = []
+
+        for func_ea in idautils.Functions():
+            functions.append({"name": idc.get_func_name(func_ea),
+                              "start_addr": idc.get_func_attr(func_ea, idc.FUNCATTR_START),
+                              "end_addr": idc.get_func_attr(func_ea, idc.FUNCATTR_END)})
+
+        symbols["functions"] = functions
+
+        inthread(bg_task, fpath, symbols)
+
+
+def check_analyze(state: RevEngState) -> None:
+    fpath = idc.get_input_file_path()
+
+    if not state.config.is_valid():
+        setup_wizard(state)
+    elif not fpath or not isfile(fpath):
+        idc.warning("No input file provided.")
+    else:
+        state.config.init_current_analysis()
+
+        def bg_task(path: str) -> None:
+            try:
+                bid = state.config.get("binary_id", 0)
+
+                res: Response = RE_status(path, bid)
+
+                if isinstance(res, Response):
+                    status = res.json()["status"]
+
+                    if bid:
+                        inmain(state.config.database.update_analysis, bid, status)
+
+                    logger.info("Got status: %s", status)
+                    inmain(Dialog.showInfo, "Check Analysis Status", f"Status: {status}")
+                else:
+                    inmain(Dialog.showError, "Check Analysis Status", "No matches found.")
+            except HTTPError as e:
+                logger.error("Error getting binary analysis status: %s", e)
+                inmain(Dialog.showError, "Check Analysis Status",
+                       """Error getting status\n\nCheck:\n
+                         • You have downloaded your binary id from the portal.\n
+                         • You have uploaded the current binary to the portal.""")
+
+        inthread(bg_task, fpath)
+
+
+def auto_analyze(state: RevEngState) -> None:
+    fpath = idc.get_input_file_path()
+
+    if not state.config.is_valid():
+        setup_wizard(state)
+    elif not fpath or not isfile(fpath):
+        idc.warning("No input file provided.")
+    else:
+        dialog = AutoAnalysisDialog(state, fpath)
+        dialog.exec_()
+
+
+def rename_function(state: RevEngState) -> None:
+    fpath = idc.get_input_file_path()
+
+    if not state.config.is_valid():
+        setup_wizard(state)
+    elif not isfile(fpath):
+        idc.warning("No input file provided.")
+    else:
+        dialog = FunctionSimilarityDialog(state, fpath)
+        dialog.exec_()
+
+
+def explain_function(state: RevEngState) -> None:
+    fpath = idc.get_input_file_path()
+
+    if not state.config.is_valid():
+        setup_wizard(state)
+    elif not fpath or not isfile(fpath):
+        idc.warning("No input file provided.")
+    else:
+        state.config.init_current_analysis()
+
+        def bg_task(pseudo_code: str) -> None:
+            if len(pseudo_code) > 0:
+                try:
+                    res: Response = RE_explain(pseudo_code, inmain(idaapi.get_file_type_name))
+
+                    print(res.text)
+
+                    # inmain(IDAUtils.set_comment, inmain(idc.here), res.json()["explanation"])
+                except HTTPError as e:
+                    logger.error("Error with function explanation: %s", e)
+                    if "error" in e.response.json():
+                        inmain(Dialog.showError, "Function Explanation",
+                               f"Error getting function explanation: {e.response.json()['error']}")
+            else:
+                info = inmain(idaapi.get_inf_structure)
+
+                procname = info.procname.lower()
+                bits = 64 if inmain(info.is_64bit) else 32 if inmain(info.is_32bit) else 16
+
+                # https://github.com/williballenthin/python-idb/blob/master/idb/idapython.py#L955-L1046
+                if any(procname.startswith(arch) for arch in ["metapc", "athlon", "k62", "p2", "p3", "p4", "80"]):
+                    arch = "x86_64" if bits == 64 else "x86"
+                elif procname.startswith("arm"):
+                    arch = "ARM64" if bits == 64 else "ARM"
+                elif procname.startswith("mips"):
+                    arch = f"MIPS{bits}"
+                elif procname.startswith("ppc"):
+                    arch = f"PPC{bits}"
+                elif procname.startswith("sparc"):
+                    arch = f"SPARC{bits}"
+                else:
+                    arch = "unknown arch"
+
+                logger.warning("Hex-Rays %s decompiler is not available", arch)
+                inmain(idc.warning, f"Hex-Rays {arch} decompiler is not available.")
+
+        inthread(bg_task, IDAUtils.decompile_func(idc.here()))
+
+
+def download_logs(state: RevEngState) -> None:
+    fpath = idc.get_input_file_path()
+
+    if not state.config.is_valid():
+        setup_wizard(state)
+    elif not fpath or not isfile(fpath):
+        idc.warning("No input file provided.")
+    else:
+        state.config.init_current_analysis()
+
+        def bg_task(path: str) -> None:
+            try:
+                res = RE_logs(path, console=False,
+                              binary_id=state.config.get("binary_id", 0))
+
+                if isinstance(res, Response) and \
+                        ("text" in res.headers.get("Content-Type") and len(res.text) > 0 or
+                         "json" in res.headers.get("Content-Type") and "error" not in res.json()):
+                    filename = inmain(ida_kernwin.ask_file, 1, "*.log", "Output Filename:")
+
+                    if filename:
+                        with open(filename, "w") as fd:
+                            fd.write(res.text)
+                    else:
+                        logger.warning("No output directory provided to export logs to")
+                        inmain(idc.warning, "No output directory provided to export logs to.")
+                else:
+                    logger.warning("No binary analysis logs found for: %s", basename(path))
+                    inmain(idc.warning, f"No binary analysis logs found for: {basename(path)}.")
+            except HTTPError as e:
+                logger.error("Unable to download binary analysis log %s", e)
+                if "error" in e.response.json():
+                    inmain(Dialog.showError, "Binary Analysis Logs",
+                           f"Unable to download binary analysis logs: {e.response.json()['error']}")
+
+        inthread(bg_task, fpath)
+
+
+def function_signature(state: RevEngState, func_addr: int = 0) -> None:
+    fpath = idc.get_input_file_path()
+
+    if not state.config.is_valid():
+        setup_wizard(state)
+    elif not fpath or not isfile(fpath):
+        idc.warning("No input file provided.")
+    else:
+        state.config.init_current_analysis()
+
+        def bg_task(path: str, start_addr: int) -> None:
+            try:
+                if start_addr is not idc.BADADDR:
+                    start_addr -= inmain(get_imagebase)
+
+                    res: Response = RE_analyze_functions(path, state.config.get("binary_id", 0))
+
+                    for function in res.json():
+                        if function["function_vaddr"] == start_addr:
+                            res = RE_functions_dump([function["function_id"]])
+
+                            dump = res.json()[0]
+
+                            # TODO Manage information of function arguments
+                            params = dump["params"]
+                            if dump["returns"]:
+                                return_type = dump["return_type"]
+
+                                # newtype = return_type
+                                #
+                                # if idc.SetType(start_addr, ""):
+                                #     logger.info("Succeed to set function type '%s' defined at address 0x%X",
+                                #                    newtype, start_addr)
+                                # else:
+                                #     logger.warning("Failed to set function type '%s' defined at address 0x%X",
+                                #                    newtype, start_addr)
+                            break
+            except HTTPError as e:
+                logger.error("Unable to obtain function argument details. %s", e)
+
+                if "error" in e.response.json():
+                    inmain(Dialog.showError, "Binary Analysis Logs",
+                           f"Failed to obtain function argument details: {e.response.json()['error']}")
+
+        inthread(bg_task, fpath,
+                 func_addr if func_addr > 0 else idc.get_func_attr(idc.here(), idc.FUNCATTR_START))
+
+
+def analysis_history(state: RevEngState) -> None:
+    fpath = idc.get_input_file_path()
+
+    if not state.config.is_valid():
+        setup_wizard(state)
+    elif not fpath or not isfile(fpath):
+        idc.warning("No input file provided.")
+    else:
+        state.config.init_current_analysis()
+
+        def bg_task(path: str) -> None:
+            try:
+                res = RE_search(path)
+
+                binaries = []
+                for binary in res.json()["binaries"]:
+                    binaries.append([binary["binary_name"], str(binary["binary_id"]),
+                                     binary["status"], binary["creation"]])
+
+                    inmain(state.config.database.add_analysis,
+                           binary["sha_256_hash"], binary["binary_id"], binary["status"], binary["creation"])
+
+                if len(binaries):
+                    f = inmain(StatusForm, state, binaries)
+                    inmain(f.Compile)
+                    inmain(f.Execute)
+                else:
+                    logger.info("%s not yet analyzed", basename(path))
+                    inmain(Dialog.showInfo, "Binary Analysis History",
+                           f"{basename(path)} binary not yet analyzed.")
+            except HTTPError as e:
+                logger.error("Unable to obtain binary analysis history. %s", e)
+                if "error" in e.response.json():
+                    inmain(Dialog.showError, "Binary Analysis History",
+                           f"Failed to obtain binary analysis history: {e.response.json()['error']}")
+
+        inthread(bg_task, fpath)
+
+
+def load_recent_analyses(state: RevEngState) -> None:
+    if state.config.is_valid():
+        def bg_task(fpath: str) -> None:
+            try:
+                res: Response = RE_recent_analysis()
+
+                for analysis in res.json()["analyses"]:
+                    inmain(state.config.database.add_upload, analysis["binary_name"], analysis["sha_256_hash"])
+                    inmain(state.config.database.add_analysis, analysis["sha_256_hash"],
+                           analysis["binary_id"], analysis["status"], analysis["creation"])
+
+                if fpath and isfile(fpath):
+                    state.config.set("binary_id",
+                                     inmain(state.config.database.get_last_analysis, re_binary_id(fpath)))
+                else:
+                    state.config.set("binary_id", None)
+            except HTTPError as e:
+                logger.error("Error getting recent analyses: %s", e)
+            else:
+                inmain(sync_functions_name, state)
+
+        inthread(bg_task, idc.get_input_file_path())
+
+
+def sync_functions_name(state: RevEngState) -> None:
+    fpath = idc.get_input_file_path()
+
+    if state.config.is_valid() and fpath and isfile(fpath):
+        def bg_task() -> None:
+            try:
+                res: Response = RE_analyze_functions(fpath, state.config.get("binary_id", 0))
+
+                for function in res.json():
+                    fe = next((func for func in functions if function["function_vaddr"] == func["start_addr"]), None)
+
+                    if fe and fe["name"] != function["function_name"]:
+                        try:
+                            RE_functions_rename(function["function_id"], fe["name"])
+                        except HTTPError as e:
+                            logger.warning("Failed to sync functionId %d. %s",
+                                           function["function_id"], e.response.reason)
+            except HTTPError as e:
+                logger.error("Error syncing functions: %s", e)
+
+        functions = []
+
+        for func_ea in idautils.Functions():
+            functions.append({"name": idc.get_func_name(func_ea),
+                              "start_addr": idc.get_func_attr(func_ea, idc.FUNCATTR_START)})
+
+        inthread(bg_task)

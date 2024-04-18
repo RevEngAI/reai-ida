@@ -1,0 +1,54 @@
+[
+  {
+    "id": "reai:wizard",
+    "name": "Run Setup Wizard",
+    "callback": "setup_wizard"
+  },
+  {
+    "id": "reai:upload",
+    "name": "Upload Binary",
+    "callback": "upload_binary",
+    "shortcut": "Ctrl+Shift+U"
+  },
+  {
+    "id": "reai:check_analyze",
+    "name": "Check Analysis Status",
+    "callback": "check_analyze",
+    "shortcut": "Ctrl+Shift+S"
+  },
+  {
+    "id": "reai:auto_analyze",
+    "name": "Auto Analyze Binary Symbol",
+    "callback": "auto_analyze",
+    "shortcut": "Ctrl+Shift+A"
+  },
+  {
+    "id": "reai:rename",
+    "name": "Rename From Similar Functions",
+    "callback": "rename_function"
+  },
+  {
+    "id": "reai:signature",
+    "disabled": true,
+    "name": "Update Function Signature",
+    "callback": "function_signature"
+  },
+  {
+    "id": "reai:explain",
+    "disabled": true,
+    "name": "Explain this Function",
+    "callback": "explain_function"
+  },
+  {
+    "id": "reai:logs",
+    "name": "Download Binary Analysis Logs",
+    "callback": "download_logs",
+    "shortcut": "Ctrl+Shift+L"
+  },
+  {
+    "id": "reai:history",
+    "name": "Binary Analysis History",
+    "callback": "analysis_history",
+    "shortcut": "Ctrl+Shift+H"
+  }
+]
