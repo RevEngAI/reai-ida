@@ -14,7 +14,7 @@ from requests import Response, HTTPError
 
 from reait.api import re_binary_id, RE_embeddings, RE_nearest_symbols
 
-from revengai.api import RE_collections, RE_collections_count
+from revengai.api import RE_collections
 from revengai.features import BaseDialog
 from revengai.misc.utils import IDAUtils
 from revengai.misc.qtutils import inthread, inmain
@@ -35,6 +35,9 @@ class Analysis(IntEnum):
 
 
 class AutoAnalysisDialog(BaseDialog):
+    _page_size: int = 50
+    _scope: str = "PUBLIC"
+
     def __init__(self, state: RevEngState, fpath: str):
         BaseDialog.__init__(self, state, fpath)
 
@@ -43,6 +46,7 @@ class AutoAnalysisDialog(BaseDialog):
         self.ui = Ui_AutoAnalysisPanel()
         self.ui.setupUi(self)
 
+        self.ui.collectionsTable.verticalScrollBar().valueChanged.connect(self._on_scroll)
         self.ui.collectionsTable.setModel(RevEngCheckableTableModel(header=["Collection Name", "Include",],
                                                                     data=[], columns=[1], parent=self))
 
@@ -184,11 +188,11 @@ class AutoAnalysisDialog(BaseDialog):
             item = table.model().index(row, 0)
             table.setRowHidden(row, filter_text.lower() not in item.sibling(row, 0).data().lower())
 
-    def _confidence(self, value) -> None:
+    def _confidence(self, value: int) -> None:
         if self.ui.tabWidget.currentIndex() == 0:
             self.ui.description.setText(f"Confidence: {value:#02d}")
 
-    def _tab_changed(self, index) -> None:
+    def _tab_changed(self, index: int) -> None:
         if index == 0:
             self.ui.description.setVisible(True)
             self.ui.renameButton.setEnabled(False)
@@ -201,17 +205,18 @@ class AutoAnalysisDialog(BaseDialog):
                                         f"Skipped Analyses: {self._analysis[Analysis.SKIPPED.value]}<br/>"
                                         f"Errored Analyses: {self._analysis[Analysis.UNSUCCESSFUL.value]}")
 
-    def _load_collections(self, scope: str = "PUBLIC", page_size: int = 100000, page_number: int = 1) -> None:
+    def _load_collections(self, page_number: int = 1) -> None:
         try:
             inmain(idaapi.show_wait_box, "HIDECANCEL\nGetting RevEng.AI collections…")
 
             inmain(self.ui.fetchButton.setEnabled, False)
 
-            res: Response = RE_collections_count(scope)
+            res = RE_collections(self._scope, self._page_size, page_number)
 
-            res = RE_collections(scope, min(page_size, res.json()["count"]), page_number)
+            collections: list = []
+            for child in inmain(self.ui.collectionsTable.model).get_data:
+                collections.append(child)
 
-            collections = []
             for collection in res.json()["collections"]:
                 collections.append([collection["collection_name"], None])
 
@@ -257,3 +262,9 @@ class AutoAnalysisDialog(BaseDialog):
                 regex.append(model.index(idx, 0).data(Qt.DisplayRole))
 
         return regex
+
+    def _on_scroll(self, value: int) -> None:
+        if len(self.ui.collectionsFilter.text()) == 0 and \
+                value / self.ui.collectionsTable.verticalScrollBar().maximum() >= .75:
+            inthread(self._load_collections,
+                     1 + round(self.ui.collectionsTable.model().rowCount() / self._page_size))
