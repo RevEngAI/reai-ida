@@ -223,6 +223,8 @@ class AutoAnalysisDialog(BaseDialog):
             inmain(inmain(self.ui.collectionsTable.model).fill_table, collections)
             inmain(self.ui.collectionsTable.resizeColumnsToContents)
         except HTTPError as e:
+            logger.error("Getting collections failed for page: %d, %s", page_number, e)
+
             inmain(idaapi.hide_wait_box)
             inmain(Dialog.showError, "Auto Analysis", f"Auto Analysis Error: {e.response.json()['error']}")
         else:
