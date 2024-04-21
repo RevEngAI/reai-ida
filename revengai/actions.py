@@ -101,16 +101,13 @@ def check_analyze(state: RevEngState) -> None:
 
                 res: Response = RE_status(path, bid)
 
-                if isinstance(res, Response):
-                    status = res.json()["status"]
+                status = res.json()["status"]
 
-                    if bid:
-                        inmain(state.config.database.update_analysis, bid, status)
+                if bid:
+                    inmain(state.config.database.update_analysis, bid, status)
 
-                    logger.info("Got status: %s", status)
-                    inmain(Dialog.showInfo, "Check Analysis Status", f"Status: {status}")
-                else:
-                    inmain(Dialog.showError, "Check Analysis Status", "No matches found.")
+                logger.info("Got status: %s", status)
+                inmain(Dialog.showInfo, "Check Analysis Status", f"Status: {status}")
             except HTTPError as e:
                 logger.error("Error getting binary analysis status: %s", e)
                 inmain(Dialog.showError, "Check Analysis Status",
@@ -206,12 +203,10 @@ def download_logs(state: RevEngState) -> None:
 
         def bg_task(path: str) -> None:
             try:
-                res = RE_logs(path, console=False,
-                              binary_id=state.config.get("binary_id", 0))
+                res = RE_logs(path, console=False, binary_id=state.config.get("binary_id", 0))
 
-                if isinstance(res, Response) and \
-                        ("text" in res.headers.get("Content-Type") and len(res.text) > 0 or
-                         "json" in res.headers.get("Content-Type") and "error" not in res.json()):
+                if "text" in res.headers.get("Content-Type") and len(res.text) > 0 or \
+                        "json" in res.headers.get("Content-Type") and "error" not in res.json():
                     filename = inmain(ida_kernwin.ask_file, 1, "*.log", "Output Filename:")
 
                     if filename:
@@ -224,7 +219,9 @@ def download_logs(state: RevEngState) -> None:
                     logger.warning("No binary analysis logs found for: %s", basename(path))
                     inmain(idc.warning, f"No binary analysis logs found for: {basename(path)}.")
             except HTTPError as e:
-                logger.error("Unable to download binary analysis log %s", e)
+                logger.error("Unable to download binary analysis logs for: %s. Reason: %s",
+                             basename(path), e)
+
                 if "error" in e.response.json():
                     inmain(Dialog.showError, "Binary Analysis Logs",
                            f"Unable to download binary analysis logs: {e.response.json()['error']}")
