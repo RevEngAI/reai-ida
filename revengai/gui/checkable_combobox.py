@@ -9,7 +9,7 @@ class CheckableComboBox(QComboBox):
     class Delegate(QStyledItemDelegate):
         def sizeHint(self, option, index):
             size = super().sizeHint(option, index)
-            size.setHeight(20)
+            size.setHeight(22)
             return size
 
     def __init__(self, *args, **kwargs):
@@ -18,6 +18,7 @@ class CheckableComboBox(QComboBox):
         # Make the combo editable to set a custom text, but readonly
         self.setEditable(True)
         self.lineEdit().setReadOnly(True)
+        self.lineEdit().setPlaceholderText("Select…")
 
         # Use custom delegate
         self.setItemDelegate(CheckableComboBox.Delegate())
@@ -60,6 +61,8 @@ class CheckableComboBox(QComboBox):
         return False
 
     def showPopup(self) -> None:
+        self._set_popup_min_width_for_items()
+
         super().showPopup()
 
         # When the popup is displayed, a click on the lineedit should close it
@@ -75,7 +78,7 @@ class CheckableComboBox(QComboBox):
         self.updateText()
 
     def timerEvent(self, event) -> None:
-        # After timeout, kill timer, and reenable click on line edit
+        # After timeout, kill timer, and re-enable click on line edit
         self.killTimer(event.timerId())
 
         self.closeOnLineEditClick = False
@@ -114,3 +117,13 @@ class CheckableComboBox(QComboBox):
                 res.append(self.model().item(i).data())
 
         return res
+
+    def _set_popup_min_width_for_items(self) -> None:
+        # See https://doc.qt.io/qt-5/qwidget.html#maximumWidth-prop for the 16777215 value
+        if self.maximumWidth() <= 16777215:
+            fm = self.fontMetrics()
+            # Calculate the maximum width among the items
+            maxWidth = max([fm.width(self.itemText(i)) for i in range(self.count())])
+
+            # Add the indicator width
+            self.view().setMinimumWidth(40 + maxWidth)
