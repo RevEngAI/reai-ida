@@ -95,11 +95,11 @@ def check_analyze(state: RevEngState) -> None:
     else:
         state.config.init_current_analysis()
 
-        def bg_task(path: str) -> None:
+        def bg_task() -> None:
             try:
                 bid = state.config.get("binary_id", 0)
 
-                res: Response = RE_status(path, bid)
+                res: Response = RE_status(fpath, bid)
 
                 status = res.json()["status"]
 
@@ -115,7 +115,7 @@ def check_analyze(state: RevEngState) -> None:
                          • You have downloaded your binary id from the portal.\n
                          • You have uploaded the current binary to the portal.""")
 
-        inthread(bg_task, fpath)
+        inthread(bg_task)
 
 
 def auto_analyze(state: RevEngState) -> None:
@@ -126,8 +126,24 @@ def auto_analyze(state: RevEngState) -> None:
     elif not fpath or not isfile(fpath):
         idc.warning("No input file provided.")
     else:
-        dialog = AutoAnalysisDialog(state, fpath)
-        dialog.exec_()
+        def bg_task() -> None:
+            try:
+                bid = state.config.get("binary_id", 0)
+
+                res: Response = RE_status(fpath, bid)
+
+                status = res.json()["status"]
+
+                if status != "Complete":
+                    inmain(idc.warning, "Analysis in progress…")
+                    return
+            except HTTPError as e:
+                logger.error("Error getting binary analysis status: %s", e)
+
+            dialog = inmain(AutoAnalysisDialog, state, fpath)
+            inmain(dialog.exec_)
+
+        inthread(bg_task)
 
 
 def rename_function(state: RevEngState) -> None:
@@ -138,8 +154,24 @@ def rename_function(state: RevEngState) -> None:
     elif not isfile(fpath):
         idc.warning("No input file provided.")
     else:
-        dialog = FunctionSimilarityDialog(state, fpath)
-        dialog.exec_()
+        def bg_task() -> None:
+            try:
+                bid = state.config.get("binary_id", 0)
+
+                res: Response = RE_status(fpath, bid)
+
+                status = res.json()["status"]
+
+                if status != "Complete":
+                    inmain(idc.warning, "Analysis in progress…")
+                    return
+            except HTTPError as e:
+                logger.error("Error getting binary analysis status: %s", e)
+
+            dialog = inmain(FunctionSimilarityDialog, state, fpath)
+            inmain(dialog.exec_)
+
+        inthread(bg_task)
 
 
 def explain_function(state: RevEngState) -> None:
@@ -201,9 +233,9 @@ def download_logs(state: RevEngState) -> None:
     else:
         state.config.init_current_analysis()
 
-        def bg_task(path: str) -> None:
+        def bg_task() -> None:
             try:
-                res = RE_logs(path, console=False, binary_id=state.config.get("binary_id", 0))
+                res = RE_logs(fpath, console=False, binary_id=state.config.get("binary_id", 0))
 
                 if "text" in res.headers.get("Content-Type") and len(res.text) > 0 or \
                         "json" in res.headers.get("Content-Type") and "error" not in res.json():
@@ -216,17 +248,17 @@ def download_logs(state: RevEngState) -> None:
                         logger.warning("No output directory provided to export logs to")
                         inmain(idc.warning, "No output directory provided to export logs to.")
                 else:
-                    logger.warning("No binary analysis logs found for: %s", basename(path))
-                    inmain(idc.warning, f"No binary analysis logs found for: {basename(path)}.")
+                    logger.warning("No binary analysis logs found for: %s", basename(fpath))
+                    inmain(idc.warning, f"No binary analysis logs found for: {basename(fpath)}.")
             except HTTPError as e:
                 logger.error("Unable to download binary analysis logs for: %s. Reason: %s",
-                             basename(path), e)
+                             basename(fpath), e)
 
                 if "error" in e.response.json():
                     inmain(Dialog.showError, "Binary Analysis Logs",
                            f"Unable to download binary analysis logs: {e.response.json()['error']}")
 
-        inthread(bg_task, fpath)
+        inthread(bg_task)
 
 
 def function_signature(state: RevEngState, func_addr: int = 0) -> None:
@@ -239,12 +271,12 @@ def function_signature(state: RevEngState, func_addr: int = 0) -> None:
     else:
         state.config.init_current_analysis()
 
-        def bg_task(path: str, start_addr: int) -> None:
+        def bg_task(start_addr: int) -> None:
             try:
                 if start_addr is not idc.BADADDR:
                     start_addr -= inmain(get_imagebase)
 
-                    res: Response = RE_analyze_functions(path, state.config.get("binary_id", 0))
+                    res: Response = RE_analyze_functions(fpath, state.config.get("binary_id", 0))
 
                     for function in res.json():
                         if function["function_vaddr"] == start_addr:
@@ -273,8 +305,7 @@ def function_signature(state: RevEngState, func_addr: int = 0) -> None:
                     inmain(Dialog.showError, "Binary Analysis Logs",
                            f"Failed to obtain function argument details: {e.response.json()['error']}")
 
-        inthread(bg_task, fpath,
-                 func_addr if func_addr > 0 else idc.get_func_attr(idc.here(), idc.FUNCATTR_START))
+        inthread(bg_task, func_addr if func_addr > 0 else idc.get_func_attr(idc.here(), idc.FUNCATTR_START))
 
 
 def analysis_history(state: RevEngState) -> None:
@@ -287,9 +318,9 @@ def analysis_history(state: RevEngState) -> None:
     else:
         state.config.init_current_analysis()
 
-        def bg_task(path: str) -> None:
+        def bg_task() -> None:
             try:
-                res = RE_search(path)
+                res = RE_search(fpath)
 
                 binaries = []
                 for binary in res.json()["binaries"]:
@@ -304,16 +335,16 @@ def analysis_history(state: RevEngState) -> None:
                     inmain(f.Compile)
                     inmain(f.Execute)
                 else:
-                    logger.info("%s not yet analyzed", basename(path))
+                    logger.info("%s not yet analyzed", basename(fpath))
                     inmain(Dialog.showInfo, "Binary Analysis History",
-                           f"{basename(path)} binary not yet analyzed.")
+                           f"{basename(fpath)} binary not yet analyzed.")
             except HTTPError as e:
                 logger.error("Unable to obtain binary analysis history. %s", e)
                 if "error" in e.response.json():
                     inmain(Dialog.showError, "Binary Analysis History",
                            f"Failed to obtain binary analysis history: {e.response.json()['error']}")
 
-        inthread(bg_task, fpath)
+        inthread(bg_task)
 
 
 def load_recent_analyses(state: RevEngState) -> None:
