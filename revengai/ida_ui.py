@@ -3,7 +3,7 @@
 from json import load
 from os.path import abspath, dirname, isfile, join, realpath
 
-from idc import get_input_file_path
+from idc import get_input_file_path, here
 from ida_kernwin import set_dock_pos, PluginForm, DP_TAB, unregister_action, attach_action_to_menu, register_action, \
     action_desc_t, action_handler_t, AST_ENABLE_ALWAYS, create_menu, SETMENU_APP, SETMENU_INS, UI_Hooks, \
     attach_action_to_popup, add_hotkey, del_hotkey, get_widget_type, BWN_DISASM, BWN_PSEUDOCODE
@@ -11,6 +11,7 @@ from ida_kernwin import set_dock_pos, PluginForm, DP_TAB, unregister_action, att
 from revengai import actions
 from revengai.actions import load_recent_analyses
 from revengai.manager import RevEngState
+from revengai.misc.utils import IDAUtils
 
 MENU = "RevEng.AI Toolkit/"
 
@@ -73,6 +74,8 @@ class Hooks(UI_Hooks):
                     if not action.get("disabled", False):
                         if self.state.config.is_valid():
                             if action["id"] == "reai:wizard" or \
+                                    (action["id"] == "reai:rename" and
+                                     not IDAUtils.is_in_valid_segment(here())) or \
                                     (get_widget_type(form) != BWN_PSEUDOCODE and
                                      action["id"] in ["reai:explain", "reai:signature"]):
                                 continue
