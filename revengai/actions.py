@@ -22,7 +22,6 @@ from revengai.features.function_similarity import FunctionSimilarityDialog
 from revengai.misc.utils import IDAUtils
 from revengai.wizard.wizard import RevEngSetupWizard
 
-
 logger = logging.getLogger("REAI")
 
 
@@ -127,21 +126,11 @@ def auto_analyze(state: RevEngState) -> None:
         idc.warning("No input file provided.")
     else:
         def bg_task() -> None:
-            try:
-                bid = state.config.get("binary_id", 0)
-
-                res: Response = RE_status(fpath, bid)
-
-                status = res.json()["status"]
-
-                if status != "Complete":
-                    inmain(idc.warning, "Analysis in progress…")
-                    return
-            except HTTPError as e:
-                logger.error("Error getting binary analysis status: %s", e)
-
-            dialog = inmain(AutoAnalysisDialog, state, fpath)
-            inmain(dialog.exec_)
+            if is_analysis_complete(state, fpath):
+                dialog = inmain(AutoAnalysisDialog, state, fpath)
+                inmain(dialog.exec_)
+            else:
+                inmain(idc.warning, "Analysis in progress…")
 
         inthread(bg_task)
 
@@ -155,21 +144,11 @@ def rename_function(state: RevEngState) -> None:
         idc.warning("No input file provided.")
     else:
         def bg_task() -> None:
-            try:
-                bid = state.config.get("binary_id", 0)
-
-                res: Response = RE_status(fpath, bid)
-
-                status = res.json()["status"]
-
-                if status != "Complete":
-                    inmain(idc.warning, "Analysis in progress…")
-                    return
-            except HTTPError as e:
-                logger.error("Error getting binary analysis status: %s", e)
-
-            dialog = inmain(FunctionSimilarityDialog, state, fpath)
-            inmain(dialog.exec_)
+            if is_analysis_complete(state, fpath):
+                dialog = inmain(FunctionSimilarityDialog, state, fpath)
+                inmain(dialog.exec_)
+            else:
+                inmain(idc.warning, "Analysis in progress…")
 
         inthread(bg_task)
 
@@ -398,3 +377,16 @@ def sync_functions_name(state: RevEngState) -> None:
                               "start_addr": idc.get_func_attr(func_ea, idc.FUNCATTR_START)})
 
         inthread(bg_task)
+
+
+def is_analysis_complete(state: RevEngState, fpath: str) -> bool:
+    try:
+        bid = state.config.get("binary_id", 0)
+
+        res: Response = RE_status(fpath, bid)
+
+        status = res.json()["status"]
+
+        return status == "Complete"
+    except HTTPError as e:
+        logger.error("Error getting binary analysis status: %s", e)
