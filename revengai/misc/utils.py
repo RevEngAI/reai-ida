@@ -49,7 +49,9 @@ class IDAUtils(object):
     @staticmethod
     def set_comment(func_ea: int, comment: str) -> None:
         if IDAUtils.is_in_valid_segment(func_ea):
-            # Set in dissassembly
+            func_ea = idc.get_func_attr(func_ea, idc.FUNCATTR_START)
+
+            # Set in disassembly
             idc.set_cmt(func_ea, comment, 0)
 
             # Set in decompiled data
@@ -119,7 +121,7 @@ class IDAUtils(object):
 
     @staticmethod
     def get_function_signature(func_ea: int) -> Optional[FunctionSignature]:
-        signature = idc.get_type(func_ea)
+        signature = idc.get_type(idc.get_func_attr(func_ea, idc.FUNCATTR_START))
 
         if not signature:
             logger.error(f"idc.get_type failed at function address: {func_ea:#x}")
@@ -133,7 +135,7 @@ class IDAUtils(object):
 
         return FunctionSignature(parsed_sig.group(1),  # return type
                                  parsed_sig.group(2),  # calling convention
-                                 idc.get_name(func_ea),
+                                 idc.get_func_name(func_ea),
                                  parsed_sig.group(3).split(', ')  # arguments
                                  )
 
