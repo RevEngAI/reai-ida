@@ -22,6 +22,7 @@ from revengai.features.function_similarity import FunctionSimilarityDialog
 from revengai.misc.utils import IDAUtils
 from revengai.wizard.wizard import RevEngSetupWizard
 
+
 logger = logging.getLogger("REAI")
 
 
@@ -386,6 +387,9 @@ def is_analysis_complete(state: RevEngState, fpath: str) -> bool:
         res: Response = RE_status(fpath, bid)
 
         status = res.json()["status"]
+
+        if bid:
+            inmain(state.config.database.update_analysis, bid, status)
 
         return status == "Complete"
     except HTTPError as e:
