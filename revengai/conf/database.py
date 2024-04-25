@@ -73,7 +73,7 @@ class RevEngDatabase(object):
 
     def add_upload(self, fpath: str, sha_256_hash: str) -> None:
         try:
-            self.conn.cursor().execute("INSERT INTO upload(name, sha_256_hash) VALUES(?, ?)",
+            self.conn.cursor().execute("INSERT OR REPLACE INTO upload(name, sha_256_hash) VALUES(?, ?)",
                                        (basename(fpath), sha_256_hash,))
         except Error as e:
             logger.error("Error adding upload into local database for hash: %s. %s", sha_256_hash, e)
