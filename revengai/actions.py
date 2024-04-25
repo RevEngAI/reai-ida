@@ -144,7 +144,6 @@ def rename_function(state: RevEngState) -> None:
     elif not isfile(fpath):
         idc.warning("No input file provided.")
     else:
-        explain_function(state)
         def bg_task() -> None:
             if is_analysis_complete(state, fpath):
                 dialog = inmain(FunctionSimilarityDialog, state, fpath)
