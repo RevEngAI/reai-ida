@@ -51,7 +51,7 @@ def RE_functions_dump(function_ids: list[int]) -> Response:
     return res
 
 
-def RE_explain(pseudo_code: str, language: str) -> Response:
+def RE_explain(pseudo_code: str, language: str = None) -> Response:
     res: Response = reveng_req(post, "explain", data=pseudo_code,
                                json_data={"language": language} if language else None)
 
