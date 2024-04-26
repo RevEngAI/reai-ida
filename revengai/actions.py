@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 import logging
-from os import stat
-from os.path import basename, isfile
 
 import ida_kernwin
 import idaapi
@@ -9,6 +7,9 @@ import idautils
 import idc
 from ida_nalt import get_imagebase
 
+from os import stat
+from subprocess import run
+from os.path import basename, isfile
 from requests import HTTPError, Response
 
 from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, re_binary_id, RE_functions_rename
@@ -164,10 +165,14 @@ def explain_function(state: RevEngState) -> None:
     else:
         state.config.init_current_analysis()
 
-        def bg_task(pseudo_code: str, compiler: str) -> None:
+        def bg_task(pseudo_code: str) -> None:
             if len(pseudo_code) > 0:
                 try:
-                    res: Response = RE_explain(pseudo_code, compiler)
+                    # Gets the programming language from the current binary
+                    ret = run(f"rabin2 -I {fpath} | grep 'lang '", shell=True, capture_output=True)
+
+                    res: Response = RE_explain(pseudo_code,
+                                               ret.stdout.split(b' ')[-1].strip().decode() if ret.returncode == 0 else None)
 
                     if "error" in res.json():
                         error = res.json()["error"]
@@ -207,8 +212,7 @@ def explain_function(state: RevEngState) -> None:
                 logger.warning("Hex-Rays %s decompiler is not available", arch)
                 inmain(idc.warning, f"Hex-Rays {arch} decompiler is not available.")
 
-        inthread(bg_task, IDAUtils.decompile_func(idc.here()),
-                 idaapi.get_compiler_name(idc.get_inf_attr(idc.INF_COMPILER)))
+        inthread(bg_task, IDAUtils.decompile_func(idc.here()))
 
 
 def download_logs(state: RevEngState) -> None:
