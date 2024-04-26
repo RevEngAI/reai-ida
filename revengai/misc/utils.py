@@ -2,6 +2,7 @@
 import logging
 from typing import Optional
 
+import ida_hexrays
 import ida_segment
 import idautils
 import idc
@@ -49,55 +50,41 @@ class IDAUtils(object):
     @staticmethod
     def set_comment(func_ea: int, comment: str) -> None:
         if IDAUtils.is_in_valid_segment(func_ea):
-            func_ea = idc.get_func_attr(func_ea, idc.FUNCATTR_START)
-
-            # Set in disassembly
-            idc.set_cmt(func_ea, comment, 0)
-
-            # Set in decompiled data
-            IDAUtils.set_hexrays_comment(func_ea, comment)
-
-    @staticmethod
-    def set_hexrays_comment(func_ea: int, comment: str) -> None:
-        """
-        Set comment in decompiled code
-        """
-        if idaapi.init_hexrays_plugin() and IDAUtils.is_in_valid_segment(func_ea):
-            cfunc = idaapi.decompile(func_ea)
-
-            if cfunc:
-                tl = idaapi.treeloc_t()
-                tl.ea = func_ea
-                tl.itp = idaapi.ITP_SEMI
-
-                cfunc.set_user_cmt(tl, comment)
-                cfunc.save_user_cmts()
+            func = idaapi.get_func(func_ea)
+            if not func:
+                logger.error(f"idaapi.get_func failed at function address: {func_ea:#x}")
+            else:
+                idc.set_func_cmt(func.start_ea, comment, False)
 
     @staticmethod
     def decompile_func(func_ea: int) -> str:
-        if not idaapi.init_hexrays_plugin() or not IDAUtils.is_in_valid_segment(func_ea):
-            return ''
-
-        func = idaapi.get_func(func_ea)
-        if func:
-            cfunc = idaapi.decompile(func.start_ea)
-
-            if cfunc:
-                lines = []
-                for sline in cfunc.get_pseudocode():
-                    lines.append(idaapi.tag_remove(sline.line))
-                return "\n".join(lines)
+        if idaapi.init_hexrays_plugin() and IDAUtils.is_in_valid_segment(func_ea):
+            func = idaapi.get_func(func_ea)
+            if not func:
+                logger.error(f"idaapi.get_func failed at function address: {func_ea:#x}")
+            else:
+                cfunc = idaapi.decompile(func.start_ea, flags=ida_hexrays.DECOMP_NO_WAIT)
+                if not cfunc:
+                    logger.error(f"idaapi.decompile failed at function address: {func_ea:#x}")
+                else:
+                    lines = []
+                    for sline in cfunc.get_pseudocode():
+                        lines.append(idaapi.tag_remove(sline.line))
+                    return "\n".join(lines)
         return ''
 
     @staticmethod
-    def disasm_func(func_addr: int) -> str:
-        func = idaapi.get_func(func_addr)
-        if func:
-            asm = []
-            for ea in idautils.FuncItems(func_addr):
-                inst = idaapi.generate_disasm_line(ea)
-                asm.append(idaapi.tag_remove(inst))
-            return "\n".join(asm)
+    def disasm_func(func_ea: int) -> str:
+        if IDAUtils.is_in_valid_segment(func_ea):
+            func = idaapi.get_func(func_ea)
+            if not func:
+                logger.error(f"idaapi.get_func failed at function address: {func_ea:#x}")
+            else:
+                asm = []
+                for ea in idautils.FuncItems(func_ea):
+                    inst = idaapi.generate_disasm_line(ea)
+                    asm.append(idaapi.tag_remove(inst))
+                return "\n".join(asm)
         return ''
 
     @staticmethod
