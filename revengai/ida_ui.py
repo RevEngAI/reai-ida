@@ -77,7 +77,7 @@ class Hooks(UI_Hooks):
                                     (action["id"] == "reai:rename" and
                                      not IDAUtils.is_in_valid_segment(here())) or \
                                     (get_widget_type(form) != BWN_PSEUDOCODE and
-                                     action["id"] in ["reai:explain", "reai:signature"]):
+                                     action["id"] in ("reai:explain", "reai:signature",)):
                                 continue
                         elif action["id"] != "reai:wizard":
                             continue

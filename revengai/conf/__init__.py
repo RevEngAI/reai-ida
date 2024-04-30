@@ -65,7 +65,7 @@ class RevEngConfiguration(object):
         return self._config
 
     def is_valid(self) -> bool:
-        return all(self.get(name) is not None for name in ["apikey", "host", "model"])
+        return all(self.get(name) is not None for name in ("apikey", "host", "model",))
 
     @property
     def database(self) -> RevEngDatabase:

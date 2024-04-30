@@ -63,7 +63,7 @@ class RevEngDatabase(object):
     def drop_tables(self) -> None:
         try:
             with closing(self.conn.cursor()) as cursor:
-                for table in ["upload", "analysis"]:
+                for table in ("upload", "analysis",):
                     cursor.execute(f"DROP TABLE {table}")
         except Error as e:
             logger.error("Error dropping tables from local database. %s", e)
@@ -83,7 +83,7 @@ class RevEngDatabase(object):
     def delete_upload(self, sha_256_hash: str) -> None:
         try:
             with closing(self.conn.cursor()) as cursor:
-                for table in ["upload", "analysis"]:
+                for table in ("upload", "analysis",):
                     cursor.execute(f"DELETE FROM {table} WHERE sha_256_hash = ?", (sha_256_hash,))
         except Error as e:
             logger.error("Error deleting upload from local database for hash: %s. %s", sha_256_hash, e)
