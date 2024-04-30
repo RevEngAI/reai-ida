@@ -107,13 +107,17 @@ def check_analyze(state: RevEngState) -> None:
                 if bid:
                     inmain(state.config.database.update_analysis, bid, status)
 
-                logger.info("Got status: %s", status)
-                inmain(Dialog.showInfo, "Check Analysis Status", f"Status: {status}")
+                logger.info("Got binary analysis status: %s", status)
+                inmain(Dialog.showInfo, "Check Binary Analysis Status", f"Binary analysis status: {status}")
             except HTTPError as e:
-                logger.error("Error getting binary analysis status: %s", e)
-                inmain(Dialog.showError, "Check Analysis Status",
-                       """Error getting binary analysis status.\n\nCheck:
-    • You have downloaded your binary id from the portal.
+                if "error" in e.response.json():
+                    logger.error("Error getting binary analysis status: %s", e.response.json()["error"])
+                else:
+                    logger.error("Error getting binary analysis status: %s", e)
+
+                inmain(Dialog.showError, "Check Binary Analysis Status",
+                       """Error getting binary analysis status.\n\nPlease check:
+    • You have downloaded your binary ID from the portal.
     • You have uploaded the current binary to the portal.""")
 
         inthread(bg_task)
