@@ -112,9 +112,9 @@ def check_analyze(state: RevEngState) -> None:
             except HTTPError as e:
                 logger.error("Error getting binary analysis status: %s", e)
                 inmain(Dialog.showError, "Check Analysis Status",
-                       """Error getting status\n\nCheck:\n
-                         • You have downloaded your binary id from the portal.\n
-                         • You have uploaded the current binary to the portal.""")
+                       """Error getting binary analysis status.\n\nCheck:
+    • You have downloaded your binary id from the portal.
+    • You have uploaded the current binary to the portal.""")
 
         inthread(bg_task)
 
@@ -128,11 +128,12 @@ def auto_analyze(state: RevEngState) -> None:
         idc.warning("No input file provided.")
     else:
         def bg_task() -> None:
-            if is_analysis_complete(state, fpath):
+            done, status = is_analysis_complete(state, fpath)
+            if done:
                 dialog = inmain(AutoAnalysisDialog, state, fpath)
                 inmain(dialog.exec_)
             else:
-                inmain(idc.warning, "Analysis in progress…")
+                inmain(idc.warning, f"Binary analysis status: {status}")
 
         inthread(bg_task)
 
@@ -146,11 +147,12 @@ def rename_function(state: RevEngState) -> None:
         idc.warning("No input file provided.")
     else:
         def bg_task() -> None:
-            if is_analysis_complete(state, fpath):
+            done, status = is_analysis_complete(state, fpath)
+            if done:
                 dialog = inmain(FunctionSimilarityDialog, state, fpath)
                 inmain(dialog.exec_)
             else:
-                inmain(idc.warning, "Analysis in progress…")
+                inmain(idc.warning, f"Binary analysis status: {status}")
 
         inthread(bg_task)
 
@@ -196,7 +198,7 @@ def explain_function(state: RevEngState) -> None:
                 bits = 64 if inmain(info.is_64bit) else 32 if inmain(info.is_32bit) else 16
 
                 # https://github.com/williballenthin/python-idb/blob/master/idb/idapython.py#L955-L1046
-                if any(procname.startswith(arch) for arch in ["metapc", "athlon", "k62", "p2", "p3", "p4", "80"]):
+                if any(procname.startswith(arch) for arch in ("metapc", "athlon", "k62", "p2", "p3", "p4", "80",)):
                     arch = "x86_64" if bits == 64 else "x86"
                 elif procname.startswith("arm"):
                     arch = "ARM64" if bits == 64 else "ARM"
@@ -392,7 +394,7 @@ def sync_functions_name(state: RevEngState) -> None:
         inthread(bg_task)
 
 
-def is_analysis_complete(state: RevEngState, fpath: str) -> bool:
+def is_analysis_complete(state: RevEngState, fpath: str) -> tuple[bool, str]:
     try:
         bid = state.config.get("binary_id", 0)
 
@@ -403,6 +405,16 @@ def is_analysis_complete(state: RevEngState, fpath: str) -> bool:
         if bid:
             inmain(state.config.database.update_analysis, bid, status)
 
-        return status == "Complete"
+        return status == "Complete", status
     except HTTPError as e:
-        logger.error("Error getting binary analysis status: %s", e)
+        if "error" in e.response.json():
+            msg = e.response.json()["error"]
+
+            if "invalid" in msg.lower():
+                upload_binary(state)
+
+            logger.error("Error getting binary analysis status: %s", msg)
+        else:
+            logger.error("Error getting binary analysis status: %s", e)
+
+        return False, "Processing"
