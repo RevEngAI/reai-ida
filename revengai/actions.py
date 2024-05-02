@@ -70,7 +70,8 @@ def upload_binary(state: RevEngState) -> None:
                     inmain(idaapi.hide_wait_box)
             else:
                 inmain(idc.warning,
-                       f"The maximum size for uploading a binary should not exceed {state.config.LIMIT}MB")
+                       f"Please be advised that the largest size for processing a binary file is"
+                       f" {state.config.LIMIT} MB.")
 
         symbols: dict = {"base_addr": get_imagebase()}
 

@@ -21,7 +21,7 @@ class RevEngConfiguration(object):
 
     auto_start = True   # Enable RevEng.AI plugin automatically
 
-    LIMIT = 100  # File size limit to upload 100MB
+    LIMIT = 10  # File size limit to upload 10MB
 
     def __init__(self):
         makedirs(RevEngConfiguration._dir, mode=0o755, exist_ok=True)
