@@ -11,7 +11,7 @@ IDA Pro Plugin for [RevEng.AI](https://reveng.ai/).
 - Configuration and persistence of plugin configuration (API key, host, model selection and analysis)
 
 # Install
-Copy `revengai` dir and `revengai.py` to the `plugins` dir inside IDA Pro installation dir.
+Install the required Python libraries: `pip install -r requirements.txt`. Copy `revengai` dir and `revengai.py` to the `plugins` dir inside IDA Pro installation dir.
 
 ## Setup & Configuration
 Open IDA and if the plugin has loaded successfully it should be visible under `RevEng.AI Toolkit` menu.
