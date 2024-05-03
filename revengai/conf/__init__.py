@@ -45,6 +45,7 @@ class RevEngConfiguration(object):
 
     def save(self) -> None:
         if self.is_valid():
+            re_conf["host"] = self.config["host"]
             re_conf["apikey"] = self.config["apikey"]
 
         with open(join(self._dir, self._filename), "w") as fd:
@@ -56,6 +57,7 @@ class RevEngConfiguration(object):
                 self._config = loads(fd.read())
 
             if self.is_valid():
+                re_conf["host"] = self.config["host"]
                 re_conf["apikey"] = self.config["apikey"]
         else:
             self.config["host"] = re_conf["host"]
