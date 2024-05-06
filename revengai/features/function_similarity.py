@@ -11,9 +11,9 @@ from ida_nalt import get_imagebase
 
 from requests import Response, HTTPError
 
-from reait.api import re_binary_id, RE_embeddings, RE_nearest_symbols
+from reait.api import re_binary_id, RE_nearest_symbols_batch
 
-from revengai.api import RE_quick_search
+from revengai.api import RE_quick_search, RE_analyze_functions
 from revengai.features import BaseDialog
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
@@ -71,42 +71,40 @@ class FunctionSimilarityDialog(BaseDialog):
             inmain(self.ui.renameButton.setEnabled, False)
             inmain(self.ui.progressBar.setProperty, "value", 25)
 
-            res: Response = RE_embeddings(self.path, self.state.config.get("binary_id", 0))
+            res: Response = RE_analyze_functions(self.path, self.state.config.get("binary_id", 0))
 
-            if res.status_code > 299:
-                logger.error("Function Similarity: %s", res.json().get("error"))
-                inmain(Dialog.showError, "Auto Analysis", f"Auto Analysis Error: {res.json().get('error')}")
+            fe = next((function for function in res.json() if function["function_vaddr"] == self.v_addr), None)
+
+            if fe is None:
+                inmain(idc.warning, "No similar functions found.")
+                logger.error("No similar functions found for: %s",
+                             inmain(idc.get_func_name, self.v_addr))
             else:
-                fe = next((item for item in res.json() if item["vaddr"] == self.v_addr), None)
+                inmain(self.ui.progressBar.setProperty, "value", 50)
 
-                if fe is None:
+                res = RE_nearest_symbols_batch(function_ids=[fe["function_id"],],
+                                               nns=int(inmain(self.ui.lineEdit.text)),
+                                               ignore_hashes=[re_binary_id(self.path),],
+                                               model_name=self.state.config.get("model"),
+                                               distance=distance, collections=collections,
+                                               debug_enabled=inmain(self.ui.checkBox.isChecked))
+
+                inmain(self.ui.progressBar.setProperty, "value", 75)
+
+                data = []
+                for item in res.json():
+                    data.append([item["nearest_neighbor_function_name"],
+                                 item["confidence"],
+                                 item["nearest_neighbor_binary_name"]])
+
+                inmain(model.fill_table, data)
+                inmain(self.ui.progressBar.setProperty, "value", 100)
+                inmain(self.ui.renameButton.setEnabled, len(data) > 0)
+
+                if len(data) == 0:
                     inmain(idc.warning, "No similar functions found.")
                     logger.error("No similar functions found for: %s",
                                  inmain(idc.get_func_name, inmain(idc.here)))
-                else:
-                    inmain(self.ui.progressBar.setProperty, "value", 50)
-
-                    res = RE_nearest_symbols(embedding=fe["embedding"],
-                                             nns=int(inmain(self.ui.lineEdit.text)),
-                                             ignore_hashes=[re_binary_id(self.path)],
-                                             model_name=self.state.config.get("model"),
-                                             distance=distance, collections=collections,
-                                             debug_enabled=inmain(self.ui.checkBox.isChecked))
-
-                    inmain(self.ui.progressBar.setProperty, "value", 75)
-
-                    data = []
-                    for item in res.json():
-                        data.append([item["name"], item["distance"], item["binary_name"]])
-
-                    inmain(model.fill_table, data)
-                    inmain(self.ui.progressBar.setProperty, "value", 100)
-                    inmain(self.ui.renameButton.setEnabled, len(data) > 0)
-
-                    if len(data) == 0:
-                        inmain(idc.warning, "No similar functions found.")
-                        logger.error("No similar functions found for: %s",
-                                     inmain(idc.get_func_name, inmain(idc.here)))
         except HTTPError as e:
             inmain(Dialog.showError, "Auto Analysis", e.response.json()["error"])
         finally:
