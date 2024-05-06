@@ -132,7 +132,7 @@ class AutoAnalysisDialog(BaseDialog):
                 if fe:
                     function_ids.append(fe["function_id"])
 
-            pos = 1 + len(self._functions)
+            pos = 1 + nb_func
             res = RE_nearest_symbols_batch(function_ids=function_ids,
                                            distance=confidence, collections=collections,
                                            nns=1, ignore_hashes=self._ignore_hashes,
@@ -160,8 +160,9 @@ class AutoAnalysisDialog(BaseDialog):
                     self._analysis[Analysis.SKIPPED.value] += 1
                     resultsData.append((function["name"], "N/A", None, "No Function Symbol Found"))
                 else:
+                    self._analysis[Analysis.SUCCESSFUL.value] += 1
+                    
                     sym["func_name"] = function["name"]
-                    sym["func_addr"] = function["start_addr"]
 
                     logger.info("Found symbol '%s' with a confidence of %f",
                                 sym["nearest_neighbor_function_name"], sym["confidence"])
@@ -176,8 +177,6 @@ class AutoAnalysisDialog(BaseDialog):
                                         f"{sym['nearest_neighbor_function_name']} "
                                         f"({sym['nearest_neighbor_binary_name']})", item,
                                         f"Can be renamed with confidence of '{sym['confidence']}"))
-
-                    self._analysis[Analysis.SUCCESSFUL.value] += 1
 
             inmain(inmain(self.ui.resultsTable.model).fill_table, resultsData)
             inmain(self.ui.resultsTable.resizeColumnsToContents)
