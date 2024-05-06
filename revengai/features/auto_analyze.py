@@ -71,13 +71,13 @@ class AutoAnalysisDialog(BaseDialog):
         self._functions = []
         self._analysis = [0] * len(Analysis)
 
-        base_addr = get_imagebase()
+        self._base_addr = get_imagebase()
 
         for func_ea in Functions():
             if IDAUtils.is_in_valid_segment(idc.get_func_attr(func_ea, idc.FUNCATTR_START)):
                 self._functions.append({"name": idc.get_func_name(func_ea),
-                                        "start_addr": (idc.get_func_attr(func_ea, idc.FUNCATTR_START) - base_addr),
-                                        "end_addr": (idc.get_func_attr(func_ea, idc.FUNCATTR_END) - base_addr)})
+                                        "start_addr": (idc.get_func_attr(func_ea, idc.FUNCATTR_START) - self._base_addr),
+                                        "end_addr": (idc.get_func_attr(func_ea, idc.FUNCATTR_END) - self._base_addr)})
 
         self.ui.progressBar.setProperty("maximum", 2 + (len(self._functions) << 1))
 
