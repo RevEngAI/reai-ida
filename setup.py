@@ -1,16 +1,20 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from setuptools import find_packages, setup
+from revengai import __version__
 
-with open("requirements.txt", "r") as f:
-    required = f.read().splitlines()
 
-with open("README.md", "r", encoding="utf-8") as f:
-    long_description = f.read()
+with open("requirements.txt") as fd:
+    required = fd.read().splitlines()
+
+with open("README.md", encoding="utf-8") as fd:
+    long_description = fd.read()
+
 
 setup(
-    name='reai-ida',
-    version='0.1',
-    python_requires='>=3.9',
+    name="reai-ida",
+    version=__version__,
+    python_requires=">=3.9",
     author="Yannick Tournier",
     author_email="yannick@reveng.ai",
     packages=find_packages(),

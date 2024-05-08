@@ -21,7 +21,7 @@ class RevEngConfiguration(object):
 
     auto_start = True   # Enable RevEng.AI plugin automatically
 
-    LIMIT = 100  # File size limit to upload 100MB
+    LIMIT = 10  # File size limit to upload 10MB
 
     def __init__(self):
         makedirs(RevEngConfiguration._dir, mode=0o755, exist_ok=True)
@@ -45,6 +45,7 @@ class RevEngConfiguration(object):
 
     def save(self) -> None:
         if self.is_valid():
+            re_conf["host"] = self.config["host"]
             re_conf["apikey"] = self.config["apikey"]
 
         with open(join(self._dir, self._filename), "w") as fd:
@@ -56,6 +57,7 @@ class RevEngConfiguration(object):
                 self._config = loads(fd.read())
 
             if self.is_valid():
+                re_conf["host"] = self.config["host"]
                 re_conf["apikey"] = self.config["apikey"]
         else:
             self.config["host"] = re_conf["host"]
@@ -65,7 +67,7 @@ class RevEngConfiguration(object):
         return self._config
 
     def is_valid(self) -> bool:
-        return all(self.get(name) is not None for name in ["apikey", "host", "model"])
+        return all(self.get(name) is not None for name in ("apikey", "host", "model",))
 
     @property
     def database(self) -> RevEngDatabase:

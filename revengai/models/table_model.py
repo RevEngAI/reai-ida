@@ -22,12 +22,16 @@ class RevEngTableModel(QAbstractTableModel):
             return self._data[index.row()][index.column()]
         return None
 
+    @property
+    def get_data(self) -> list:
+        return self._data
+
     def headerData(self, col, orientation, role=None):
         if orientation == Qt.Horizontal and role == Qt.DisplayRole:
             return self._header[col]
         return None
 
     def fill_table(self, data: list):
-        self.beginResetModel()
+        self.layoutAboutToBeChanged.emit()
         self._data = data
-        self.endResetModel()
+        self.layoutChanged.emit()

@@ -121,6 +121,10 @@ class UserAvailableModelsPage(BasePage):
     def _get_layout(self) -> QLayout:
         self.cbModel: QComboBox = QComboBox(self)
 
+        self.cbModel.setEditable(True)
+        self.cbModel.lineEdit().setReadOnly(True)
+        self.cbModel.lineEdit().setPlaceholderText("Select…")
+
         layout = QFormLayout(self)
 
         layout.addWidget(QLabel("<span style=\"font-weight:bold\">Set AI Model</span>"))
@@ -132,6 +136,7 @@ class UserAvailableModelsPage(BasePage):
         self.cbModel.clear()
 
         self.cbModel.addItems(self.state.config.get("models"))
+
         self.cbModel.setCurrentIndex(-1)
 
     def validatePage(self):
