@@ -11,6 +11,7 @@ IDA Pro Plugin for [RevEng.AI](https://reveng.ai/).
 - Configuration and persistence of plugin configuration (API key, host, model selection and analysis)
 
 # Install
+
 Install the required Python libraries: `pip install -r requirements.txt`. Copy `revengai` dir and `reveng.py` to the `plugins` dir inside IDA Pro installation dir (or `~/.idapro/plugins` on MacOS and Linux).
 
 ### Details
@@ -20,7 +21,6 @@ Check the version of Python your IDA Pro installation is using by opening IDA an
 ### Development
 
 Ensure the latest version of the [reait](https://github.com/RevEngAI/reait) package is installed with the version of Python IDA is using.
-
 
 ## Setup & Configuration
 Open IDA and if the plugin has loaded successfully it should be visible under `RevEng.AI Toolkit` menu.
