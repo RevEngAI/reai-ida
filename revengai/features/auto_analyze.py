@@ -109,7 +109,7 @@ class AutoAnalysisDialog(BaseDialog):
 
             res: Response = RE_analyze_functions(self.path, self.state.config.get("binary_id", 0))
 
-            functions = res.json()
+            functions = res.json()["functions"]
 
             collections = inmain(self._selected_collections)
             confidence = 1 - (int(inmain(self.ui.confidenceSlider.property, "value")) /

@@ -73,7 +73,7 @@ class FunctionSimilarityDialog(BaseDialog):
 
             res: Response = RE_analyze_functions(self.path, self.state.config.get("binary_id", 0))
 
-            fe = next((function for function in res.json() if function["function_vaddr"] == self.v_addr), None)
+            fe = next((function for function in res.json()["functions"] if function["function_vaddr"] == self.v_addr), None)
 
             if fe is None:
                 inmain(idc.warning, "No similar functions found.")

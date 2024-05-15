@@ -44,7 +44,7 @@ class BaseDialog(QDialog):
         try:
             res: Response = RE_analyze_functions(self.path, self.state.config.get("binary_id", 0))
 
-            for function in res.json():
+            for function in res.json()["functions"]:
                 self.analyzed_functions[function["function_vaddr"]] = function["function_id"]
         except HTTPError as e:
             if "error" in e.response.json():

@@ -281,7 +281,7 @@ def function_signature(state: RevEngState, func_addr: int = 0) -> None:
 
                     res: Response = RE_analyze_functions(fpath, state.config.get("binary_id", 0))
 
-                    for function in res.json():
+                    for function in res.json()["functions"]:
                         if function["function_vaddr"] == start_addr:
                             res = RE_functions_dump([function["function_id"]])
 
@@ -387,7 +387,7 @@ def sync_functions_name(state: RevEngState) -> None:
             try:
                 res: Response = RE_analyze_functions(fpath, state.config.get("binary_id", 0))
 
-                for function in res.json():
+                for function in res.json()["functions"]:
                     fe = next((func for func in functions if function["function_vaddr"] == func["start_addr"]), None)
 
                     if fe and fe["name"] != function["function_name"]:
