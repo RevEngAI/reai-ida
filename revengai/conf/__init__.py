@@ -43,6 +43,9 @@ class RevEngConfiguration(object):
         else:
             self.config[name] = value
 
+            if name in ("apikey", "host",):
+                re_conf[name] = value
+
     def save(self) -> None:
         if self.is_valid():
             re_conf["host"] = self.config["host"]
