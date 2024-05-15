@@ -43,7 +43,7 @@ class RevEngConfiguration(object):
         else:
             self.config[name] = value
 
-            if name in ("apikey", "host",):
+            if name in ("host", "apikey",):
                 re_conf[name] = value
 
     def save(self) -> None:
@@ -60,6 +60,8 @@ class RevEngConfiguration(object):
                 self._config = loads(fd.read())
 
             if self.is_valid():
+                self.init_current_analysis()
+
                 re_conf["host"] = self.config["host"]
                 re_conf["apikey"] = self.config["apikey"]
         else:

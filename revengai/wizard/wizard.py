@@ -85,8 +85,12 @@ class UserCredentialsPage(BasePage):
 
                 res: Response = RE_models()
 
-                self.state.config.set("models", res.json()["models"])
-                return True
+                if res.json()["success"]:
+                    self.state.config.set("models", [model["model_name"] for model in res.json()["models"]])
+                    return True
+
+                self.state.config.set("host")
+                self.state.config.set("apikey")
             except HTTPError as e:
                 logger.error("Unable to retrieve all models used")
                 Dialog.showError("Setup Wizard", f"{e.response.json()['error']}")

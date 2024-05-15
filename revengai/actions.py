@@ -9,8 +9,8 @@ from ida_nalt import get_imagebase
 
 from os import stat
 from subprocess import run
-from os.path import basename, isfile
 from requests import HTTPError, Response
+from os.path import basename, getsize, isfile
 
 from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, re_binary_id, RE_functions_rename
 
@@ -44,24 +44,29 @@ def upload_binary(state: RevEngState) -> None:
                 try:
                     inmain(idaapi.show_wait_box, "HIDECANCEL\nUploading binary for analysis…")
 
-                    RE_upload(path)
+                    res = RE_upload(path)
 
-                    logger.info("Upload succeed for: %s", basename(path))
+                    upload = res.json()
 
-                    sha_256_hash = re_binary_id(path)
+                    logger.info("Upload ended for: %s. %s", basename(path), upload["message"])
 
-                    inmain(state.config.database.add_upload, path, sha_256_hash)
+                    if upload["success"]:
+                        sha_256_hash = upload["sha_256_hash"]
 
-                    res = RE_analyse(fpath=path, model_name=state.config.get("model"), symbols=syms, duplicate=True)
+                        inmain(state.config.database.add_upload, path, sha_256_hash)
 
-                    analysis = res.json()
+                        res: Response = RE_analyse(fpath=path, binary_size=getsize(path),
+                                                   model_name=state.config.get("model"), symbols=syms, duplicate=True)
 
-                    state.config.set("binary_id", analysis["binary_id"])
+                        analysis = res.json()
 
-                    inmain(state.config.database.add_analysis,
-                           sha_256_hash, analysis["binary_id"], analysis["success"])
+                        state.config.set("binary_id", analysis["binary_id"])
 
-                    logger.info("Binary analysis succeed for: %s", analysis["binary_id"])
+                        inmain(state.config.database.add_analysis,
+                               sha_256_hash, analysis["binary_id"], analysis["success"])
+
+                        logger.info("Binary analysis %s for: %s",
+                                    "succeed" if analysis["success"] else "failed", basename(path))
                 except HTTPError as e:
                     logger.error("Error analyzing %s. Reason: %s", basename(path), e)
                     inmain(idaapi.hide_wait_box)
@@ -236,13 +241,12 @@ def download_logs(state: RevEngState) -> None:
             try:
                 res = RE_logs(fpath, console=False, binary_id=state.config.get("binary_id", 0))
 
-                if "text" in res.headers.get("Content-Type") and len(res.text) > 0 or \
-                        "json" in res.headers.get("Content-Type") and "error" not in res.json():
+                if res.json()["success"]:
                     filename = inmain(ida_kernwin.ask_file, 1, "*.log", "Output Filename:")
 
                     if filename:
                         with open(filename, "w") as fd:
-                            fd.write(res.text)
+                            fd.write(res.json()["logs"])
                     else:
                         logger.warning("No output directory provided to export logs to")
                         inmain(idc.warning, "No output directory provided to export logs to.")
@@ -322,8 +326,9 @@ def analysis_history(state: RevEngState) -> None:
                 res = RE_search(fpath)
 
                 binaries = []
-                for binary in res.json()["binaries"]:
-                    binaries.append([binary["binary_name"], str(binary["binary_id"]),
+                results = list(filter(lambda binary: binary is not None, res.json()["query_results"]))
+                for binary in results:
+                    binaries.append([binary.get("binary_name"), str(binary["binary_id"]),
                                      binary["status"], binary["creation"]])
 
                     inmain(state.config.database.add_analysis,
@@ -354,10 +359,10 @@ def load_recent_analyses(state: RevEngState) -> None:
             try:
                 res: Response = RE_recent_analysis()
 
-                for analysis in res.json()["analyses"]:
+                for analysis in res.json()["analysis"]:
                     inmain(state.config.database.add_upload, analysis["binary_name"], analysis["sha_256_hash"])
                     inmain(state.config.database.add_analysis, analysis["sha_256_hash"],
-                           analysis["binary_id"], analysis["status"], analysis["creation"])
+                           analysis["binary_id"], analysis["status"], analysis["creation"], analysis["model_name"])
 
                 if fpath and isfile(fpath):
                     state.config.set("binary_id",

@@ -53,7 +53,8 @@ class RevEngDatabase(object):
                 cursor.execute("""
                 CREATE TABLE IF NOT EXISTS analysis(
                 id INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE,
-                sha_256_hash TEXT NOT NULL, binary_id INTEGER NOT NULL UNIQUE, status TEXT, submitted TEXT);
+                sha_256_hash TEXT NOT NULL, binary_id INTEGER NOT NULL UNIQUE,
+                status TEXT, creation TEXT, model_name TEXT);
                 """)
         except Error as e:
             logger.error("Error creating tables to local database. %s", e)
@@ -101,11 +102,11 @@ class RevEngDatabase(object):
         except Error as e:
             logger.error("Error getting last analysis for hash: %s. %s", sha_256_hash, e)
 
-    def add_analysis(self, sha_256_hash: str, bid: int, status: str = "", submitted: str = "") -> None:
+    def add_analysis(self, sha_256_hash: str, bid: int, status: str = "", creation: str = "", model_name: str = "") -> None:
         try:
             with closing(self.conn.cursor()) as cursor:
-                cursor.execute("INSERT OR REPLACE INTO analysis(sha_256_hash, binary_id, status, submitted) VALUES(?, ?, ?, ?)",
-                               (sha_256_hash, bid, status, submitted,))
+                cursor.execute("INSERT OR REPLACE INTO analysis(sha_256_hash, binary_id, status, creation, model_name) VALUES(?, ?, ?, ?, ?)",
+                               (sha_256_hash, bid, status, creation, model_name,))
         except Error as e:
             logger.error("Error adding analysis for bid: %d, status: %s, hash: %s. %s",
                          bid, status, sha_256_hash, e)
