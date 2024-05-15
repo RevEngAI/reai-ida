@@ -348,6 +348,8 @@ def analysis_history(state: RevEngState) -> None:
 
 def load_recent_analyses(state: RevEngState) -> None:
     if state.config.is_valid():
+        state.config.init_current_analysis()
+
         def bg_task(fpath: str) -> None:
             try:
                 res: Response = RE_recent_analysis()
@@ -374,6 +376,8 @@ def sync_functions_name(state: RevEngState) -> None:
     fpath = idc.get_input_file_path()
 
     if state.config.is_valid() and fpath and isfile(fpath):
+        state.config.init_current_analysis()
+
         def bg_task() -> None:
             try:
                 res: Response = RE_analyze_functions(fpath, state.config.get("binary_id", 0))

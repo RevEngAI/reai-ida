@@ -72,16 +72,19 @@ class UserCredentialsPage(BasePage):
         super().__init__(state, parent)
 
     def initializePage(self):
+        self.state.config.restore()
+
         self.api_key.setText(self.state.config.get("apikey"))
         self.server_url.setText(self.state.config.get("host"))
 
     def validatePage(self):
         if not any(c.text() == "" for c in [self.api_key, self.server_url]):
             try:
-                res: Response = RE_models()
-
                 self.state.config.set("apikey", self.api_key.text())
                 self.state.config.set("host", self.server_url.text())
+
+                res: Response = RE_models()
+
                 self.state.config.set("models", res.json()["models"])
                 return True
             except HTTPError as e:
