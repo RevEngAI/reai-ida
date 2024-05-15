@@ -130,4 +130,4 @@ class IDAUtils(object):
     def is_in_valid_segment(func_ea: int) -> bool:
         segments = [ida_segment.get_segm_by_name(name) for name in (".init", ".text", ".fini",)]
 
-        return any(segment.start_ea <= func_ea <= segment.end_ea for segment in segments) if segments else False
+        return any(segment and segment.start_ea <= func_ea <= segment.end_ea for segment in segments) if segments else False
