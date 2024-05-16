@@ -67,11 +67,11 @@ class RevEngConfiguration(object):
                 re_conf["apikey"] = self.config["apikey"]
 
                 try:
-                    RE_health()
-                    res: Response = RE_settings()
+                    if RE_health():
+                        res: Response = RE_settings()
 
-                    if res.json()["success"]:
-                        self.LIMIT = res.json()["max_file_size"] // (1024 * 1024)
+                        if res.json()["success"]:
+                            self.LIMIT = res.json()["max_file_size"] // (1024 * 1024)
                 except HTTPError:
                     pass
         else:
