@@ -5,9 +5,10 @@ from json import loads, dumps
 from os.path import join, exists
 
 import idc
+from requests import HTTPError, Response
 from ida_diskio import get_user_idadir
 
-from reait.api import re_conf, re_binary_id
+from reait.api import re_conf, re_binary_id, RE_health, RE_settings
 
 from revengai.conf.database import RevEngDatabase
 from revengai.log.log import configure_loggers
@@ -64,6 +65,15 @@ class RevEngConfiguration(object):
 
                 re_conf["host"] = self.config["host"]
                 re_conf["apikey"] = self.config["apikey"]
+
+                try:
+                    RE_health()
+                    res: Response = RE_settings()
+
+                    if res.json()["success"]:
+                        self.LIMIT = res.json()["max_file_size"] // (1024 * 1024)
+                except HTTPError:
+                    pass
         else:
             self.config["host"] = re_conf["host"]
 
