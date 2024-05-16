@@ -4,6 +4,7 @@ import abc
 import logging
 from sys import platform
 
+import idc
 from PyQt5.QtCore import QRect
 from requests import HTTPError, Response
 
@@ -88,12 +89,16 @@ class UserCredentialsPage(BasePage):
                 if res.json()["success"]:
                     self.state.config.set("models", [model["model_name"] for model in res.json()["models"]])
                     return True
+                else:
+                    idc.warning("Unable to retrieve any of the available models.")
 
+                # Reset host and API key if an error occurs
                 self.state.config.set("host")
                 self.state.config.set("apikey")
             except HTTPError as e:
-                logger.error("Unable to retrieve all models used")
-                Dialog.showError("Setup Wizard", f"{e.response.json()['error']}")
+                Dialog.showError("Setup Wizard", e.response.json()["error"])
+                logger.error("Unable to retrieve any of the available models. %s",
+                             e.response.json()["error"])
         return False
 
     def _get_title(self) -> str:
