@@ -7,15 +7,15 @@ from requests import get, post, Response
 from reait.api import reveng_req, re_binary_id, re_bid_search, ReaitError
 
 
-def RE_collections_count(scope: str = "PUBLIC") -> Response:
-    res: Response = reveng_req(post, "collections/count", json_data={"scope": scope})
+def RE_collections_count(scope: str = "ALL") -> Response:
+    res: Response = reveng_req(post, "v1/collections/count", json_data={"scope": scope})
 
     res.raise_for_status()
     return res
 
 
-def RE_collections(scope: str = "PUBLIC", page_size: int = 100000, page_number: int = 1) -> Response:
-    res: Response = reveng_req(post, "collections",
+def RE_collections(scope: str = "ALL", page_size: int = 100000, page_number: int = 1) -> Response:
+    res: Response = reveng_req(post, "v1/collections",
                                json_data={"scope": scope,
                                           "page_size": page_size,
                                           "page_number": page_number})
@@ -73,7 +73,7 @@ def RE_search(fpath: str) -> Response:
 
 
 def RE_quick_search(model: str) -> Response:
-    res: Response = reveng_req(get, f"collections/quick/search?model_name={model}")
+    res: Response = reveng_req(get, f"v1/collections/quick/search", params={"model_name": model})
 
     res.raise_for_status()
     return res

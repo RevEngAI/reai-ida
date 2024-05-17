@@ -45,7 +45,7 @@ class FunctionSimilarityDialog(BaseDialog):
         self.ui.renameButton.setEnabled(False)
 
         self.ui.lineEdit.setValidator(QIntValidator(1, 256, self))
-        self.ui.tableView.setModel(RevEngTableModel([], ["Function Name", "From",], self))
+        self.ui.tableView.setModel(RevEngTableModel([], ["Function Name", "Confidence", "From",], self))
 
         self.ui.tableView.customContextMenuRequested.connect(self._table_menu)
 
@@ -53,9 +53,17 @@ class FunctionSimilarityDialog(BaseDialog):
         self.ui.fetchButton.clicked.connect(self._fetch)
         self.ui.renameButton.clicked.connect(self._rename_symbol)
 
+        self._similarities = {}
+
     def showEvent(self, event):
         super(FunctionSimilarityDialog, self).showEvent(event)
+
         inthread(self._quick_search)
+
+    def closeEvent(self, event):
+        super(FunctionSimilarityDialog, self).closeEvent(event)
+
+        self._similarities.clear()
 
     def _fetch(self):
         if self.v_addr > 0:
@@ -64,6 +72,8 @@ class FunctionSimilarityDialog(BaseDialog):
 
     def _load(self, collections, distance):
         try:
+            self._similarities.clear()
+
             model = inmain(self.ui.tableView.model)
 
             inmain(model.fill_table, [])
@@ -71,42 +81,51 @@ class FunctionSimilarityDialog(BaseDialog):
             inmain(self.ui.renameButton.setEnabled, False)
             inmain(self.ui.progressBar.setProperty, "value", 25)
 
-            res: Response = RE_analyze_functions(self.path, self.state.config.get("binary_id", 0))
+            function_id = self.analyzed_functions.get(self.v_addr, None)
 
-            fe = next((function for function in res.json()["functions"] if function["function_vaddr"] == self.v_addr),
-                      None)
+            if function_id is None:
+                res: Response = RE_analyze_functions(self.path, self.state.config.get("binary_id", 0))
 
-            if fe is None:
-                inmain(idc.warning, "No similar functions found.")
-                logger.error("No similar functions found for: %s",
-                             inmain(idc.get_func_name, self.v_addr))
-            else:
-                inmain(self.ui.progressBar.setProperty, "value", 50)
+                fe = next((func for func in res.json()["functions"] if func["function_vaddr"] == self.v_addr), None)
 
-                res = RE_nearest_symbols_batch(function_ids=[fe["function_id"],],
-                                               nns=int(inmain(self.ui.lineEdit.text)),
-                                               ignore_hashes=[re_binary_id(self.path),],
-                                               model_name=self.state.config.get("model"),
-                                               distance=distance, collections=collections,
-                                               debug_enabled=inmain(self.ui.checkBox.isChecked))
-
-                inmain(self.ui.progressBar.setProperty, "value", 75)
-
-                data = []
-                for function_id, functions in res.json()["function_matches"].items():
-                    if function_id == str(fe["function_id"]):
-                        for _, function in functions.items():
-                            data.append([function["function_name"],
-                                         function["binary_name"],])
-
-                inmain(model.fill_table, data)
-                inmain(self.ui.progressBar.setProperty, "value", 100)
-                inmain(self.ui.renameButton.setEnabled, len(data) > 0)
-
-                if len(data) == 0:
+                if fe is None:
                     inmain(idc.warning, "No similar functions found.")
                     logger.error("No similar functions found for: %s",
-                                 inmain(idc.get_func_name, inmain(idc.here)))
+                                 inmain(idc.get_func_name, self.v_addr))
+                    return
+                else:
+                    function_id = fe["function_id"]
+
+            inmain(self.ui.progressBar.setProperty, "value", 50)
+
+            res = RE_nearest_symbols_batch(function_ids=[function_id,],
+                                           nns=int(inmain(self.ui.lineEdit.text)),
+                                           ignore_hashes=[re_binary_id(self.path),],
+                                           model_name=self.state.config.get("model"),
+                                           distance=distance, collections=collections,
+                                           debug_enabled=inmain(self.ui.checkBox.isChecked))
+
+            inmain(self.ui.progressBar.setProperty, "value", 75)
+
+            data = []
+            for function_id, functions in res.json()["function_matches"].items():
+                if function_id == str(function_id):
+                    for func_id, function in functions.items():
+                        self._similarities[f"{function['function_name']}_"
+                                           f"{function['binary_name']}"] = func_id
+                        data.append((function["function_name"],
+                                     str(function["confidence"]),
+                                     function["binary_name"],))
+
+            inmain(model.fill_table, data)
+            inmain(self.ui.tableView.resizeColumnsToContents)
+            inmain(self.ui.progressBar.setProperty, "value", 100)
+            inmain(self.ui.renameButton.setEnabled, len(data) > 0)
+
+            if len(data) == 0:
+                inmain(idc.warning, "No similar functions found.")
+                logger.error("No similar functions found for: %s",
+                             inmain(idc.get_func_name, inmain(idc.here)))
         except HTTPError as e:
             inmain(Dialog.showError, "Auto Analysis", e.response.json()["error"])
         finally:
@@ -136,18 +155,20 @@ class FunctionSimilarityDialog(BaseDialog):
 
             res: Response = RE_quick_search(self.state.config.get("model"))
 
-            names = []
+            collections = []
 
-            for collection in res.json():
-                names.append(collection["collection_name"])
+            for collection in res.json()["collections"]:
+                collections.append(collection)
 
-            if len(names) == 0:
+            if len(collections) == 0:
                 inmain(self.ui.label.setVisible, False)
                 inmain(self.ui.comboBox.setVisible, False)
             else:
-                inmain(self.ui.comboBox.addItems, names)
+                inmain(self.ui.comboBox.addItems, collections)
                 inmain(self.ui.comboBox.setCurrentIndex, -1)
         except HTTPError as e:
+            inmain(self.ui.label.setVisible, False)
+            inmain(self.ui.comboBox.setVisible, False)
             logger.error("Getting collections failed: %s", e)
 
     def _table_menu(self) -> None:
@@ -155,4 +176,17 @@ class FunctionSimilarityDialog(BaseDialog):
             menu = QMenu()
             renameAction = menu.addAction(self.ui.renameButton.text())
             renameAction.triggered.connect(self._rename_symbol)
+
+            func_id = self._similarities.get(f"{self.ui.tableView.selectedIndexes()[0].data()}_"
+                                             f"{self.ui.tableView.selectedIndexes()[2].data()}")
+
+            if func_id:
+                breakdownAction = menu.addAction("View Function Breakdown")
+                breakdownAction.triggered.connect(lambda: self._function_breakdown(func_id))
+
             menu.exec_(QCursor.pos())
+
+    def _function_breakdown(self, func_id: int) -> None:
+        from webbrowser import open_new_tab
+
+        open_new_tab(f"http://dashboard.local/function/{func_id}")

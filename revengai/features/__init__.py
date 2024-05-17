@@ -40,6 +40,11 @@ class BaseDialog(QDialog):
 
         inthread(self._get_analyze_functions)
 
+    def closeEvent(self, event):
+        super(BaseDialog, self).closeEvent(event)
+
+        self.analyzed_functions.clear()
+
     def _get_analyze_functions(self) -> None:
         try:
             res: Response = RE_analyze_functions(self.path, self.state.config.get("binary_id", 0))
