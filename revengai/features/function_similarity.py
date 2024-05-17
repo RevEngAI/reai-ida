@@ -45,7 +45,7 @@ class FunctionSimilarityDialog(BaseDialog):
         self.ui.renameButton.setEnabled(False)
 
         self.ui.lineEdit.setValidator(QIntValidator(1, 256, self))
-        self.ui.tableView.setModel(RevEngTableModel([], ["Function Name", "Confidence", "From",], self))
+        self.ui.tableView.setModel(RevEngTableModel([], ["Function Name", "From",], self))
 
         self.ui.tableView.customContextMenuRequested.connect(self._table_menu)
 
@@ -73,7 +73,8 @@ class FunctionSimilarityDialog(BaseDialog):
 
             res: Response = RE_analyze_functions(self.path, self.state.config.get("binary_id", 0))
 
-            fe = next((function for function in res.json()["functions"] if function["function_vaddr"] == self.v_addr), None)
+            fe = next((function for function in res.json()["functions"] if function["function_vaddr"] == self.v_addr),
+                      None)
 
             if fe is None:
                 inmain(idc.warning, "No similar functions found.")
@@ -92,10 +93,11 @@ class FunctionSimilarityDialog(BaseDialog):
                 inmain(self.ui.progressBar.setProperty, "value", 75)
 
                 data = []
-                for item in res.json():
-                    data.append([item["nearest_neighbor_function_name"],
-                                 item["confidence"],
-                                 item["nearest_neighbor_binary_name"]])
+                for function_id, functions in res.json()["function_matches"].items():
+                    if function_id == str(fe["function_id"]):
+                        for _, function in functions.items():
+                            data.append([function["function_name"],
+                                         function["binary_name"],])
 
                 inmain(model.fill_table, data)
                 inmain(self.ui.progressBar.setProperty, "value", 100)
