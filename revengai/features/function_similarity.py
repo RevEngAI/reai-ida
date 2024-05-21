@@ -75,7 +75,7 @@ class FunctionSimilarityDialog(BaseDialog):
             self._similarities.clear()
 
             model = inmain(self.ui.tableView.model)
-
+            isfile(file) and access(file, R_OK)
             inmain(model.fill_table, [])
             inmain(self.ui.fetchButton.setEnabled, False)
             inmain(self.ui.renameButton.setEnabled, False)
@@ -101,7 +101,6 @@ class FunctionSimilarityDialog(BaseDialog):
             res = RE_nearest_symbols_batch(function_ids=[function_id,],
                                            nns=int(inmain(self.ui.lineEdit.text)),
                                            ignore_hashes=[re_binary_id(self.path),],
-                                           model_name=self.state.config.get("model"),
                                            distance=distance, collections=collections,
                                            debug_enabled=inmain(self.ui.checkBox.isChecked))
 
@@ -155,10 +154,10 @@ class FunctionSimilarityDialog(BaseDialog):
 
             res: Response = RE_quick_search(self.state.config.get("model"))
 
-            collections = []
+            collections = set()
 
             for collection in res.json()["collections"]:
-                collections.append(collection)
+                collections.add(collection["collection_name"])
 
             if len(collections) == 0:
                 inmain(self.ui.label.setVisible, False)
