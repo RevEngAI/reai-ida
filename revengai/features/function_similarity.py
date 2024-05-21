@@ -75,7 +75,7 @@ class FunctionSimilarityDialog(BaseDialog):
             self._similarities.clear()
 
             model = inmain(self.ui.tableView.model)
-            isfile(file) and access(file, R_OK)
+            
             inmain(model.fill_table, [])
             inmain(self.ui.fetchButton.setEnabled, False)
             inmain(self.ui.renameButton.setEnabled, False)
