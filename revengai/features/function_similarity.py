@@ -13,7 +13,7 @@ from requests import Response, HTTPError
 
 from reait.api import re_binary_id, RE_nearest_symbols_batch
 
-from revengai.api import RE_quick_search, RE_analyze_functions
+from revengai.api import RE_quick_search
 from revengai.features import BaseDialog
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
@@ -45,7 +45,8 @@ class FunctionSimilarityDialog(BaseDialog):
         self.ui.renameButton.setEnabled(False)
 
         self.ui.lineEdit.setValidator(QIntValidator(1, 256, self))
-        self.ui.tableView.setModel(RevEngTableModel([], ["Function Name", "Confidence", "From",], self))
+        self.ui.tableView.setModel(RevEngTableModel(data=[], parent=self,
+                                                    header=["Function Name", "Confidence", "From",]))
 
         self.ui.tableView.customContextMenuRequested.connect(self._table_menu)
 
@@ -81,20 +82,16 @@ class FunctionSimilarityDialog(BaseDialog):
             inmain(self.ui.renameButton.setEnabled, False)
             inmain(self.ui.progressBar.setProperty, "value", 25)
 
+            if not self.analyzed_functions or len(self.analyzed_functions) == 0:
+                self._get_analyze_functions()
+
             function_id = self.analyzed_functions.get(self.v_addr, None)
 
             if function_id is None:
-                res: Response = RE_analyze_functions(self.path, self.state.config.get("binary_id", 0))
-
-                fe = next((func for func in res.json()["functions"] if func["function_vaddr"] == self.v_addr), None)
-
-                if fe is None:
-                    inmain(idc.warning, "No similar functions found.")
-                    logger.error("No similar functions found for: %s",
-                                 inmain(idc.get_func_name, self.v_addr))
-                    return
-                else:
-                    function_id = fe["function_id"]
+                inmain(idc.warning, "No similar functions found.")
+                logger.error("No similar functions found for: %s",
+                             inmain(idc.get_func_name, self.v_addr))
+                return
 
             inmain(self.ui.progressBar.setProperty, "value", 50)
 
