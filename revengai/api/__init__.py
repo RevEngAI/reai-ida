@@ -7,23 +7,6 @@ from requests import get, post, Response
 from reait.api import reveng_req, re_binary_id, re_bid_search, ReaitError
 
 
-def RE_collections_count(scope: str = "ALL") -> Response:
-    res: Response = reveng_req(post, "v1/collections/count", json_data={"scope": scope})
-
-    res.raise_for_status()
-    return res
-
-
-def RE_collections(scope: str = "ALL", page_size: int = 100000, page_number: int = 1) -> Response:
-    res: Response = reveng_req(post, "v1/collections",
-                               json_data={"scope": scope,
-                                          "page_size": page_size,
-                                          "page_number": page_number})
-
-    res.raise_for_status()
-    return res
-
-
 def RE_analyze_functions(fpath: str, binary_id: int = 0) -> Response:
     bin_id = re_binary_id(fpath)
     bid = re_bid_search(bin_id) if binary_id == 0 else binary_id
