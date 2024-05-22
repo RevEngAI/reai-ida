@@ -21,7 +21,6 @@ class FunctionSignature(object):
     @param func_name:       Mangled function name
     @param func_args:       Array of type of function arguments
     """
-
     def __init__(self, return_type: str, call_convention: str, func_name: str, func_args: list):
         self.ret = return_type
         self.conv = call_convention
@@ -52,7 +51,7 @@ class IDAUtils(object):
         if IDAUtils.is_in_valid_segment(func_ea):
             func = idaapi.get_func(func_ea)
             if not func:
-                logger.error(f"idaapi.get_func failed at function address: {func_ea:#x}")
+                logger.error("idaapi.get_func failed for function address: 0x%02X", func_ea)
             else:
                 idc.set_func_cmt(func.start_ea, comment, False)
 
@@ -61,31 +60,31 @@ class IDAUtils(object):
         if idaapi.init_hexrays_plugin() and IDAUtils.is_in_valid_segment(func_ea):
             func = idaapi.get_func(func_ea)
             if not func:
-                logger.error(f"idaapi.get_func failed at function address: {func_ea:#x}")
+                logger.error("idaapi.get_func failed at function address: 0x%02X", func_ea)
             else:
                 cfunc = idaapi.decompile(func.start_ea, flags=ida_hexrays.DECOMP_NO_WAIT)
                 if not cfunc:
-                    logger.error(f"idaapi.decompile failed at function address: {func_ea:#x}")
+                    logger.error("idaapi.decompile failed at function address: 0x%02X", func_ea)
                 else:
                     lines = []
                     for sline in cfunc.get_pseudocode():
                         lines.append(idaapi.tag_remove(sline.line))
                     return "\n".join(lines)
-        return ''
+        return ""
 
     @staticmethod
     def disasm_func(func_ea: int) -> str:
         if IDAUtils.is_in_valid_segment(func_ea):
             func = idaapi.get_func(func_ea)
             if not func:
-                logger.error(f"idaapi.get_func failed at function address: {func_ea:#x}")
+                logger.error("idaapi.get_func failed at function address: 0x%02X", func_ea)
             else:
                 asm = []
                 for ea in idautils.FuncItems(func_ea):
                     inst = idaapi.generate_disasm_line(ea)
                     asm.append(idaapi.tag_remove(inst))
                 return "\n".join(asm)
-        return ''
+        return ""
 
     @staticmethod
     def create_find_struct(name: str) -> any:
@@ -111,19 +110,19 @@ class IDAUtils(object):
         signature = idc.get_type(idc.get_func_attr(func_ea, idc.FUNCATTR_START))
 
         if not signature:
-            logger.error(f"idc.get_type failed at function address: {func_ea:#x}")
+            logger.error("idc.get_type failed at function address: 0x%02X", func_ea)
             return None
 
         parsed_sig = match(func_sig_pattern, signature)
 
         if not parsed_sig:
-            logger.error(f"Failed to run re.match for sig: {signature}")
+            logger.error("Failed to run re.match for sig: %s", signature)
             return None
 
         return FunctionSignature(parsed_sig.group(1),  # return type
                                  parsed_sig.group(2),  # calling convention
                                  idc.get_func_name(func_ea),
-                                 parsed_sig.group(3).split(', ')  # arguments
+                                 parsed_sig.group(3).split(", ")  # arguments
                                  )
 
     @staticmethod
