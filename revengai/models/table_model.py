@@ -1,6 +1,16 @@
 # -*- coding: utf-8 -*-
+from typing import Optional
 
 from PyQt5.QtCore import QAbstractTableModel, Qt
+from PyQt5.QtGui import QIcon
+
+from os.path import dirname, join
+
+
+class TableItem(object):
+    def __init__(self, text: str, icon_name: str = None):
+        self.text: str = text
+        self.icon: Optional[QIcon] = QIcon(join(dirname(__file__), icon_name)) if icon_name else None
 
 
 class RevEngTableModel(QAbstractTableModel):
@@ -18,8 +28,15 @@ class RevEngTableModel(QAbstractTableModel):
         return 0
 
     def data(self, index, role=None):
-        if index.isValid() and role == Qt.DisplayRole:
-            return self._data[index.row()][index.column()]
+        if index.isValid():
+            item = self._data[index.row()][index.column()]
+            if isinstance(item, TableItem):
+                if role == Qt.DecorationRole:
+                    return item.icon
+                elif role == Qt.DisplayRole:
+                    return item.text
+            elif role == Qt.DisplayRole:
+                return item
         return None
 
     @property
