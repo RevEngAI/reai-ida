@@ -7,6 +7,8 @@ from PyQt5.QtCore import QRect
 from PyQt5.QtWidgets import QDialog, QDesktopWidget
 from reait.api import RE_functions_rename
 
+from ida_nalt import get_imagebase
+
 from requests import HTTPError, Response
 
 from revengai.api import RE_analyze_functions
@@ -26,6 +28,8 @@ class BaseDialog(QDialog):
         self.path = fpath
         self.state = state
         self.analyzed_functions = {}
+
+        self.base_addr = get_imagebase()
 
         state.config.init_current_analysis()
 
@@ -74,3 +78,8 @@ class BaseDialog(QDialog):
                                  func_id, new_func_name, e.response.reason)
         else:
             logger.error('Not found functionId at address: 0x%X.', func_addr)
+
+    def _function_breakdown(self, func_id: int) -> None:
+        from webbrowser import open_new_tab
+
+        open_new_tab(f"http://dashboard.local/function/{func_id}")

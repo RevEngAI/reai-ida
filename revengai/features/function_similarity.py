@@ -7,7 +7,6 @@ from idaapi import ASKBTN_YES
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIntValidator, QCursor
-from ida_nalt import get_imagebase
 
 from requests import Response, HTTPError
 
@@ -33,7 +32,7 @@ class FunctionSimilarityDialog(BaseDialog):
         start_addr = idc.get_func_attr(idc.here(), idc.FUNCATTR_START)
 
         if start_addr is not idc.BADADDR:
-            self.v_addr = start_addr - get_imagebase()
+            self.v_addr = start_addr - self.base_addr
         else:
             self.v_addr = 0
             logger.error("Pointer location not in valid function")
@@ -134,7 +133,7 @@ class FunctionSimilarityDialog(BaseDialog):
         if len(rows) > 0:
             new_func_name = self.ui.tableView.model().data(rows[0], Qt.DisplayRole)
 
-            if not IDAUtils.set_name(self.v_addr, new_func_name):
+            if not IDAUtils.set_name(self.v_addr + self.base_addr, new_func_name):
                 Dialog.showError("Rename Function Error", "Symbol already exists.")
             else:
                 inthread(self._set_function_renamed, self.v_addr, new_func_name)
@@ -181,8 +180,3 @@ class FunctionSimilarityDialog(BaseDialog):
                 breakdownAction.triggered.connect(lambda: self._function_breakdown(func_id))
 
             menu.exec_(QCursor.pos())
-
-    def _function_breakdown(self, func_id: int) -> None:
-        from webbrowser import open_new_tab
-
-        open_new_tab(f"http://dashboard.local/function/{func_id}")
