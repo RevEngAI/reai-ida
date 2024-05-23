@@ -102,8 +102,14 @@ class IDAUtils(object):
         return idc.get_func_name(func_ea)
 
     @staticmethod
-    def demangle(mangled_name: str) -> str:
-        return idc.demangle_name(mangled_name, idc.get_inf_attr(idc.INF_LONG_DEMNAMES))
+    def get_demangled_func_name(func_ea: int) -> str:
+        return IDAUtils.demangle(IDAUtils.get_func_name(func_ea)).split("(")[0]
+
+    @staticmethod
+    def demangle(mangled_name: str, attr: int = idc.INF_SHORT_DN) -> str:
+        demangled_name = idc.demangle_name(mangled_name, idc.get_inf_attr(attr))
+
+        return demangled_name if demangled_name else mangled_name
 
     @staticmethod
     def get_function_signature(func_ea: int) -> Optional[FunctionSignature]:
@@ -121,7 +127,7 @@ class IDAUtils(object):
 
         return FunctionSignature(parsed_sig.group(1),  # return type
                                  parsed_sig.group(2),  # calling convention
-                                 idc.get_func_name(func_ea),
+                                 IDAUtils.get_demangled_func_name(func_ea),
                                  parsed_sig.group(3).split(", ")  # arguments
                                  )
 
