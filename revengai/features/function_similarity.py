@@ -89,7 +89,7 @@ class FunctionSimilarityDialog(BaseDialog):
             if function_id is None:
                 inmain(idc.warning, "No similar functions found.")
                 logger.error("No similar functions found for: %s",
-                             inmain(idc.get_func_name, self.v_addr))
+                             inmain(IDAUtils.get_demangled_func_name, self.v_addr))
                 return
 
             inmain(self.ui.progressBar.setProperty, "value", 50)
@@ -120,7 +120,7 @@ class FunctionSimilarityDialog(BaseDialog):
             if len(data) == 0:
                 inmain(idc.warning, "No similar functions found.")
                 logger.error("No similar functions found for: %s",
-                             inmain(idc.get_func_name, inmain(idc.here)))
+                             inmain(IDAUtils.get_demangled_func_name, inmain(idc.here)))
         except HTTPError as e:
             inmain(Dialog.showError, "Auto Analysis", e.response.json()["error"])
         finally:
