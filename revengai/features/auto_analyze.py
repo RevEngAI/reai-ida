@@ -241,9 +241,9 @@ class AutoAnalysisDialog(BaseDialog):
 
             for collection in res.json()["collections"]:
                 collections.append((TableItem(collection["collection_name"],
-                                              "../resources/lock.png"
+                                              "lock.png"
                                               if collection["collection_scope"] == "PRIVATE"
-                                              else "../resources/unlock.png"),
+                                              else "unlock.png"),
                                     None,))
 
             inmain(inmain(self.ui.collectionsTable.model).fill_table, collections)

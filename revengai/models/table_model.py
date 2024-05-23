@@ -8,9 +8,17 @@ from os.path import dirname, join
 
 
 class TableItem(object):
-    def __init__(self, text: str, icon_name: str = None):
+    def __init__(self, text: str, resource_name: str = None):
         self.text: str = text
-        self.icon: Optional[QIcon] = QIcon(join(dirname(__file__), icon_name)) if icon_name else None
+
+        self.icon: Optional[QIcon] = QIcon(TableItem._plugin_resource(resource_name)) if resource_name else None
+
+    @staticmethod
+    def _plugin_resource(resource_name: str) -> str:
+        """
+        Return the full path for a given plugin resource file.
+        """
+        return join(dirname(__file__), "../resources", resource_name)
 
 
 class RevEngTableModel(QAbstractTableModel):
