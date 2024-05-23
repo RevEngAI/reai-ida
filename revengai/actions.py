@@ -5,12 +5,11 @@ import ida_kernwin
 import idaapi
 import idautils
 import idc
-from ida_nalt import get_imagebase
+from ida_nalt import get_imagebase, retrieve_input_file_size
 
-from os import stat
 from subprocess import run
 from requests import HTTPError, Response
-from os.path import basename, getsize, isfile
+from os.path import basename, isfile
 
 from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, re_binary_id, RE_functions_rename
 
@@ -40,7 +39,9 @@ def upload_binary(state: RevEngState) -> None:
         idc.warning("No input file provided.")
     else:
         def bg_task(path: str, syms: dict) -> None:
-            if state.config.LIMIT > (stat(path).st_size // (1024 * 1024)):
+            file_size = inmain(retrieve_input_file_size)
+
+            if state.config.LIMIT > (file_size // (1024 * 1024)):
                 try:
                     inmain(idaapi.show_wait_box, "HIDECANCEL\nUploading binary for analysis…")
 
@@ -55,7 +56,7 @@ def upload_binary(state: RevEngState) -> None:
 
                         inmain(state.config.database.add_upload, path, sha_256_hash)
 
-                        res: Response = RE_analyse(fpath=path, binary_size=getsize(path),
+                        res: Response = RE_analyse(fpath=path, binary_size=file_size,
                                                    model_name=state.config.get("model"), symbols=syms, duplicate=True)
 
                         analysis = res.json()

@@ -7,11 +7,12 @@ import idc
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QStandardItem, QCursor
 from PyQt5.QtWidgets import QMenu
+from ida_nalt import retrieve_input_file_sha256
 from idautils import Functions
 
 from requests import Response, HTTPError
 
-from reait.api import re_binary_id, RE_nearest_symbols_batch
+from reait.api import RE_nearest_symbols_batch
 
 from revengai.api import RE_quick_search
 from revengai.features import BaseDialog
@@ -37,7 +38,7 @@ class AutoAnalysisDialog(BaseDialog):
     def __init__(self, state: RevEngState, fpath: str):
         BaseDialog.__init__(self, state, fpath)
 
-        self._ignore_hashes = [re_binary_id(self.path)]
+        self._ignore_hashes = [retrieve_input_file_sha256().hex()]
 
         self.ui = Ui_AutoAnalysisPanel()
         self.ui.setupUi(self)
