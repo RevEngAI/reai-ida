@@ -183,7 +183,7 @@ class AutoAnalysisDialog(BaseDialog):
                                             f"Can be renamed with confidence of '{str(symbol['confidence'])}",))
 
             for idx, func in enumerate(self._functions):
-                if not any(data for data in resultsData if data[0] == func["name"]):
+                if not any(data[0] == func["name"] for data in resultsData):
                     self._analysis[Analysis.SKIPPED.value] += 1
                     resultsData.insert(idx, (func["name"], "N/A", None, "No Function Symbol Found"))
 
