@@ -83,7 +83,7 @@ def upload_binary(state: RevEngState) -> None:
         functions = []
 
         for func_ea in idautils.Functions():
-            functions.append({"name": idc.get_func_name(func_ea),
+            functions.append({"name": IDAUtils.get_demangled_func_name(func_ea),
                               "start_addr": idc.get_func_attr(func_ea, idc.FUNCATTR_START),
                               "end_addr": idc.get_func_attr(func_ea, idc.FUNCATTR_END)})
 
@@ -400,9 +400,8 @@ def sync_functions_name(state: RevEngState) -> None:
                 logger.error("Error syncing functions: %s", e)
 
         functions = []
-
         for func_ea in idautils.Functions():
-            functions.append({"name": idc.get_func_name(func_ea),
+            functions.append({"name": IDAUtils.get_demangled_func_name(func_ea),
                               "start_addr": idc.get_func_attr(func_ea, idc.FUNCATTR_START)})
 
         inthread(bg_task)
