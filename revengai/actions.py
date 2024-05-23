@@ -15,7 +15,7 @@ from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, re_binary_id, R
 
 from revengai.api import RE_explain, RE_analyze_functions, RE_functions_dump, RE_search, RE_recent_analysis
 from revengai.misc.qtutils import inthread, inmain
-from revengai.gui.dialog import Dialog, StatusForm
+from revengai.gui.dialog import Dialog, StatusForm, UploadBinaryForm
 from revengai.manager import RevEngState
 from revengai.features.auto_analyze import AutoAnalysisDialog
 from revengai.features.function_similarity import FunctionSimilarityDialog
@@ -38,26 +38,43 @@ def upload_binary(state: RevEngState) -> None:
     elif not fpath or not isfile(fpath):
         idc.warning("No input file provided.")
     else:
-        def bg_task(path: str, syms: dict) -> None:
+        def bg_task(path: str, syms: dict, tags: list = None, scope: str = "PRIVATE", debug_info: str = None) -> None:
             file_size = inmain(retrieve_input_file_size)
 
             if state.config.LIMIT > (file_size // (1024 * 1024)):
                 try:
                     inmain(idaapi.show_wait_box, "HIDECANCEL\nUploading binary for analysis…")
 
-                    res = RE_upload(path)
+                    res: Response = RE_upload(path)
 
                     upload = res.json()
 
                     logger.info("Upload ended for: %s. %s", basename(path), upload["message"])
+
+                    debug_hash = None
+                    if debug_info and isfile(debug_info):
+                        try:
+                            res = RE_upload(debug_info)
+
+                            debug = res.json()
+
+                            if debug["success"]:
+                                debug_hash = debug["sha_256_hash"]
+
+                            logger.info("Upload of debug info ended for: %s. %s",
+                                        basename(debug_info), debug["message"])
+                        except HTTPError as e:
+                            logger.info("Upload of debug info failed for: %s. %s",
+                                        basename(debug_info), e.response.json()["error"])
 
                     if upload["success"]:
                         sha_256_hash = upload["sha_256_hash"]
 
                         inmain(state.config.database.add_upload, path, sha_256_hash)
 
-                        res: Response = RE_analyse(fpath=path, binary_size=file_size,
-                                                   model_name=state.config.get("model"), symbols=syms, duplicate=True)
+                        res = RE_analyse(fpath=path, binary_size=file_size, binary_scope=scope,
+                                         debug_hash=debug_hash, model_name=state.config.get("model"),
+                                         tags=tags, symbols=syms, duplicate=True)
 
                         analysis = res.json()
 
@@ -79,18 +96,23 @@ def upload_binary(state: RevEngState) -> None:
                        f"Please be advised that the largest size for processing a binary file is"
                        f" {state.config.LIMIT} MB.")
 
-        symbols: dict = {"base_addr": get_imagebase()}
+        f = UploadBinaryForm()
 
-        functions = []
+        if f.Show():
+            symbols: dict = {"base_addr": get_imagebase()}
 
-        for func_ea in idautils.Functions():
-            functions.append({"name": IDAUtils.get_demangled_func_name(func_ea),
-                              "start_addr": idc.get_func_attr(func_ea, idc.FUNCATTR_START),
-                              "end_addr": idc.get_func_attr(func_ea, idc.FUNCATTR_END)})
+            functions = []
+            for func_ea in idautils.Functions():
+                functions.append({"name": IDAUtils.get_demangled_func_name(func_ea),
+                                  "start_addr": idc.get_func_attr(func_ea, idc.FUNCATTR_START),
+                                  "end_addr": idc.get_func_attr(func_ea, idc.FUNCATTR_END)})
 
-        symbols["functions"] = functions
+            symbols["functions"] = functions
 
-        inthread(bg_task, fpath, symbols)
+            inthread(bg_task, fpath, symbols, f.iTags.value.split(","),
+                     "PUBLIC" if f.iScope.value else "PRIVATE", f.iDebugFile.value)
+
+        f.Free()
 
 
 def check_analyze(state: RevEngState) -> None:
@@ -337,8 +359,8 @@ def analysis_history(state: RevEngState) -> None:
 
                 if len(binaries):
                     f = inmain(StatusForm, state, binaries)
-                    inmain(f.Compile)
-                    inmain(f.Execute)
+                    inmain(f.Show)
+                    inmain(f.Free)
                 else:
                     logger.info("%s not yet analyzed", basename(fpath))
                     inmain(Dialog.showInfo, "Binary Analysis History",

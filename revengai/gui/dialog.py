@@ -12,7 +12,6 @@ from reait.api import RE_delete
 from revengai.manager import RevEngState
 from revengai.misc.qtutils import inthread
 
-
 logger = logging.getLogger("REAI")
 
 
@@ -40,14 +39,20 @@ class StatusForm(Form):
     class StatusFormChooser(Choose):
         def __init__(self, title: str, state: RevEngState, items: list,
                      flags: int = CH_CAN_DEL | CH_MULTI | CH_MODAL | CH_NO_STATUS_BAR):
-            Choose.__init__(self, title=title, flags=flags, embedded=True,
-                            cols=[["File Name", 20 | CHCOL_PLAIN],
+            Choose.__init__(self, title=title, flags=flags, embedded=True, icon=state.icon_id,
+                            cols=[["Binary Name", 20 | CHCOL_PLAIN],
                                   ["Analysis ID", 6 | CHCOL_DEC],
-                                  ["Status", 5 | CHCOL_PLAIN],
+                                  ["Status", 6 | CHCOL_PLAIN],
                                   ["Submitted Date", 16 | CHCOL_PLAIN]])
             self.state = state
             self.items = items
             self.fpath = get_input_file_path()
+
+        def GetItems(self) -> list:
+            return self.items
+
+        def SetItems(self, items: list) -> None:
+            self.items = [] if items is None else items
 
         def OnGetLine(self, n) -> any:
             return self.items[n]
@@ -70,20 +75,67 @@ class StatusForm(Form):
 
     def __init__(self, state: RevEngState, items: list):
         self.invert = False
+        self.EChooser = StatusForm.StatusFormChooser("", state, items)
+
         Form.__init__(self,
-                      r"""STARTITEM 0
-BUTTON CANCEL NONE
+                      r"""BUTTON CANCEL NONE
 Binary Analysis History
       
-{OnChangeFormCallback}
-<:{History}>
+{FormChangeCb}
+<:{cEChooser}>
 """, {
-                          "OnChangeFormCallback": Form.FormChangeCb(self.OnFormChange),
-                          "History": Form.EmbeddedChooserControl(StatusForm.StatusFormChooser("", state, items))
+                          "FormChangeCb": Form.FormChangeCb(self.OnFormChange),
+                          "cEChooser": Form.EmbeddedChooserControl(self.EChooser)
                       })
 
-    def OnFormChange(self, fid) -> int:
+    def OnFormChange(self, _) -> int:
         """
         Triggered when an event occurs on form
         """
         return 1
+
+    def Show(self) -> int:
+        # Compile the form once
+        if not self.Compiled():
+            self.Compile()
+
+        # Execute the form
+        return self.Execute()
+
+
+class UploadBinaryForm(Form):
+    def __init__(self):
+        self.invert = False
+        Form.__init__(self,
+                      r"""BUTTON YES* Analyse
+Upload Binary for Analysis
+
+{FormChangeCb}
+Choose your options for binary analysis
+
+<#Debugging information for uploaded binary#~D~ebug Info or PDB\::{iDebugFile}>
+<#Add custom tags to your file#~C~ustom Tags\:      :{iTags}>
+
+Privacy:
+    <#You are the only one able to access this file#Private to you:{rOptPrivate}>
+    <#Everyone will be able to search against this file#Public access:{rOptPublic}>{iScope}>
+""",{
+                          "FormChangeCb": Form.FormChangeCb(self.OnFormChange),
+                          "iScope": Form.RadGroupControl(("rOptPrivate", "rOptPublic",)),
+                          "iDebugFile": Form.FileInput(swidth=40, open=True),
+                          "iTags": Form.StringInput(swidth=40, tp=Form.FT_ASCII)
+                      })
+
+    def OnFormChange(self, _) -> int:
+        """
+        Triggered when an event occurs on form
+        """
+        return 1
+
+    def Show(self) -> int:
+        # Compile the form once
+        if not self.Compiled():
+            self.Compile()
+
+        # Execute the form
+        return self.Execute()
