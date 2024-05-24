@@ -114,7 +114,7 @@ class Ui_AutoAnalysisPanel(object):
         self.confidenceSlider = QtWidgets.QSlider(AutoAnalysisPanel)
         self.confidenceSlider.setMaximum(100)
         self.confidenceSlider.setPageStep(5)
-        self.confidenceSlider.setSliderPosition(99)
+        self.confidenceSlider.setSliderPosition(90)
         self.confidenceSlider.setOrientation(QtCore.Qt.Horizontal)
         self.confidenceSlider.setInvertedAppearance(False)
         self.confidenceSlider.setInvertedControls(False)
