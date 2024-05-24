@@ -47,9 +47,7 @@ def RE_explain(pseudo_code: str, language: str = None) -> Response:
 def RE_search(fpath: str) -> Response:
     bin_id = re_binary_id(fpath)
 
-    res: Response = reveng_req(get, "v1/search",
-                               json_data={"sha_256_hash": bin_id,
-                                          "binary_name": basename(fpath)})
+    res: Response = reveng_req(get, "v1/search", json_data={"sha256_hash": bin_id})
 
     res.raise_for_status()
     return res
