@@ -24,13 +24,14 @@ class TableItem(object):
 class RevEngTableModel(QAbstractTableModel):
     def __init__(self, data: list, header: list, parent=None):
         QAbstractTableModel.__init__(self, parent)
+
         self._data: list = data
         self._header: list = header
 
-    def rowCount(self, parent=None):
+    def rowCount(self, parent=None) -> int:
         return len(self._data) if self._data else 0
 
-    def columnCount(self, parent=None):
+    def columnCount(self, parent=None) -> int:
         if self.rowCount(parent) > 0 and len(self._data) > 0:
             return len(self._data[0])
         return 0
@@ -56,7 +57,7 @@ class RevEngTableModel(QAbstractTableModel):
             return self._header[col]
         return None
 
-    def fill_table(self, data: list):
+    def fill_table(self, data: list) -> None:
         self.layoutAboutToBeChanged.emit()
         self._data = data
         self.layoutChanged.emit()
