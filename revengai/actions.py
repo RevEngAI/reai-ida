@@ -10,6 +10,7 @@ from ida_nalt import get_imagebase, retrieve_input_file_size
 from subprocess import run
 from requests import HTTPError, Response
 from os.path import basename, isfile
+from datetime import datetime
 
 from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, re_binary_id, RE_functions_rename
 
@@ -348,8 +349,10 @@ def analysis_history(state: RevEngState) -> None:
             try:
                 res = RE_search(fpath)
 
+                results = res.json()["query_results"]
+                results.sort(key=lambda binary: datetime.fromisoformat(binary["creation"]).timestamp(), reverse=True)
+
                 binaries = []
-                results = list(filter(lambda binary: binary is not None, res.json()["query_results"]))
                 for binary in results:
                     binaries.append([binary.get("binary_name"), str(binary["binary_id"]),
                                      binary["status"], binary["creation"]])
