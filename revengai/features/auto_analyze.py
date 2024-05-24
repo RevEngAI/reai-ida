@@ -161,15 +161,14 @@ class AutoAnalysisDialog(BaseDialog):
                 inmain(self.ui.progressBar.setProperty, "value", pos)
 
                 for function in self._functions:
-                    symbol = next((symbol for symbol in symbols if symbol["function_addr"] == function["start_addr"]),
-                                  None)
+                    symbol = next((sym for sym in symbols if sym["function_addr"] == function["start_addr"]), None)
 
                     if symbol:
                         self._analysis[Analysis.SUCCESSFUL.value] += 1
 
                         symbol["org_func_name"] = function["name"]
 
-                        logger.info("Found symbol '%s' with a confidence of '%s",
+                        logger.info("Found symbol '%s' with a confidence level of '%s",
                                     symbol["function_name"], str(symbol["confidence"]))
 
                         item = QStandardItem()
@@ -180,7 +179,8 @@ class AutoAnalysisDialog(BaseDialog):
 
                         resultsData.append((symbol["org_func_name"],
                                             f"{symbol['function_name']} ({symbol['binary_name']})", item,
-                                            f"Can be renamed with confidence of '{str(symbol['confidence'])}",))
+                                            "Can be renamed with a confidence level of "
+                                            f"{float(str(symbol['confidence'])[:6]) * 100}%"))
 
             for idx, func in enumerate(self._functions):
                 if not any(data[0] == func["name"] for data in resultsData):
@@ -247,9 +247,7 @@ class AutoAnalysisDialog(BaseDialog):
                                     None,))
 
             inmain(inmain(self.ui.collectionsTable.model).fill_table, collections)
-
-            inmain(self.ui.collectionsTable.setColumnWidth,
-                   0, inmain(self.ui.collectionsTable.width) * .8)
+            inmain(self.ui.collectionsTable.setColumnWidth, 0, inmain(self.ui.collectionsTable.width) * .9)
         except HTTPError as e:
             logger.error("Getting collections failed. Reason: %s", e)
 
