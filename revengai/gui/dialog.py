@@ -2,7 +2,7 @@
 import logging
 
 from idc import get_input_file_path
-from idaapi import CH_CAN_DEL, CH_MULTI, CH_MODAL, CH_NO_STATUS_BAR, CHCOL_DEC, CHCOL_PLAIN, Choose, Form
+from idaapi import CH_CAN_DEL, CH_CAN_EDIT, CH_MULTI, CH_MODAL, CH_NO_STATUS_BAR, CHCOL_DEC, CHCOL_PLAIN, Choose, Form
 
 from PyQt5.QtWidgets import QMessageBox
 
@@ -38,15 +38,19 @@ class Dialog(object):
 class StatusForm(Form):
     class StatusFormChooser(Choose):
         def __init__(self, title: str, state: RevEngState, items: list,
-                     flags: int = CH_CAN_DEL | CH_MULTI | CH_MODAL | CH_NO_STATUS_BAR):
+                     flags: int = CH_CAN_DEL | CH_CAN_EDIT | CH_MULTI | CH_MODAL | CH_NO_STATUS_BAR):
             Choose.__init__(self, title=title, flags=flags, embedded=True, icon=state.icon_id,
-                            cols=[["Binary Name", 20 | CHCOL_PLAIN],
+                            popup_names=["", "Delete Analysis", "View Analysis Report",],
+                            cols=[["Binary Name", 30 | CHCOL_PLAIN],
                                   ["Analysis ID", 6 | CHCOL_DEC],
-                                  ["Status", 6 | CHCOL_PLAIN],
-                                  ["Submitted Date", 16 | CHCOL_PLAIN]])
+                                  ["Status", 8 | CHCOL_PLAIN],
+                                  ["Submitted Date", 14 | CHCOL_PLAIN],])
             self.state = state
             self.items = items
             self.fpath = get_input_file_path()
+
+        def show(self) -> int:
+            return self.Show((self.flags & CH_MODAL) == CH_MODAL)
 
         def GetItems(self) -> list:
             return self.items
@@ -59,6 +63,13 @@ class StatusForm(Form):
 
         def OnGetSize(self) -> int:
             return len(self.items)
+
+        def OnEditLine(self, sel) -> None:
+            logger.info("Analysis Report ID %s | %s",
+                        self.OnGetLine(sel[0])[1], self.OnGetLine(sel[0])[0])
+
+            from webbrowser import open_new_tab
+            open_new_tab(f"http://dashboard.local/analyses/{self.OnGetLine(sel[0])[1]}")
 
         def OnDeleteLine(self, sel) -> tuple:
             for idx in sel:
@@ -106,6 +117,7 @@ Binary Analysis History
 class UploadBinaryForm(Form):
     def __init__(self):
         self.invert = False
+
         Form.__init__(self,
                       r"""BUTTON YES* Analyse
 Upload Binary for Analysis

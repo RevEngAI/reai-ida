@@ -354,8 +354,8 @@ def analysis_history(state: RevEngState) -> None:
 
                 binaries = []
                 for binary in results:
-                    binaries.append([binary.get("binary_name"), str(binary["binary_id"]),
-                                     binary["status"], binary["creation"]])
+                    binaries.append((binary.get("binary_name"), str(binary["binary_id"]), binary["status"],
+                                     datetime.fromisoformat(binary["creation"]).strftime("%d/%m/%Y, %H:%M:%S"),))
 
                     inmain(state.config.database.add_analysis,
                            binary["sha_256_hash"], binary["binary_id"], binary["status"], binary["creation"])
