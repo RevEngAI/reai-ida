@@ -103,7 +103,7 @@ class IDAUtils(object):
 
     @staticmethod
     def get_demangled_func_name(func_ea: int) -> str:
-        return IDAUtils.demangle(IDAUtils.get_func_name(func_ea)).split("(")[0]
+        return IDAUtils.demangle(IDAUtils.get_func_name(func_ea))#.split("(")[0]
 
     @staticmethod
     def demangle(mangled_name: str, attr: int = idc.INF_SHORT_DN) -> str:

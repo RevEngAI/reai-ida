@@ -47,7 +47,6 @@ class AutoAnalysisDialog(BaseDialog):
                                                                     header=["Collection Name", "Include",]))
 
         self.ui.resultsTable.setModel(RevEngCheckableTableModel(data=[], columns=[2], parent=self,
-                                                                flag=(Qt.ItemIsSelectable | Qt.ItemIsUserCheckable),
                                                                 header=["Source Symbol", "Destination Symbol",
                                                                         "Successful", "Reason",]))
 
@@ -106,7 +105,7 @@ class AutoAnalysisDialog(BaseDialog):
 
     def _auto_analysis(self) -> None:
         try:
-            self._analysis = [0] * len(Analysis)
+            self._analysis = [0,] * len(Analysis)
 
             inmain(self.ui.fetchButton.setEnabled, False)
             inmain(self.ui.renameButton.setEnabled, False)
@@ -180,12 +179,14 @@ class AutoAnalysisDialog(BaseDialog):
                         resultsData.append((symbol["org_func_name"],
                                             f"{symbol['function_name']} ({symbol['binary_name']})", item,
                                             "Can be renamed with a confidence level of "
-                                            f"{float(str(symbol['confidence'])[:6]) * 100}%"))
+                                            f"{float(str(symbol['confidence'])[:6]) * 100}%",))
 
             for idx, func in enumerate(self._functions):
                 if not any(data[0] == func["name"] for data in resultsData):
                     self._analysis[Analysis.SKIPPED.value] += 1
-                    resultsData.insert(idx, (func["name"], "N/A", None, "No Function Symbol Found"))
+                    resultsData.insert(idx, (func["name"], "N/A", None, "No Function Symbol Found",))
+
+            self._analysis[Analysis.TOTAL.value] = len(resultsData)
 
             inmain(inmain(self.ui.resultsTable.model).fill_table, resultsData)
 
