@@ -34,23 +34,19 @@ def setup_wizard(state: RevEngState) -> None:
 def upload_binary(state: RevEngState) -> None:
     fpath = idc.get_input_file_path()
 
-    if not state.config.is_valid():
-        setup_wizard(state)
-    elif not fpath or not isfile(fpath):
-        idc.warning("No input file provided.")
-    else:
-        def bg_task(path: str, syms: dict, tags: list = None, scope: str = "PRIVATE", debug_info: str = None) -> None:
+    if is_condition_met(state, fpath):
+        def bg_task(tags: list = None, scope: str = "PRIVATE", debug_info: str = None) -> None:
             file_size = inmain(retrieve_input_file_size)
 
             if state.config.LIMIT > (file_size // (1024 * 1024)):
                 try:
                     inmain(idaapi.show_wait_box, "HIDECANCEL\nUploading binary for analysis…")
 
-                    res: Response = RE_upload(path)
+                    res: Response = RE_upload(fpath)
 
                     upload = res.json()
 
-                    logger.info("Upload ended for: %s. %s", basename(path), upload["message"])
+                    logger.info("Upload ended for: %s. %s", basename(fpath), upload["message"])
 
                     debug_hash = None
                     if debug_info and isfile(debug_info):
@@ -71,11 +67,11 @@ def upload_binary(state: RevEngState) -> None:
                     if upload["success"]:
                         sha_256_hash = upload["sha_256_hash"]
 
-                        inmain(state.config.database.add_upload, path, sha_256_hash)
+                        inmain(state.config.database.add_upload, fpath, sha_256_hash)
 
-                        res = RE_analyse(fpath=path, binary_size=file_size, binary_scope=scope,
+                        res = RE_analyse(fpath=fpath, binary_size=file_size, binary_scope=scope,
                                          debug_hash=debug_hash, model_name=state.config.get("model"),
-                                         tags=tags, symbols=syms, duplicate=True)
+                                         tags=tags, symbols=symbols, duplicate=True)
 
                         analysis = res.json()
 
@@ -85,11 +81,11 @@ def upload_binary(state: RevEngState) -> None:
                                sha_256_hash, analysis["binary_id"], analysis["success"])
 
                         logger.info("Binary analysis %s for: %s",
-                                    "succeed" if analysis["success"] else "failed", basename(path))
+                                    "succeed" if analysis["success"] else "failed", basename(fpath))
                 except HTTPError as e:
-                    logger.error("Error analyzing %s. Reason: %s", basename(path), e)
+                    logger.error("Error analyzing %s. Reason: %s", basename(fpath), e)
                     inmain(idaapi.hide_wait_box)
-                    inmain(idc.warning, f"Error analysing {basename(path)}.\nReason: {e.response.json()['error']}")
+                    inmain(idc.warning, f"Error analysing {basename(fpath)}.\nReason: {e.response.json()['error']}")
                 else:
                     inmain(idaapi.hide_wait_box)
             else:
@@ -110,7 +106,7 @@ def upload_binary(state: RevEngState) -> None:
 
             symbols["functions"] = functions
 
-            inthread(bg_task, fpath, symbols, f.iTags.value.split(","),
+            inthread(bg_task, f.iTags.value.split(","),
                      "PUBLIC" if f.iScope.value else "PRIVATE", f.iDebugFile.value)
 
         f.Free()
@@ -119,11 +115,7 @@ def upload_binary(state: RevEngState) -> None:
 def check_analyze(state: RevEngState) -> None:
     fpath = idc.get_input_file_path()
 
-    if not state.config.is_valid():
-        setup_wizard(state)
-    elif not fpath or not isfile(fpath):
-        idc.warning("No input file provided.")
-    else:
+    if is_condition_met(state, fpath):
         state.config.init_current_analysis()
 
         def bg_task() -> None:
@@ -156,11 +148,7 @@ def check_analyze(state: RevEngState) -> None:
 def auto_analyze(state: RevEngState) -> None:
     fpath = idc.get_input_file_path()
 
-    if not state.config.is_valid():
-        setup_wizard(state)
-    elif not fpath or not isfile(fpath):
-        idc.warning("No input file provided.")
-    else:
+    if is_condition_met(state, fpath):
         def bg_task() -> None:
             done, status = is_analysis_complete(state, fpath)
             if done:
@@ -175,11 +163,7 @@ def auto_analyze(state: RevEngState) -> None:
 def rename_function(state: RevEngState) -> None:
     fpath = idc.get_input_file_path()
 
-    if not state.config.is_valid():
-        setup_wizard(state)
-    elif not isfile(fpath):
-        idc.warning("No input file provided.")
-    else:
+    if is_condition_met(state, fpath):
         def bg_task() -> None:
             done, status = is_analysis_complete(state, fpath)
             if done:
@@ -194,11 +178,7 @@ def rename_function(state: RevEngState) -> None:
 def explain_function(state: RevEngState) -> None:
     fpath = idc.get_input_file_path()
 
-    if not state.config.is_valid():
-        setup_wizard(state)
-    elif not fpath or not isfile(fpath):
-        idc.warning("No input file provided.")
-    else:
+    if is_condition_met(state, fpath):
         state.config.init_current_analysis()
 
         def bg_task(pseudo_code: str) -> None:
@@ -254,11 +234,7 @@ def explain_function(state: RevEngState) -> None:
 def download_logs(state: RevEngState) -> None:
     fpath = idc.get_input_file_path()
 
-    if not state.config.is_valid():
-        setup_wizard(state)
-    elif not fpath or not isfile(fpath):
-        idc.warning("No input file provided.")
-    else:
+    if is_condition_met(state, fpath):
         state.config.init_current_analysis()
 
         def bg_task() -> None:
@@ -291,11 +267,7 @@ def download_logs(state: RevEngState) -> None:
 def function_signature(state: RevEngState, func_addr: int = 0) -> None:
     fpath = idc.get_input_file_path()
 
-    if not state.config.is_valid():
-        setup_wizard(state)
-    elif not fpath or not isfile(fpath):
-        idc.warning("No input file provided.")
-    else:
+    if is_condition_met(state, fpath):
         state.config.init_current_analysis()
 
         def bg_task(start_addr: int) -> None:
@@ -338,11 +310,7 @@ def function_signature(state: RevEngState, func_addr: int = 0) -> None:
 def analysis_history(state: RevEngState) -> None:
     fpath = idc.get_input_file_path()
 
-    if not state.config.is_valid():
-        setup_wizard(state)
-    elif not fpath or not isfile(fpath):
-        idc.warning("No input file provided.")
-    else:
+    if is_condition_met(state, fpath):
         state.config.init_current_analysis()
 
         def bg_task() -> None:
@@ -457,3 +425,13 @@ def is_analysis_complete(state: RevEngState, fpath: str) -> tuple[bool, str]:
             logger.error("Error getting binary analysis status: %s", e)
 
         return False, "Processing"
+
+
+def is_condition_met(state: RevEngState, fpath: str) -> bool:
+    if not state.config.is_valid():
+        setup_wizard(state)
+    elif not fpath or not isfile(fpath):
+        idc.warning("No input file provided.")
+    else:
+        return True
+    return False
