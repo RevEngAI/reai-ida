@@ -16,7 +16,7 @@ with open("README.md", encoding="utf-8") as fd:
 
 
 extra_files = []
-for (path, _, filenames) in walk("./revengai"):
+for (path, _, filenames,) in walk("./revengai"):
     for filename in filenames:
         extra_files.append(join(path, filename))
 

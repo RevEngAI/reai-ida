@@ -8,7 +8,6 @@ from setuptools.dist import Distribution
 from setuptools.command.install import install
 
 
-
 class IdaPluginInstallCommand(install):
     description = "Install the current plugin in IDA plugin folder."
 
@@ -27,7 +26,7 @@ class IdaPluginInstallCommand(install):
             if not self.dry_run:
                 pip.main(["install", "-t", install_dir, "--ignore-installed", dependency,])
 
-    def install_packages(self, dist, install_dir: str) -> None:
+    def install_packages(self, dist: Distribution, install_dir: str) -> None:
         """ Install python packages """
         for package in dist.packages:
             self.announce(f"[IDA PLUGIN INSTALL] copy package: {package} -> {install_dir}",
@@ -47,11 +46,11 @@ class IdaPluginInstallCommand(install):
             if not self.dry_run:
                 self.copy_file(plugin, install_dir)
 
-    def run(self, *args, **kwargs):
+    def run(self, *args, **kwargs) -> None:
         """ Install ida plugins routine """
-        dist = self.distribution
+        dist: Distribution = self.distribution
 
-        install_dir = self.root  # respect user-override install dir
+        install_dir: str = self.root  # respect user-override install dir
 
         if not install_dir:  # otherwise return the ida install dir
             install_dir = IdaPluginInstallCommand._get_install_dir()
