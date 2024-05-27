@@ -5,7 +5,7 @@ from enum import IntEnum
 import idaapi
 import idc
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QStandardItem, QCursor
+from PyQt5.QtGui import QCursor
 from PyQt5.QtWidgets import QMenu
 from ida_nalt import retrieve_input_file_sha256
 from idautils import Functions
@@ -18,7 +18,7 @@ from revengai.api import RE_quick_search
 from revengai.features import BaseDialog
 from revengai.misc.utils import IDAUtils
 from revengai.misc.qtutils import inthread, inmain
-from revengai.models.checkable_model import RevEngCheckableTableModel
+from revengai.models.checkable_model import RevEngCheckableTableModel, CheckableItem
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
 from revengai.models.table_model import TableItem
@@ -90,13 +90,13 @@ class AutoAnalysisDialog(BaseDialog):
     def _table_menu(self) -> None:
         selected = self.ui.resultsTable.selectedIndexes()
 
-        if selected and self.ui.renameButton.isEnabled() and isinstance(selected[2].data(), QStandardItem):
+        if selected and self.ui.renameButton.isEnabled() and isinstance(selected[2].data(), CheckableItem):
             menu = QMenu()
             renameAction = menu.addAction(self.ui.renameButton.text())
             renameAction.triggered.connect(lambda: self._rename_function(selected))
 
             breakdownAction = menu.addAction("View Function Breakdown")
-            breakdownAction.triggered.connect(lambda: self._function_breakdown(selected[2].data().data()["function_id"]))
+            breakdownAction.triggered.connect(lambda: self._function_breakdown(selected[2].data().data["function_id"]))
 
             menu.exec_(QCursor.pos())
 
@@ -170,14 +170,9 @@ class AutoAnalysisDialog(BaseDialog):
                         logger.info("Found symbol '%s' with a confidence level of '%s",
                                     symbol["function_name"], str(symbol["confidence"]))
 
-                        item = QStandardItem()
-
-                        item.setData(symbol)
-                        item.setCheckState(Qt.Checked)
-                        item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsUserCheckable)
-
                         resultsData.append((symbol["org_func_name"],
-                                            f"{symbol['function_name']} ({symbol['binary_name']})", item,
+                                            f"{symbol['function_name']} ({symbol['binary_name']})",
+                                            CheckableItem(symbol),
                                             "Can be renamed with a confidence level of "
                                             f"{float(str(symbol['confidence'])[:6]) * 100}%",))
 
@@ -245,7 +240,7 @@ class AutoAnalysisDialog(BaseDialog):
                                               "lock.png"
                                               if collection["collection_scope"] == "PRIVATE"
                                               else "unlock.png"),
-                                    None,))
+                                    CheckableItem(checked=False),))
 
             inmain(inmain(self.ui.collectionsTable.model).fill_table, collections)
             inmain(self.ui.collectionsTable.setColumnWidth, 0, inmain(self.ui.collectionsTable.width) * .9)
@@ -264,7 +259,7 @@ class AutoAnalysisDialog(BaseDialog):
 
     def _rename_function(self, selected: list = None) -> None:
         if selected:
-            symbol = selected[2].data().data()
+            symbol = selected[2].data().data
 
             if IDAUtils.set_name(symbol["function_addr"] + self.base_addr, symbol["function_name"]):
                 inthread(self._set_function_renamed, symbol["function_addr"], symbol["function_name"])
@@ -278,9 +273,9 @@ class AutoAnalysisDialog(BaseDialog):
             model = self.ui.resultsTable.model()
 
             for idx in range(model.rowCount()):
-                if isinstance(model.index(idx, 2).data(), QStandardItem) and \
-                        model.index(idx, 2).data().checkState() == Qt.Checked:
-                    self._rename_function([None, None, model.index(idx, 2), None])
+                if isinstance(model.index(idx, 2).data(), CheckableItem) and \
+                        model.index(idx, 2).data().checkState == Qt.Checked:
+                    self._rename_function([None, None, model.index(idx, 2), None,])
 
     def _selected_collections(self) -> list:
         model = self.ui.collectionsTable.model()

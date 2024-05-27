@@ -1,9 +1,15 @@
 # -*- coding: utf-8 -*-
+from typing import Any
 
-from PyQt5.QtCore import Qt, QPersistentModelIndex
-from PyQt5.QtGui import QStandardItem
+from PyQt5.QtCore import Qt
 
 from revengai.models.table_model import RevEngTableModel
+
+
+class CheckableItem(object):
+    def __init__(self, data: Any = None, checked: bool = True):
+        self.data: Any = data
+        self.checkState: int = Qt.Checked if checked else Qt.Unchecked
 
 
 class RevEngCheckableTableModel(RevEngTableModel):
@@ -11,30 +17,24 @@ class RevEngCheckableTableModel(RevEngTableModel):
                  flag: Qt.ItemFlag = (Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsUserCheckable)):
         RevEngTableModel.__init__(self, data, header, parent)
 
-        self._checked = {}
-
         self.flag = flag
         self._columns = columns
 
     def data(self, index, role=None) -> int:
         if index.isValid() and role == Qt.CheckStateRole and index.column() in self._columns:
-            if isinstance(self._data[index.row()][index.column()], QStandardItem):
-                return self._data[index.row()][index.column()].checkState()
-            return self._check_state(QPersistentModelIndex(index))
+            if isinstance(self._data[index.row()][index.column()], CheckableItem):
+                return self._data[index.row()][index.column()].checkState
+            return Qt.Unchecked
         return super().data(index, role)
 
     def setData(self, index, value, role=None) -> bool:
         if index.isValid() and role == Qt.CheckStateRole and index.column() in self._columns:
-            self._checked[QPersistentModelIndex(index)] = value
-            return True
+            if isinstance(self._data[index.row()][index.column()], CheckableItem):
+                self._data[index.row()][index.column()].checkState = value
+                return True
         return super().setData(index, value, role)
 
     def flags(self, index) -> Qt.ItemFlag:
         if index.isValid() and index.column() in self._columns:
-            if isinstance(self._data[index.row()][index.column()], QStandardItem):
-                return self._data[index.row()][index.column()].flags()
             return self.flag
         return super().flags(index)
-
-    def _check_state(self, index) -> int:
-        return self._checked[index] if index in self._checked.keys() else Qt.Unchecked
