@@ -3,9 +3,9 @@ from json import load
 from os.path import abspath, dirname, isfile, join, realpath
 
 from idc import get_input_file_path, here
-from ida_kernwin import set_dock_pos, PluginForm, DP_TAB, unregister_action, attach_action_to_menu, register_action, \
-    action_desc_t, action_handler_t, AST_ENABLE_ALWAYS, create_menu, SETMENU_APP, SETMENU_INS, UI_Hooks, \
-    attach_action_to_popup, add_hotkey, del_hotkey, get_widget_type, BWN_DISASM, BWN_PSEUDOCODE
+from idaapi import set_dock_pos, PluginForm, unregister_action, attach_action_to_menu, register_action, UI_Hooks, \
+    action_desc_t, action_handler_t, create_menu, attach_action_to_popup, add_hotkey, del_hotkey, get_widget_type, \
+    AST_ENABLE_ALWAYS, BWN_DISASM, BWN_PSEUDOCODE, DP_TAB, SETMENU_APP, SETMENU_INS
 
 from revengai import actions
 from revengai.actions import load_recent_analyses

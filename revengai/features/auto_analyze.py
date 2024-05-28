@@ -2,12 +2,11 @@
 import logging
 from enum import IntEnum
 
-import idaapi
 import idc
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QCursor
 from PyQt5.QtWidgets import QMenu
-from ida_nalt import retrieve_input_file_sha256
+from idaapi import retrieve_input_file_sha256, hide_wait_box, show_wait_box
 from idautils import Functions
 
 from requests import Response, HTTPError
@@ -228,7 +227,7 @@ class AutoAnalysisDialog(BaseDialog):
 
     def _load_collections(self) -> None:
         try:
-            inmain(idaapi.show_wait_box, "HIDECANCEL\nGetting RevEng.AI collections…")
+            inmain(show_wait_box, "HIDECANCEL\nGetting RevEng.AI collections…")
 
             inmain(self.ui.fetchButton.setEnabled, False)
 
@@ -248,10 +247,10 @@ class AutoAnalysisDialog(BaseDialog):
         except HTTPError as e:
             logger.error("Getting collections failed. Reason: %s", e)
 
-            inmain(idaapi.hide_wait_box)
+            inmain(hide_wait_box)
             inmain(Dialog.showError, "Auto Analysis", f"Auto Analysis Error: {e.response.json()['error']}")
         else:
-            inmain(idaapi.hide_wait_box)
+            inmain(hide_wait_box)
         finally:
             inmain(self._tab_changed, 0)
             inmain(self.ui.tabWidget.setCurrentIndex, 0)

@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 
-from ida_kernwin import get_kernel_version
-from idaapi import plugin_t, PLUGIN_FIX, PLUGIN_SKIP, PLUGIN_OK, PLUGIN_KEEP
+from idaapi import plugin_t, PLUGIN_FIX, PLUGIN_SKIP, PLUGIN_OK, PLUGIN_KEEP, get_kernel_version
 
 from revengai.manager import RevEngState
 

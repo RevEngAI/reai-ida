@@ -1,11 +1,9 @@
 # -*- coding: utf-8 -*-
 import logging
 
-import ida_kernwin
-import idaapi
 import idautils
 import idc
-from ida_nalt import get_imagebase, retrieve_input_file_size
+from idaapi import ask_file, get_imagebase, get_inf_structure, retrieve_input_file_size, show_wait_box, hide_wait_box
 
 from subprocess import run
 from requests import HTTPError, Response
@@ -40,7 +38,7 @@ def upload_binary(state: RevEngState) -> None:
 
             if state.config.LIMIT > (file_size // (1024 * 1024)):
                 try:
-                    inmain(idaapi.show_wait_box, "HIDECANCEL\nUploading binary for analysis…")
+                    inmain(show_wait_box, "HIDECANCEL\nUploading binary for analysis…")
 
                     res: Response = RE_upload(fpath)
 
@@ -84,10 +82,10 @@ def upload_binary(state: RevEngState) -> None:
                                     "succeed" if analysis["success"] else "failed", basename(fpath))
                 except HTTPError as e:
                     logger.error("Error analyzing %s. Reason: %s", basename(fpath), e)
-                    inmain(idaapi.hide_wait_box)
+                    inmain(hide_wait_box)
                     inmain(idc.warning, f"Error analysing {basename(fpath)}.\nReason: {e.response.json()['error']}")
                 else:
-                    inmain(idaapi.hide_wait_box)
+                    inmain(hide_wait_box)
             else:
                 inmain(idc.warning,
                        f"Please be advised that the largest size for processing a binary file is"
@@ -206,7 +204,7 @@ def explain_function(state: RevEngState) -> None:
                         inmain(Dialog.showError, "Function Explanation",
                                f"Error getting function explanation: {e.response.json()['error']}")
             else:
-                info = inmain(idaapi.get_inf_structure)
+                info = inmain(get_inf_structure)
 
                 procname = info.procname.lower()
                 bits = 64 if inmain(info.is_64bit) else 32 if inmain(info.is_32bit) else 16
@@ -242,7 +240,7 @@ def download_logs(state: RevEngState) -> None:
                 res = RE_logs(fpath, console=False, binary_id=state.config.get("binary_id", 0))
 
                 if res.json()["success"]:
-                    filename = inmain(ida_kernwin.ask_file, 1, "*.log", "Output Filename:")
+                    filename = inmain(ask_file, 1, "*.log", "Output Filename:")
 
                     if filename:
                         with open(filename, "w") as fd:

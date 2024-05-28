@@ -6,7 +6,7 @@ from PyQt5.QtCore import QRect
 from PyQt5.QtWidgets import QDialog, QDesktopWidget
 from reait.api import RE_functions_rename
 
-from ida_nalt import get_imagebase
+from idaapi import get_imagebase
 
 from requests import HTTPError, Response
 

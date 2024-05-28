@@ -2,8 +2,6 @@
 import logging
 from typing import Optional
 
-import ida_hexrays
-import ida_segment
 import idautils
 import idc
 import idaapi
@@ -62,7 +60,7 @@ class IDAUtils(object):
             if not func:
                 logger.error("idaapi.get_func failed at function address: 0x%02X", func_ea)
             else:
-                cfunc = idaapi.decompile(func.start_ea, flags=ida_hexrays.DECOMP_NO_WAIT)
+                cfunc = idaapi.decompile(func.start_ea, flags=idaapi.DECOMP_NO_WAIT)
                 if not cfunc:
                     logger.error("idaapi.decompile failed at function address: 0x%02X", func_ea)
                 else:
@@ -133,6 +131,7 @@ class IDAUtils(object):
 
     @staticmethod
     def is_in_valid_segment(func_ea: int) -> bool:
-        segments = [ida_segment.get_segm_by_name(name) for name in (".init", ".text", ".fini",)]
+        segments = [idaapi.get_segm_by_name(name) for name in (".init", ".text", ".fini",)]
 
-        return any(segment and segment.start_ea <= func_ea <= segment.end_ea for segment in segments) if segments else False
+        return any(segment and segment.start_ea <= func_ea <= segment.end_ea for segment in segments) \
+            if segments else False

@@ -7,7 +7,7 @@ from os.path import join, basename
 from sqlite3 import connect, Connection, Error
 from weakref import finalize
 
-from ida_diskio import get_user_idadir
+from idaapi import get_user_idadir
 
 
 logger = logging.getLogger("REAI")

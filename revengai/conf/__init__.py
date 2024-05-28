@@ -3,9 +3,8 @@ from os import makedirs
 from json import loads, dumps
 from os.path import join, exists
 
-from ida_nalt import retrieve_input_file_sha256
 from requests import HTTPError, Response
-from ida_diskio import get_user_idadir
+from idaapi import get_user_idadir, retrieve_input_file_sha256
 
 from reait.api import re_conf, RE_health, RE_settings
 
