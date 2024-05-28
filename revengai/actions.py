@@ -67,7 +67,7 @@ def upload_binary(state: RevEngState) -> None:
 
                         inmain(state.config.database.add_upload, fpath, sha_256_hash)
 
-                        res = RE_analyse(fpath=fpath, binary_size=file_size, binary_scope=scope,
+                        res = RE_analyse(fpath=fpath, binary_scope=scope,
                                          debug_hash=debug_hash, model_name=state.config.get("model"),
                                          tags=tags, symbols=symbols, duplicate=True)
 
