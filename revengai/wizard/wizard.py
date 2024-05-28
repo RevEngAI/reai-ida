@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-
 import abc
 import logging
 from sys import platform
@@ -13,6 +12,7 @@ from PyQt5.QtWidgets import QWizardPage, QFormLayout, QLineEdit, QLabel, QWizard
 from revengai.api import RE_models
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
+
 
 logger = logging.getLogger("REAI")
 

@@ -12,6 +12,7 @@ from reait.api import RE_delete
 from revengai.manager import RevEngState
 from revengai.misc.qtutils import inthread
 
+
 logger = logging.getLogger("REAI")
 
 

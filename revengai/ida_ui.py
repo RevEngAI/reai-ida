@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-
 from json import load
 from os.path import abspath, dirname, isfile, join, realpath
 
@@ -12,6 +11,7 @@ from revengai import actions
 from revengai.actions import load_recent_analyses
 from revengai.manager import RevEngState
 from revengai.misc.utils import IDAUtils
+
 
 MENU = "RevEng.AI Toolkit/"
 

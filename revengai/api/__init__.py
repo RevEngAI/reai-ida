@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from os.path import basename
 from requests import get, post, Response
 
 from reait.api import reveng_req, re_binary_id, re_bid_search, ReaitError

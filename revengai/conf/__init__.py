@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-
 from os import makedirs
 from json import loads, dumps
 from os.path import join, exists

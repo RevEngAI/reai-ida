@@ -24,6 +24,7 @@ from revengai.manager import RevEngState
 from revengai.models.table_model import TableItem
 from revengai.ui.auto_analysis_panel import Ui_AutoAnalysisPanel
 
+
 logger = logging.getLogger("REAI")
 
 
