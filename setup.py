@@ -14,7 +14,6 @@ with open("requirements.txt") as fd:
 with open("README.md", encoding="utf-8") as fd:
     long_description = fd.read()
 
-
 extra_files = []
 for (path, _, filenames,) in walk("./revengai"):
     for filename in filenames:
@@ -36,6 +35,7 @@ setup(
     py_modules=["reveng",],
     package_data={
         "ida_plugins": extra_files,
+        "": ["*.png", "*.json", "*.ini",],
     },
     classifiers=[
         "Operating System :: OS Independent",
