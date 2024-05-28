@@ -2,6 +2,7 @@
 import abc
 import logging
 
+import idaapi
 from PyQt5.QtCore import QRect
 from PyQt5.QtWidgets import QDialog, QDesktopWidget
 from reait.api import RE_functions_rename
@@ -12,8 +13,7 @@ from requests import HTTPError, Response
 
 from revengai.api import RE_analyze_functions
 from revengai.manager import RevEngState
-from revengai.misc.qtutils import inthread
-
+from revengai.misc.qtutils import inthread, inmain
 
 logger = logging.getLogger("REAI")
 
@@ -72,6 +72,8 @@ class BaseDialog(QDialog):
                 if "error" in e.response.json():
                     logger.error("Failed to rename functionId %d by '%s'. %s",
                                  func_id, new_func_name, e.response.json()["error"])
+
+                    inmain(idaapi.warning, e.response.json()["error"])
                 else:
                     logger.error("Failed to rename functionId %d by '%s'. %s",
                                  func_id, new_func_name, e.response.reason)
