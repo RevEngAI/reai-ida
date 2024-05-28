@@ -33,7 +33,7 @@ def upload_binary(state: RevEngState) -> None:
     fpath = idc.get_input_file_path()
 
     if is_condition_met(state, fpath):
-        def bg_task(tags: list = None, scope: str = "PRIVATE", debug_info: str = None) -> None:
+        def bg_task(tags: list = None, scope: str = "PRIVATE", debug_fpath: str = None) -> None:
             file_size = inmain(retrieve_input_file_size)
 
             if state.config.LIMIT > (file_size // (1024 * 1024)):
@@ -46,29 +46,14 @@ def upload_binary(state: RevEngState) -> None:
 
                     logger.info("Upload ended for: %s. %s", basename(fpath), upload["message"])
 
-                    debug_hash = None
-                    if debug_info and isfile(debug_info):
-                        try:
-                            res = RE_upload(debug_info)
-
-                            debug = res.json()
-
-                            if debug["success"]:
-                                debug_hash = debug["sha_256_hash"]
-
-                            logger.info("Upload of debug info ended for: %s. %s",
-                                        basename(debug_info), debug["message"])
-                        except HTTPError as e:
-                            logger.info("Upload of debug info failed for: %s. %s",
-                                        basename(debug_info), e.response.json()["error"])
-
                     if upload["success"]:
                         sha_256_hash = upload["sha_256_hash"]
 
                         inmain(state.config.database.add_upload, fpath, sha_256_hash)
 
                         res = RE_analyse(fpath=fpath, binary_scope=scope,
-                                         debug_hash=debug_hash, model_name=state.config.get("model"),
+                                         debug_fpath=debug_fpath,
+                                         model_name=state.config.get("model"),
                                          tags=tags, symbols=symbols, duplicate=True)
 
                         analysis = res.json()
