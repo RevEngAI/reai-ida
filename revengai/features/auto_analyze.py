@@ -6,7 +6,7 @@ import idc
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QCursor
 from PyQt5.QtWidgets import QMenu
-from idaapi import retrieve_input_file_sha256, hide_wait_box, show_wait_box
+from idaapi import hide_wait_box, show_wait_box
 from idautils import Functions
 
 from requests import Response, HTTPError
@@ -17,10 +17,10 @@ from revengai.api import RE_quick_search
 from revengai.features import BaseDialog
 from revengai.misc.utils import IDAUtils
 from revengai.misc.qtutils import inthread, inmain
-from revengai.models.checkable_model import RevEngCheckableTableModel, CheckableItem
+from revengai.models import CheckableItem, IconItem, SimpleItem
+from revengai.models.checkable_model import RevEngCheckableTableModel
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
-from revengai.models.table_model import TableItem
 from revengai.ui.auto_analysis_panel import Ui_AutoAnalysisPanel
 
 
@@ -38,8 +38,6 @@ class AutoAnalysisDialog(BaseDialog):
     def __init__(self, state: RevEngState, fpath: str):
         BaseDialog.__init__(self, state, fpath)
 
-        self._ignore_hashes = [retrieve_input_file_sha256().hex()]
-
         self.ui = Ui_AutoAnalysisPanel()
         self.ui.setupUi(self)
 
@@ -47,7 +45,7 @@ class AutoAnalysisDialog(BaseDialog):
                                                                     header=["Collection Name", "Include",]))
 
         self.ui.resultsTable.setModel(RevEngCheckableTableModel(data=[], columns=[2], parent=self,
-                                                                header=["Source Symbol", "Destination Symbol",
+                                                                header=["Function Name", "Destination Function Name",
                                                                         "Successful", "Reason",]))
 
         self.ui.resultsTable.customContextMenuRequested.connect(self._table_menu)
@@ -88,15 +86,17 @@ class AutoAnalysisDialog(BaseDialog):
         self._functions.clear()
 
     def _table_menu(self) -> None:
-        selected = self.ui.resultsTable.selectedIndexes()
+        rows = sorted(set(index.row() for index in self.ui.resultsTable.selectedIndexes()))
+        selected = self.ui.resultsTable.model().get_data(rows[0])
 
-        if selected and self.ui.renameButton.isEnabled() and isinstance(selected[2].data(), CheckableItem):
+        if selected and self.ui.renameButton.isEnabled() and isinstance(selected[2], CheckableItem):
             menu = QMenu()
             renameAction = menu.addAction(self.ui.renameButton.text())
             renameAction.triggered.connect(lambda: self._rename_function(selected))
 
+            func_id = selected[2].data["origin_function_id"]
             breakdownAction = menu.addAction("View Function Breakdown")
-            breakdownAction.triggered.connect(lambda: self._function_breakdown(selected[2].data().data["function_id"]))
+            breakdownAction.triggered.connect(lambda: self._function_breakdown(func_id))
 
             menu.exec_(QCursor.pos())
 
@@ -140,41 +140,47 @@ class AutoAnalysisDialog(BaseDialog):
             inmain(self.ui.progressBar.setProperty, "value", pos)
 
             for chunk in AutoAnalysisDialog._divide_chunks(function_ids):
-                res = RE_nearest_symbols_batch(function_ids=chunk,
-                                               distance=confidence, collections=collections,
-                                               nns=1, ignore_hashes=self._ignore_hashes)
+                try:
+                    res = RE_nearest_symbols_batch(function_ids=chunk, distance=confidence,
+                                                   collections=collections, nns=1)
 
-                symbols = []
+                    for symbol in res.json()["function_matches"]:
+                        func_addr = next((func_addr for func_addr, func_id in self.analyzed_functions.items()
+                                          if symbol["origin_function_id"] == func_id), None)
 
-                for function_id, symbol in res.json()["function_matches"].items():
-                    func_addr = next((func_addr for func_addr, func_id in self.analyzed_functions.items()
-                                      if function_id == str(func_id)), None)
+                        if func_addr:
+                            self._analysis[Analysis.SUCCESSFUL.value] += 1
 
-                    if func_addr and len(symbol.values()):
-                        sym = next(iter(symbol.values()))
-                        sym["function_addr"] = func_addr
-                        sym["function_id"] = next(iter(symbol))
-                        symbols.append(sym)
+                            symbol["function_addr"] = func_addr
+                            symbol["org_func_name"] = next((function["name"] for function in self._functions
+                                                            if func_addr == function["start_addr"]), "Unknown")
 
-                pos += len(chunk)
-                inmain(self.ui.progressBar.setProperty, "value", pos)
+                            logger.info("Found symbol '%s' with a confidence level of '%s",
+                                        symbol["nearest_neighbor_function_name"], str(symbol["confidence"]))
 
-                for function in self._functions:
-                    symbol = next((sym for sym in symbols if sym["function_addr"] == function["start_addr"]), None)
+                            resultsData.append((symbol["org_func_name"],
+                                                f"{symbol['nearest_neighbor_function_name']} "
+                                                f"({symbol['nearest_neighbor_binary_name']})",
+                                                CheckableItem(symbol),
+                                                "Can be renamed with a confidence level of "
+                                                f"{float(str(symbol['confidence'])[:6]) * 100:#.02f}%",))
+                except HTTPError as e:
+                    logger.error("Fetching a chunk of auto analysis failed. Reason: %s", e)
 
-                    if symbol:
-                        self._analysis[Analysis.SUCCESSFUL.value] += 1
+                    self._analysis[Analysis.UNSUCCESSFUL] += len(chunk)
+                    err_msg = e.response.json().get("error", "Fetching Function Symbol Failed")
 
-                        symbol["org_func_name"] = function["name"]
+                    for function_id in chunk:
+                        func_addr = next((func_addr for func_addr, func_id in self.analyzed_functions.items()
+                                          if function_id == func_id), None)
 
-                        logger.info("Found symbol '%s' with a confidence level of '%s",
-                                    symbol["function_name"], str(symbol["confidence"]))
-
-                        resultsData.append((symbol["org_func_name"],
-                                            f"{symbol['function_name']} ({symbol['binary_name']})",
-                                            CheckableItem(symbol),
-                                            "Can be renamed with a confidence level of "
-                                            f"{float(str(symbol['confidence'])[:6]) * 100}%",))
+                        if func_addr:
+                            resultsData.append((next((function["name"] for function in self._functions
+                                                      if func_addr == function["start_addr"]), "Unknown"),
+                                               "N/A", None, err_msg,))
+                finally:
+                    pos += len(chunk)
+                    inmain(self.ui.progressBar.setProperty, "value", pos)
 
             for idx, func in enumerate(self._functions):
                 if not any(data[0] == func["name"] for data in resultsData):
@@ -236,10 +242,8 @@ class AutoAnalysisDialog(BaseDialog):
             collections = []
 
             for collection in res.json()["collections"]:
-                collections.append((TableItem(collection["collection_name"],
-                                              "lock.png"
-                                              if collection["collection_scope"] == "PRIVATE"
-                                              else "unlock.png"),
+                collections.append((IconItem(collection["collection_name"],
+                                             "lock.png" if collection["collection_scope"] == "PRIVATE" else "unlock.png"),
                                     CheckableItem(checked=False),))
 
             inmain(inmain(self.ui.collectionsTable.model).fill_table, collections)
@@ -257,25 +261,22 @@ class AutoAnalysisDialog(BaseDialog):
             inmain(self.ui.fetchButton.setEnabled, True)
             inmain(self.ui.fetchButton.setFocus)
 
-    def _rename_function(self, selected: list = None) -> None:
-        if selected:
-            symbol = selected[2].data().data
+    def _rename_function(self, selected = None) -> None:
+        if selected and len(selected) > 3 and isinstance(selected[2], SimpleItem):
+            symbol = selected[2].data
 
-            if IDAUtils.set_name(symbol["function_addr"] + self.base_addr, symbol["function_name"]):
-                inthread(self._set_function_renamed, symbol["function_addr"], symbol["function_name"])
+            if IDAUtils.set_name(symbol["function_addr"] + self.base_addr, symbol["nearest_neighbor_function_name"]):
+                inthread(self._set_function_renamed, symbol["function_addr"], symbol["nearest_neighbor_function_name"])
 
                 logger.info("Renowned %s in %s with confidence of '%s",
-                            symbol["org_func_name"], symbol["function_name"], symbol["confidence"])
+                            symbol["org_func_name"], symbol["nearest_neighbor_function_name"], symbol["confidence"])
             else:
-                logger.warning("Symbol name %s already exists", symbol["function_name"])
-                idc.warning(f"Can't rename {symbol['org_func_name']}. Name {symbol['function_name']} already exists.")
+                logger.warning("Symbol name %s already exists", symbol["nearest_neighbor_function_name"])
+                idc.warning(f"Can't rename {symbol['org_func_name']}. Name {symbol['nearest_neighbor_function_name']} already exists.")
         else:
-            model = self.ui.resultsTable.model()
-
-            for idx in range(model.rowCount()):
-                if isinstance(model.index(idx, 2).data(), CheckableItem) and \
-                        model.index(idx, 2).data().checkState == Qt.Checked:
-                    self._rename_function([None, None, model.index(idx, 2), None,])
+            for row_item in self.ui.resultsTable.model().get_datas():
+                if isinstance(row_item[2], CheckableItem) and row_item[2].checkState == Qt.Checked:
+                    self._rename_function(row_item)
 
     def _selected_collections(self) -> list:
         model = self.ui.collectionsTable.model()
