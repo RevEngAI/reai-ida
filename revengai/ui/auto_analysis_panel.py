@@ -10,6 +10,8 @@
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
+from revengai.gui.slider import Slider
+
 
 class Ui_AutoAnalysisPanel(object):
     def setupUi(self, AutoAnalysisPanel):
@@ -111,7 +113,7 @@ class Ui_AutoAnalysisPanel(object):
         self.description.setWordWrap(True)
         self.description.setObjectName("description")
         self.verticalLayout.addWidget(self.description)
-        self.confidenceSlider = QtWidgets.QSlider(AutoAnalysisPanel)
+        self.confidenceSlider = Slider(AutoAnalysisPanel)
         self.confidenceSlider.setMaximum(100)
         self.confidenceSlider.setPageStep(5)
         self.confidenceSlider.setSliderPosition(90)
