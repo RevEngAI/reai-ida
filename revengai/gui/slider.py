@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from PyQt5.QtGui import QMouseEvent
 from PyQt5.QtWidgets import QSlider, QToolTip
 
 
@@ -9,7 +8,7 @@ class Slider(QSlider):
 
         self.setMouseTracking(True)
 
-    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+    def mouseMoveEvent(self, event) -> None:
         QToolTip.showText(event.globalPos(), f"{self.value():#02d}")
 
         super().mouseMoveEvent(event)
