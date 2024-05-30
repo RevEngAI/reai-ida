@@ -98,4 +98,4 @@ Select the function you are interested in, and from the decompiler view select `
 # Software Requirements
 
 RevEng.AI IDA uses:
-- [reait](https://github.com/RevEngAI/reait) (version >= 0.0.20)
+- [reait](https://github.com/RevEngAI/reait) (version >= 1.0.0)
