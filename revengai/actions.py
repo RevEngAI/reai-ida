@@ -115,10 +115,8 @@ def check_analyze(state: RevEngState) -> None:
                 logger.info("Got binary analysis status: %s", status)
                 inmain(Dialog.showInfo, "Check Binary Analysis Status", f"Binary analysis status: {status}")
             except HTTPError as e:
-                if "error" in e.response.json():
-                    logger.error("Error getting binary analysis status: %s", e.response.json()["error"])
-                else:
-                    logger.error("Error getting binary analysis status: %s", e)
+                logger.error("Error getting binary analysis status: %s",
+                             e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience."))
 
                 inmain(Dialog.showError, "Check Binary Analysis Status",
                        """Error getting binary analysis status.\n\nPlease check:
@@ -173,9 +171,8 @@ def explain_function(state: RevEngState) -> None:
                     res: Response = RE_explain(pseudo_code,
                                                ret.stdout.split(b' ')[-1].strip().decode() if ret.returncode == 0 else None)
 
-                    if "error" in res.json():
-                        error = res.json()["error"]
-
+                    error = res.json().get("error", None)
+                    if error:
                         logger.error("Error with function explanation: %s", error)
                         inmain(Dialog.showError, "", f"Error getting function explanation: {error}")
                     else:
@@ -185,9 +182,9 @@ def explain_function(state: RevEngState) -> None:
                         inmain(IDAUtils.set_comment, inmain(idc.here), comment)
                 except HTTPError as e:
                     logger.error("Error with function explanation: %s", e)
-                    if "error" in e.response.json():
-                        inmain(Dialog.showError, "Function Explanation",
-                               f"Error getting function explanation: {e.response.json()['error']}")
+
+                    error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
+                    inmain(Dialog.showError, "Function Explanation", f"Error getting function explanation: {error}")
             else:
                 info = inmain(get_inf_structure)
 
@@ -240,9 +237,8 @@ def download_logs(state: RevEngState) -> None:
                 logger.error("Unable to download binary analysis logs for: %s. Reason: %s",
                              basename(fpath), e)
 
-                if "error" in e.response.json():
-                    inmain(Dialog.showError, "Binary Analysis Logs",
-                           f"Unable to download binary analysis logs: {e.response.json()['error']}")
+                error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
+                inmain(Dialog.showError, "Binary Analysis Logs", f"Unable to download binary analysis logs: {error}")
 
         inthread(bg_task)
 
@@ -283,9 +279,8 @@ def function_signature(state: RevEngState, func_addr: int = 0) -> None:
             except HTTPError as e:
                 logger.error("Unable to obtain function argument details. %s", e)
 
-                if "error" in e.response.json():
-                    inmain(Dialog.showError, "Binary Analysis Logs",
-                           f"Failed to obtain function argument details: {e.response.json()['error']}")
+                error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
+                inmain(Dialog.showError, "Binary Analysis Logs", f"Failed to obtain function argument details: {error}")
 
         inthread(bg_task, idc.get_func_attr(func_addr if func_addr > 0 else idc.here(), idc.FUNCATTR_START))
 
@@ -321,9 +316,9 @@ def analysis_history(state: RevEngState) -> None:
                            f"{basename(fpath)} binary not yet analyzed.")
             except HTTPError as e:
                 logger.error("Unable to obtain binary analysis history. %s", e)
-                if "error" in e.response.json():
-                    inmain(Dialog.showError, "Binary Analysis History",
-                           f"Failed to obtain binary analysis history: {e.response.json()['error']}")
+
+                error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
+                inmain(Dialog.showError, "Binary Analysis History", f"Failed to obtain binary analysis history: {error}")
 
         inthread(bg_task)
 
@@ -397,16 +392,11 @@ def is_analysis_complete(state: RevEngState, fpath: str) -> tuple[bool, str]:
 
         return status == "Complete", status
     except HTTPError as e:
-        if "error" in e.response.json():
-            msg = e.response.json()["error"]
+        error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
+        if "invalid" in error.lower():
+            upload_binary(state)
 
-            if "invalid" in msg.lower():
-                upload_binary(state)
-
-            logger.error("Error getting binary analysis status: %s", msg)
-        else:
-            logger.error("Error getting binary analysis status: %s", e)
-
+        logger.error("Error getting binary analysis status: %s", error)
         return False, "Processing"
 
 

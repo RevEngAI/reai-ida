@@ -96,9 +96,10 @@ class UserCredentialsPage(BasePage):
                 self.state.config.set("host")
                 self.state.config.set("apikey")
             except HTTPError as e:
-                Dialog.showError("Setup Wizard", e.response.json()["error"])
-                logger.error("Unable to retrieve any of the available models. %s",
-                             e.response.json()["error"])
+                logger.error("Unable to retrieve any of the available models. %s", e)
+
+                error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
+                Dialog.showError("Setup Wizard", error)
         return False
 
     def _get_title(self) -> str:

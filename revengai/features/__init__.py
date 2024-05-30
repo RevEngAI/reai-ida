@@ -55,10 +55,8 @@ class BaseDialog(QDialog):
             for function in res.json()["functions"]:
                 self.analyzed_functions[function["function_vaddr"]] = function["function_id"]
         except HTTPError as e:
-            if "error" in e.response.json():
-                logger.error("Error getting analysed functions: %s", e.response.json()["error"])
-            else:
-                logger.error("Error getting analysed functions: %s", e.response.reason)
+            logger.error("Error getting analysed functions: %s",
+                         e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience."))
 
     def _set_function_renamed(self, func_addr: int, new_func_name: str) -> None:
         func_id = self.analyzed_functions.get(func_addr)
@@ -67,16 +65,12 @@ class BaseDialog(QDialog):
             try:
                 res: Response = RE_functions_rename(func_id, new_func_name)
 
-                logger.info(res.json()["success"])
+                logger.info(res.json()["msg"])
             except HTTPError as e:
-                if "error" in e.response.json():
-                    logger.error("Failed to rename functionId %d by '%s'. %s",
-                                 func_id, new_func_name, e.response.json()["error"])
+                error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
+                logger.error("Failed to rename functionId %d by '%s'. %s", func_id, new_func_name, error)
 
-                    inmain(idaapi.warning, e.response.json()["error"])
-                else:
-                    logger.error("Failed to rename functionId %d by '%s'. %s",
-                                 func_id, new_func_name, e.response.reason)
+                inmain(idaapi.warning, error)
         else:
             logger.error('Not found functionId at address: 0x%X.', func_addr)
 
