@@ -21,7 +21,7 @@ from revengai.misc.qtutils import inthread, inmain
 from revengai.models import CheckableItem, IconItem, SimpleItem
 from revengai.models.checkable_model import RevEngCheckableTableModel
 from revengai.models.table_model import RevEngTableModel
-from revengai.ui.function_similarity_panel2 import Ui_FunctionSimilarityPanel
+from revengai.ui.function_similarity_panel import Ui_FunctionSimilarityPanel
 
 
 logger = logging.getLogger("REAI")
