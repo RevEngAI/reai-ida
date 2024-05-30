@@ -3,13 +3,8 @@ from typing import Any
 
 from PyQt5.QtCore import Qt
 
+from revengai.models import CheckableItem
 from revengai.models.table_model import RevEngTableModel
-
-
-class CheckableItem(object):
-    def __init__(self, data: Any = None, checked: bool = True):
-        self.data: Any = data
-        self.checkState: int = Qt.Checked if checked else Qt.Unchecked
 
 
 class RevEngCheckableTableModel(RevEngTableModel):
@@ -20,7 +15,7 @@ class RevEngCheckableTableModel(RevEngTableModel):
         self.flag = flag
         self._columns = columns
 
-    def data(self, index, role=None) -> int:
+    def data(self, index, role=None) -> Any:
         if index.isValid() and role == Qt.CheckStateRole and index.column() in self._columns:
             if isinstance(self._data[index.row()][index.column()], CheckableItem):
                 return self._data[index.row()][index.column()].checkState

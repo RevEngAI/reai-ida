@@ -1,24 +1,9 @@
 # -*- coding: utf-8 -*-
-from typing import Optional
+from typing import Any, Optional
 
 from PyQt5.QtCore import QAbstractTableModel, Qt
-from PyQt5.QtGui import QIcon
 
-from os.path import dirname, join
-
-
-class TableItem(object):
-    def __init__(self, text: str, resource_name: str = None):
-        self.text: str = text
-
-        self.icon: Optional[QIcon] = QIcon(TableItem._plugin_resource(resource_name)) if resource_name else None
-
-    @staticmethod
-    def _plugin_resource(resource_name: str) -> str:
-        """
-        Return the full path for a given plugin resource file.
-        """
-        return join(dirname(__file__), "../resources", resource_name)
+from revengai.models import IconItem, SimpleItem
 
 
 class RevEngTableModel(QAbstractTableModel):
@@ -36,23 +21,22 @@ class RevEngTableModel(QAbstractTableModel):
             return len(self._data[0])
         return 0
 
-    def data(self, index, role=None):
+    def data(self, index, role=None) -> Any:
         if index.isValid():
             item = self._data[index.row()][index.column()]
-            if isinstance(item, TableItem):
-                if role == Qt.DecorationRole:
-                    return item.icon
-                elif role == Qt.DisplayRole:
-                    return item.text
+            if role == Qt.DecorationRole and isinstance(item, IconItem):
+                return item.icon
             elif role == Qt.DisplayRole:
-                return item
+                return item.text if isinstance(item, SimpleItem) else item
         return None
 
-    @property
-    def get_data(self) -> list:
+    def get_datas(self) -> list[Any]:
         return self._data
 
-    def headerData(self, col, orientation, role=None):
+    def get_data(self, pos: int) -> Optional[Any]:
+        return self._data[pos] if len(self._data) > pos else None
+
+    def headerData(self, col, orientation, role=None) -> Any:
         if orientation == Qt.Horizontal and role == Qt.DisplayRole:
             return self._header[col]
         return None
