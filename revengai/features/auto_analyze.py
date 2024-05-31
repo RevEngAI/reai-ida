@@ -111,6 +111,7 @@ class AutoAnalysisDialog(BaseDialog):
             inmain(self.ui.renameButton.setEnabled, False)
             inmain(self.ui.confidenceSlider.setEnabled, False)
             inmain(self.ui.progressBar.setProperty, "value", 1)
+            inmain(show_wait_box, "HIDECANCEL\nGetting results…")
 
             if not self.analyzed_functions or len(self.analyzed_functions) == 0:
                 self._get_analyze_functions()
@@ -201,6 +202,7 @@ class AutoAnalysisDialog(BaseDialog):
             logger.error("Fetching auto analysis failed. Reason: %s", e)
             inmain(Dialog.showError, "Auto Analysis", f"Auto Analysis Error: {e.response.json()['error']}")
         finally:
+            inmain(hide_wait_box)
             inmain(self._tab_changed, 1)
             inmain(self.ui.tabWidget.setCurrentIndex, 1)
             inmain(self.ui.fetchButton.setEnabled, True)
