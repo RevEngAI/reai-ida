@@ -3,7 +3,7 @@ from os import makedirs
 from json import loads, dumps
 from os.path import join, exists
 
-from requests import HTTPError, Response
+from requests import HTTPError
 from idaapi import get_user_idadir, retrieve_input_file_sha256
 
 from reait.api import re_conf, RE_health, RE_settings
@@ -21,7 +21,8 @@ class RevEngConfiguration(object):
 
     auto_start = True   # Enable RevEng.AI plugin automatically
 
-    LIMIT = 10  # File size limit to upload 10MB
+    LIMIT = 10 * 1024**2  # File size limit to upload 10MB
+    PORTAL = "http://dashboard.local"   # Web portal
 
     def __init__(self):
         makedirs(RevEngConfiguration._dir, mode=0o755, exist_ok=True)
@@ -68,10 +69,11 @@ class RevEngConfiguration(object):
                 def bg_task() -> None:
                     try:
                         if RE_health():
-                            res: Response = RE_settings()
+                            response = RE_settings().json()
 
-                            if res.json()["success"]:
-                                RevEngConfiguration.LIMIT = res.json()["max_file_size"] // (1024 * 1024)
+                            if response["success"]:
+                                RevEngConfiguration.PORTAL = response.get("portal", RevEngConfiguration.PORTAL)
+                                RevEngConfiguration.LIMIT = response.get("max_file_size", RevEngConfiguration.LIMIT)
                     except HTTPError:
                         pass
 

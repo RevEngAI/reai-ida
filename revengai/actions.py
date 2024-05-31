@@ -36,7 +36,7 @@ def upload_binary(state: RevEngState) -> None:
         def bg_task(tags: list = None, scope: str = "PRIVATE", debug_fpath: str = None) -> None:
             file_size = inmain(retrieve_input_file_size)
 
-            if state.config.LIMIT > (file_size // (1024 * 1024)):
+            if state.config.LIMIT > file_size:
                 try:
                     inmain(show_wait_box, "HIDECANCEL\nUploading binary for analysis…")
 
@@ -74,7 +74,7 @@ def upload_binary(state: RevEngState) -> None:
             else:
                 inmain(idc.warning,
                        f"Please be advised that the largest size for processing a binary file is"
-                       f" {state.config.LIMIT} MB.")
+                       f" {state.config.LIMIT // (1024**2)} MB.")
 
         f = UploadBinaryForm()
 
@@ -385,18 +385,20 @@ def function_breakdown(state: RevEngState, function_id: int = 0) -> None:
     if is_condition_met(state, fpath):
         state.config.init_current_analysis()
 
-        def bg_task(func_ea: int = 0, function_id: int = 0) -> None:
-            function_name = inmain(IDAUtils.get_demangled_func_name, inmain(idc.here))
+        def bg_task(func_ea: int, func_id: int = 0) -> None:
+            func_name = inmain(IDAUtils.get_demangled_func_name, func_ea)
 
-            if not function_id and func_ea:
+            if not func_id:
+                func_ea -= inmain(get_imagebase)
+
                 try:
                     inmain(show_wait_box,
-                           f"HIDECANCEL\nGetting information on the function breakdown of {function_name}…")
+                           f"HIDECANCEL\nGetting information on the function breakdown of {func_name}…")
 
                     res: Response = RE_analyze_functions(fpath, state.config.get("binary_id", 0))
 
-                    function_id = next((function["function_id"] for function in res.json()["functions"]
-                                        if function["function_vaddr"] == func_ea), 0)
+                    func_id = next((function["function_id"] for function in res.json()["functions"]
+                                    if function["function_vaddr"] == func_ea), 0)
                 except HTTPError as e:
                     logger.error("Error getting function list: %s",
                                  e.response.json().get("error",
@@ -404,16 +406,15 @@ def function_breakdown(state: RevEngState, function_id: int = 0) -> None:
                 finally:
                     inmain(hide_wait_box)
 
-            if function_id:
-                logger.info("Redirect to WEB browser to display function breakdown for %s [%d]",
-                            function_name, function_id)
+            if func_id:
+                logger.info("Redirection to the WEB browser to display the function breakdown ID %d | %s",
+                            func_id, func_name)
 
                 from webbrowser import open_new_tab
 
-                # f"{state.config.get("host")}/function/{function_id}"
-                open_new_tab(f"http://dashboard.local/function/{function_id}")
+                open_new_tab(f"{state.config.PORTAL}/function/{func_id}")
 
-        inthread(bg_task, (idc.get_func_attr(idc.here(), idc.FUNCATTR_START) - get_imagebase()), function_id)
+        inthread(bg_task, idc.get_func_attr(idc.here(), idc.FUNCATTR_START), function_id)
 
 
 def is_analysis_complete(state: RevEngState, fpath: str) -> tuple[bool, str]:
