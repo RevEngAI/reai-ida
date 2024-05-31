@@ -193,7 +193,7 @@ class FunctionSimilarityDialog(BaseDialog):
             renameAction = menu.addAction(self.ui.renameButton.text())
             renameAction.triggered.connect(self._rename_symbol)
 
-            func_id = selected[0].data["origin_function_id"]
+            func_id = selected[0].data["nearest_neighbor_id"]
             breakdownAction = menu.addAction("View Function Breakdown")
             breakdownAction.triggered.connect(lambda: self._function_breakdown(func_id))
 

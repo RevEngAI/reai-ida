@@ -94,7 +94,7 @@ class AutoAnalysisDialog(BaseDialog):
             renameAction = menu.addAction(self.ui.renameButton.text())
             renameAction.triggered.connect(lambda: self._rename_function(selected))
 
-            func_id = selected[2].data["origin_function_id"]
+            func_id = selected[2].data["nearest_neighbor_id"]
             breakdownAction = menu.addAction("View Function Breakdown")
             breakdownAction.triggered.connect(lambda: self._function_breakdown(func_id))
 
