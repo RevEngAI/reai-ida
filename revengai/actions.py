@@ -379,6 +379,43 @@ def sync_functions_name(state: RevEngState) -> None:
         inthread(bg_task)
 
 
+def function_breakdown(state: RevEngState, function_id: int = 0) -> None:
+    fpath = idc.get_input_file_path()
+
+    if is_condition_met(state, fpath):
+        state.config.init_current_analysis()
+
+        def bg_task(func_ea: int = 0, function_id: int = 0) -> None:
+            function_name = inmain(IDAUtils.get_demangled_func_name, inmain(idc.here))
+
+            if not function_id and func_ea:
+                try:
+                    inmain(show_wait_box,
+                           f"HIDECANCEL\nGetting information on the function breakdown of {function_name}…")
+
+                    res: Response = RE_analyze_functions(fpath, state.config.get("binary_id", 0))
+
+                    function_id = next((function["function_id"] for function in res.json()["functions"]
+                                        if function["function_vaddr"] == func_ea), 0)
+                except HTTPError as e:
+                    logger.error("Error getting function list: %s",
+                                 e.response.json().get("error",
+                                                       "An unexpected error occurred. Sorry for the inconvenience."))
+                finally:
+                    inmain(hide_wait_box)
+
+            if function_id:
+                logger.info("Redirect to WEB browser to display function breakdown for %s [%d]",
+                            function_name, function_id)
+
+                from webbrowser import open_new_tab
+
+                # f"{state.config.get("host")}/function/{function_id}"
+                open_new_tab(f"http://dashboard.local/function/{function_id}")
+
+        inthread(bg_task, (idc.get_func_attr(idc.here(), idc.FUNCATTR_START) - get_imagebase()), function_id)
+
+
 def is_analysis_complete(state: RevEngState, fpath: str) -> tuple[bool, str]:
     try:
         bid = state.config.get("binary_id", 0)

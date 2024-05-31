@@ -74,13 +74,14 @@ class Hooks(UI_Hooks):
                     if not action.get("disabled", False):
                         if self.state.config.is_valid():
                             if action["id"] == "reai:wizard" or \
-                                    (action["id"] == "reai:rename" and
-                                     not IDAUtils.is_in_valid_segment(here())) or \
+                                    (action["id"] in ("reai:rename", "reai:breakdown",) and
+                                     not IDAUtils.is_function(here())) or \
                                     (get_widget_type(form) != BWN_PSEUDOCODE and
                                      action["id"] in ("reai:explain", "reai:signature",)):
                                 continue
                         elif action["id"] != "reai:wizard":
                             continue
+                        print(action["id"])
                         attach_action_to_popup(form, popup, action["id"], MENU, SETMENU_APP)
 
 

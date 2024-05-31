@@ -50,5 +50,11 @@
     "name": "Binary Analysis History",
     "callback": "analysis_history",
     "shortcut": "Ctrl+Shift+H"
+  },
+  {
+    "id": "reai:breakdown",
+    "name": "View Function Breakdown",
+    "callback": "function_breakdown",
+    "shortcut": "Ctrl+Shift+B"
   }
 ]

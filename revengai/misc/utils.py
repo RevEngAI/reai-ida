@@ -130,8 +130,13 @@ class IDAUtils(object):
                                  )
 
     @staticmethod
-    def is_in_valid_segment(func_ea: int) -> bool:
-        segments = [idaapi.get_segm_by_name(name) for name in (".init", ".text", ".fini",)]
-
+    def is_in_valid_segment(func_ea: int, segments: tuple[str] = None) -> bool:
+        print(segments)
+        segments = [idaapi.get_segm_by_name(name) for name in (segments if segments else (".init", ".text", ".fini",))]
+        print(segments)
         return any(segment and segment.start_ea <= func_ea <= segment.end_ea for segment in segments) \
             if segments else False
+
+    @staticmethod
+    def is_function(func_ea: int) -> bool:
+        return True if idaapi.get_func(func_ea) else False

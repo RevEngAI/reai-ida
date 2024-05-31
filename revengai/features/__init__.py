@@ -75,6 +75,7 @@ class BaseDialog(QDialog):
             logger.error('Not found functionId at address: 0x%X.', func_addr)
 
     def _function_breakdown(self, func_id: int) -> None:
-        from webbrowser import open_new_tab
+        # Prevent circular import
+        from revengai.actions import function_breakdown
 
-        open_new_tab(f"http://dashboard.local/function/{func_id}")
+        function_breakdown(self.state, func_id)

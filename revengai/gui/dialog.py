@@ -70,6 +70,8 @@ class StatusForm(Form):
                         self.OnGetLine(sel[0])[1], self.OnGetLine(sel[0])[0])
 
             from webbrowser import open_new_tab
+
+            # f"{state.config.get("host")}/analyses/{self.OnGetLine(sel[0])[1]}"
             open_new_tab(f"http://dashboard.local/analyses/{self.OnGetLine(sel[0])[1]}")
 
         def OnDeleteLine(self, sel) -> tuple:
