@@ -112,6 +112,8 @@ class AutoAnalysisDialog(BaseDialog):
             inmain(self.ui.confidenceSlider.setEnabled, False)
             inmain(self.ui.progressBar.setProperty, "value", 1)
             inmain(show_wait_box, "HIDECANCEL\nGetting results…")
+            inmain(inmain(self.ui.resultsTable.model).fill_table, [])
+            inmain(self._tab_changed, inmain(self.ui.tabWidget.currentIndex))
 
             if not self.analyzed_functions or len(self.analyzed_functions) == 0:
                 self._get_analyze_functions()

@@ -86,6 +86,7 @@ class FunctionSimilarityDialog(BaseDialog):
             inmain(self.ui.fetchButton.setEnabled, False)
             inmain(self.ui.renameButton.setEnabled, False)
             inmain(self.ui.progressBar.setProperty, "value", 25)
+            inmain(show_wait_box, "HIDECANCEL\nGetting results…")
 
             if not self.analyzed_functions or len(self.analyzed_functions) == 0:
                 self._get_analyze_functions()
@@ -126,6 +127,7 @@ class FunctionSimilarityDialog(BaseDialog):
             error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
             inmain(Dialog.showError, "Function Renaming", error)
         finally:
+            inmain(hide_wait_box)
             inmain(self.ui.tabWidget.setCurrentIndex, 1)
             inmain(self.ui.fetchButton.setEnabled, True)
             inmain(self.ui.progressBar.setProperty, "value", 0)
