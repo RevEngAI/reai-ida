@@ -81,7 +81,6 @@ class Hooks(UI_Hooks):
                                 continue
                         elif action["id"] != "reai:wizard":
                             continue
-                        print(action["id"])
                         attach_action_to_popup(form, popup, action["id"], MENU, SETMENU_APP)
 
 
