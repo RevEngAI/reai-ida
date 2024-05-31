@@ -55,7 +55,7 @@ class RevEngConfiguration(object):
 
     def restore(self) -> None:
         if exists(join(self._dir, self._filename)):
-            with open(join(self._dir, self._filename), "r") as fd:
+            with open(join(self._dir, self._filename)) as fd:
                 self._config = loads(fd.read())
 
             if self.is_valid():

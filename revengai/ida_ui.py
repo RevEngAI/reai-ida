@@ -69,7 +69,7 @@ class Hooks(UI_Hooks):
             attach_action_to_popup(form, popup, None, None)
 
             # Add actions
-            with open(join(abspath(dirname(realpath(__file__))), "conf/actions.json"), "r") as fd:
+            with open(join(abspath(dirname(realpath(__file__))), "conf/actions.json")) as fd:
                 for action in load(fd):
                     if not action.get("disabled", False):
                         if self.state.config.is_valid():
@@ -124,7 +124,7 @@ class RevEngConfigForm_t(PluginForm):
         # Add ui hook
         self._hooks.hook()
 
-        with open(join(abspath(dirname(realpath(__file__))), "conf/actions.json"), "r") as fd:
+        with open(join(abspath(dirname(realpath(__file__))), "conf/actions.json")) as fd:
             for action in load(fd):
                 if not action.get("disabled", False) and \
                         (self.state.config.is_valid() or action["id"] == "reai:wizard"):
@@ -149,7 +149,7 @@ class RevEngConfigForm_t(PluginForm):
             del_hotkey(hotkey)
 
         # Unregister menu actions
-        with open(join(abspath(dirname(realpath(__file__))), "conf/actions.json"), "r") as fd:
+        with open(join(abspath(dirname(realpath(__file__))), "conf/actions.json")) as fd:
             for action in load(fd):
                 unregister_action(action["id"])
 
