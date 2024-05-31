@@ -136,8 +136,9 @@ def auto_analyze(state: RevEngState) -> None:
                 dialog = inmain(AutoAnalysisDialog, state, fpath)
                 inmain(dialog.exec_)
             else:
-                inmain(idc.warning,
-                       f"We are unable to fulfil your request at this time. Binary analysis status: {status}")
+                inmain(Dialog.showInfo,
+                       "Auto Analysis",
+                       f"Unable to fulfil your request at this time.\nBinary analysis status: {status}")
 
         inthread(bg_task)
 
@@ -152,8 +153,9 @@ def rename_function(state: RevEngState) -> None:
                 dialog = inmain(FunctionSimilarityDialog, state, fpath)
                 inmain(dialog.exec_)
             else:
-                inmain(idc.warning,
-                       f"We are unable to fulfil your request at this time. Binary analysis status: {status}")
+                inmain(Dialog.showInfo,
+                       "Function Renaming",
+                       f"Unable to fulfil your request at this time.\nBinary analysis status: {status}")
 
         inthread(bg_task)
 
@@ -390,8 +392,9 @@ def function_breakdown(state: RevEngState, function_id: int = 0) -> None:
         def bg_task(func_ea: int, func_id: int = 0) -> None:
             done, status = is_analysis_complete(state, fpath)
             if not done:
-                inmain(idc.warning,
-                       f"We are unable to fulfil your request at this time. Binary analysis status: {status}")
+                inmain(Dialog.showInfo,
+                       "Function Breakdown",
+                       f"Unable to fulfil your request at this time.\nBinary analysis status: {status}")
                 return
 
             func_name = inmain(IDAUtils.get_demangled_func_name, func_ea)
