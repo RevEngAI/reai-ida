@@ -22,7 +22,7 @@ class RevEngConfiguration(object):
     auto_start = True   # Enable RevEng.AI plugin automatically
 
     LIMIT = 10 * 1024**2  # File size limit to upload 10MB
-    PORTAL = "http://dashboard.local"   # Web portal
+    PORTAL = "https://portal.reveng.ai"   # Web portal
 
     def __init__(self):
         makedirs(RevEngConfiguration._dir, mode=0o755, exist_ok=True)
