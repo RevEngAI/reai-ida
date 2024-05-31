@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 import abc
 import logging
+from os.path import dirname, join
 
 import idaapi
 from PyQt5.QtCore import QRect
+from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QDialog, QDesktopWidget
 from reait.api import RE_functions_rename
 
@@ -31,6 +33,9 @@ class BaseDialog(QDialog):
         self.base_addr = get_imagebase()
 
         state.config.init_current_analysis()
+
+        self.setModal(True)
+        self.setWindowIcon(QIcon(join(dirname(__file__), "../resources/favicon.png")))
 
     def showEvent(self, event):
         super(BaseDialog, self).showEvent(event)
