@@ -114,7 +114,7 @@ class AutoAnalysisDialog(BaseDialog):
             inmain(show_wait_box, "HIDECANCEL\nGetting results…")
             inmain(inmain(self.ui.resultsTable.model).fill_table, [])
             inmain(self._tab_changed, inmain(self.ui.tabWidget.currentIndex))
-            
+
             if not self.analyzed_functions or len(self.analyzed_functions) == 0:
                 self._get_analyze_functions()
 
