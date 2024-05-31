@@ -2,7 +2,7 @@
 import logging
 from os.path import dirname, join
 
-from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QIcon, QPixmap
 from idc import get_input_file_path
 from idaapi import CH_CAN_DEL, CH_CAN_EDIT, CH_MULTI, CH_MODAL, CH_NO_STATUS_BAR, CHCOL_DEC, CHCOL_PLAIN, Choose, Form
 
@@ -20,7 +20,7 @@ logger = logging.getLogger("REAI")
 
 class Dialog(object):
     @staticmethod
-    def showInfo(title: str, message: str) -> None:
+    def showInfo(title: str, message: str) -> int:
         msgBox = QMessageBox()
 
         msgBox.setModal(True)
@@ -28,12 +28,12 @@ class Dialog(object):
         msgBox.setWindowIcon(QIcon(join(dirname(__file__), "../resources/favicon.png")))
 
         msgBox.setText(message)
-        msgBox.setIcon(QMessageBox.Information)
+        msgBox.setIconPixmap(QPixmap(join(dirname(__file__), "../resources/favicon.png")))
 
-        msgBox.exec()
+        return msgBox.exec()
 
     @staticmethod
-    def showError(title: str, message: str) -> None:
+    def showError(title: str, message: str) -> int:
         msgBox = QMessageBox()
 
         msgBox.setModal(True)
@@ -41,9 +41,9 @@ class Dialog(object):
         msgBox.setWindowIcon(QIcon(join(dirname(__file__), "../resources/favicon.png")))
 
         msgBox.setText(message)
-        msgBox.setIcon(QMessageBox.Critical)
+        msgBox.setIcon(QMessageBox.Warning)
 
-        msgBox.exec()
+        return msgBox.exec()
 
 
 class StatusForm(Form):
