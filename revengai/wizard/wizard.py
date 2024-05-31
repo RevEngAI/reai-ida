@@ -125,7 +125,7 @@ class UserCredentialsPage(BasePage):
         layout = QFormLayout(self)
 
         layout.addWidget(QLabel("<span style=\"font-weight:bold\">Setup Account Information</span>"))
-        layout.addRow(QLabel("API Key:"), self.api_key)
+        layout.addRow(QLabel("Personal Key:"), self.api_key)
         layout.addRow(QLabel("Hostname:"), self.server_url)
 
         return layout
