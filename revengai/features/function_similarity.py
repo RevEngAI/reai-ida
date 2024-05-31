@@ -93,7 +93,7 @@ class FunctionSimilarityDialog(BaseDialog):
             function_id = self.analyzed_functions.get(self.v_addr, None)
 
             if function_id is None:
-                inmain(idc.warning, "No similar functions found.")
+                inmain(idc.warning, "No matches found.")
                 logger.error("No similar functions found for: %s",
                              inmain(IDAUtils.get_demangled_func_name, self.v_addr))
                 return
@@ -119,12 +119,12 @@ class FunctionSimilarityDialog(BaseDialog):
             inmain(self.ui.renameButton.setEnabled, len(data) > 0)
 
             if len(data) == 0:
-                inmain(idc.warning, "No similar functions found.")
-                logger.error("No similar functions found for: %s",
-                             inmain(IDAUtils.get_demangled_func_name, inmain(idc.here)))
+                inmain(idc.warning, "No matches found. Try a different confidence value.")
+                logger.error("No similar functions found for: %s with confidence: %d",
+                             inmain(IDAUtils.get_demangled_func_name, inmain(idc.here)), (1 - distance) * 100)
         except HTTPError as e:
             error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
-            inmain(Dialog.showError, "Auto Analysis", error)
+            inmain(Dialog.showError, "Function Renaming", error)
         finally:
             inmain(self.ui.tabWidget.setCurrentIndex, 1)
             inmain(self.ui.fetchButton.setEnabled, True)
@@ -137,6 +137,10 @@ class FunctionSimilarityDialog(BaseDialog):
             inmain(self.ui.resultsTable.setColumnWidth, 2, width * .5)
 
     def _rename_symbol(self):
+        if not self.ui.resultsTable.selectedIndexes():
+            Dialog.showInfo("Function Renaming", "Select one of the listed functions that you wish to use.")
+            return
+
         rows = sorted(set(index.row() for index in self.ui.resultsTable.selectedIndexes()))
         selected = self.ui.resultsTable.model().get_data(rows[0])
 
