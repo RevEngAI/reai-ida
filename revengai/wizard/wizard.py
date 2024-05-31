@@ -4,6 +4,7 @@ import logging
 from os.path import dirname, join
 from sys import platform
 
+import idaapi
 import idc
 from PyQt5.QtCore import QRect
 from PyQt5.QtGui import QPixmap
@@ -14,7 +15,6 @@ from PyQt5.QtWidgets import QWizardPage, QFormLayout, QLineEdit, QLabel, QWizard
 from revengai.api import RE_models
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
-
 
 logger = logging.getLogger("REAI")
 
@@ -85,6 +85,8 @@ class UserCredentialsPage(BasePage):
     def validatePage(self):
         if not any(c.text() == "" for c in [self.api_key, self.server_url]):
             try:
+                idaapi.show_wait_box("HIDECANCEL\nChecking configuration…")
+
                 self.state.config.set("apikey", self.api_key.text())
                 self.state.config.set("host", self.server_url.text())
 
@@ -104,6 +106,8 @@ class UserCredentialsPage(BasePage):
 
                 error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
                 Dialog.showError("Setup Wizard", error)
+            finally:
+                idaapi.hide_wait_box()
         return False
 
     def _get_title(self) -> str:
