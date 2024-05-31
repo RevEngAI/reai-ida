@@ -11,6 +11,9 @@ from PyQt5.QtWidgets import QMessageBox
 from itertools import filterfalse
 
 from reait.api import RE_delete
+
+from revengai import __version__
+from revengai.conf import RevEngConfiguration
 from revengai.manager import RevEngState
 from revengai.misc.qtutils import inthread
 
@@ -143,7 +146,7 @@ Choose your options for binary analysis
 Privacy:
     <#You are the only one able to access this file#Private to you:{rOptPrivate}>
     <#Everyone will be able to search against this file#Public access:{rOptPublic}>{iScope}>
-""",{
+""", {
                           "FormChangeCb": Form.FormChangeCb(self.OnFormChange),
                           "iScope": Form.RadGroupControl(("rOptPrivate", "rOptPublic",)),
                           "iDebugFile": Form.FileInput(swidth=40, open=True),
@@ -154,6 +157,40 @@ Privacy:
         """
         Triggered when an event occurs on form
         """
+        return 1
+
+    def Show(self) -> int:
+        # Compile the form once
+        if not self.Compiled():
+            self.Compile()
+
+        # Execute the form
+        return self.Execute()
+
+
+class AboutForm(Form):
+    def __init__(self):
+        self.invert = False
+
+        Form.__init__(self,
+                      r"""BUTTON YES* Open Reveng.AI Website
+RevEng.AI Toolkit: About
+
+{FormChangeCb}
+RevEng.AI Toolkit IDA plugin v%s.
+
+RevEng.AI Toolkit is released under the GPL v2.
+Find more info at https://reveng.ai/
+""" % __version__, {
+                          "FormChangeCb": Form.FormChangeCb(self.OnFormChange),
+                      })
+
+    # callback to be executed when any form control changed
+    def OnFormChange(self, fid):
+        if fid == -2:   # Goto homepage
+            from webbrowser import open_new_tab
+
+            open_new_tab("https://reveng.ai/")
         return 1
 
     def Show(self) -> int:

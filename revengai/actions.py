@@ -14,7 +14,7 @@ from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, re_binary_id, R
 
 from revengai.api import RE_explain, RE_analyze_functions, RE_functions_dump, RE_search, RE_recent_analysis
 from revengai.misc.qtutils import inthread, inmain
-from revengai.gui.dialog import Dialog, StatusForm, UploadBinaryForm
+from revengai.gui.dialog import Dialog, StatusForm, UploadBinaryForm, AboutForm
 from revengai.manager import RevEngState
 from revengai.features.auto_analyze import AutoAnalysisDialog
 from revengai.features.function_similarity import FunctionSimilarityDialog
@@ -457,3 +457,9 @@ def is_condition_met(state: RevEngState, fpath: str) -> bool:
     else:
         return True
     return False
+
+
+def about(_) -> None:
+    f = AboutForm()
+    f.Show()
+    f.Free()
