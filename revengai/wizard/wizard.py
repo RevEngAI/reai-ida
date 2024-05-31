@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 import abc
 import logging
+from os.path import dirname, join
 from sys import platform
 
 import idc
 from PyQt5.QtCore import QRect
+from PyQt5.QtGui import QPixmap
 from requests import HTTPError, Response
 
 from PyQt5.QtWidgets import QWizardPage, QFormLayout, QLineEdit, QLabel, QWizard, QComboBox, QLayout, QDesktopWidget
@@ -26,9 +28,11 @@ class RevEngSetupWizard(QWizard):
         self.addPage(UserCredentialsPage(self.state))
         self.addPage(UserAvailableModelsPage(self.state))
 
-        self.setWindowTitle("RevEng.AI Setup Wizard")
+        self.setWindowTitle("RevEng.AI Toolkit: Setup Wizard")
         self.setOptions(QWizard.CancelButtonOnLeft | QWizard.NoBackButtonOnStartPage)
         self.setWizardStyle(QWizard.MacStyle if platform == 'darwin' else QWizard.ModernStyle)
+        self.setPixmap(QWizard.BackgroundPixmap if platform == 'darwin' else QWizard.WatermarkPixmap,
+                       QPixmap(join(dirname(__file__), "../resources/logo.png")))
 
         self.button(QWizard.FinishButton).clicked.connect(self._save)
 

@@ -10,6 +10,7 @@ from reait.api import re_conf, RE_health, RE_settings
 
 from revengai.conf.database import RevEngDatabase
 from revengai.log.log import configure_loggers
+from revengai.misc.qtutils import inthread
 
 
 class RevEngConfiguration(object):
@@ -64,14 +65,17 @@ class RevEngConfiguration(object):
                 re_conf["host"] = self.config["host"]
                 re_conf["apikey"] = self.config["apikey"]
 
-                try:
-                    if RE_health():
-                        res: Response = RE_settings()
+                def bg_task() -> None:
+                    try:
+                        if RE_health():
+                            res: Response = RE_settings()
 
-                        if res.json()["success"]:
-                            self.LIMIT = res.json()["max_file_size"] // (1024 * 1024)
-                except HTTPError:
-                    pass
+                            if res.json()["success"]:
+                                RevEngConfiguration.LIMIT = res.json()["max_file_size"] // (1024 * 1024)
+                    except HTTPError:
+                        pass
+
+                inthread(bg_task)
         else:
             self.config["host"] = re_conf["host"]
 
