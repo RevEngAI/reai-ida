@@ -5,10 +5,10 @@ from os.path import dirname, join
 from sys import platform
 
 import idaapi
-import idc
 from PyQt5.QtCore import QRect
 from PyQt5.QtGui import QPixmap
-from requests import HTTPError, Response
+from reait.api import RE_authentication
+from requests import HTTPError
 
 from PyQt5.QtWidgets import QWizardPage, QFormLayout, QLineEdit, QLabel, QWizard, QComboBox, QLayout, QDesktopWidget
 
@@ -90,18 +90,19 @@ class UserCredentialsPage(BasePage):
                 self.state.config.set("apikey", self.api_key.text())
                 self.state.config.set("host", self.server_url.text())
 
-                res: Response = RE_models()
+                response = RE_authentication().json()
 
-                if res.json()["success"]:
-                    self.state.config.set("models", [model["model_name"] for model in res.json()["models"]])
-                    return True
-                else:
-                    idc.warning("Unable to retrieve any of the available models.")
+                logger.info("%s", response["message"])
 
+                response = RE_models().json()
+
+                self.state.config.set("models", [model["model_name"] for model in response["models"]])
+                return True
+            except HTTPError as e:
                 # Reset host and API key if an error occurs
                 self.state.config.set("host")
                 self.state.config.set("apikey")
-            except HTTPError as e:
+
                 logger.error("Unable to retrieve any of the available models. %s", e)
 
                 error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
