@@ -17,6 +17,7 @@ from revengai.api import RE_analyze_functions
 from revengai.manager import RevEngState
 from revengai.misc.qtutils import inthread, inmain
 
+
 logger = logging.getLogger("REAI")
 
 
