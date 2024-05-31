@@ -390,16 +390,16 @@ def function_breakdown(state: RevEngState, function_id: int = 0) -> None:
         state.config.init_current_analysis()
 
         def bg_task(func_ea: int, func_id: int = 0) -> None:
-            done, status = is_analysis_complete(state, fpath)
-            if not done:
-                inmain(Dialog.showInfo,
-                       "Function Breakdown",
-                       f"Unable to fulfil your request at this time.\nBinary analysis status: {status}")
-                return
-
             func_name = inmain(IDAUtils.get_demangled_func_name, func_ea)
 
             if not func_id:
+                done, status = is_analysis_complete(state, fpath)
+                if not done:
+                    inmain(Dialog.showInfo,
+                           "Function Breakdown",
+                           f"Unable to fulfil your request at this time.\nBinary analysis status: {status}")
+                    return
+
                 func_ea -= inmain(get_imagebase)
 
                 try:
