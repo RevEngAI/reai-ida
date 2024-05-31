@@ -142,7 +142,7 @@ class RevEngConfigForm_t(PluginForm):
 
             # context menu for About
             handler = Handler("about", self.state)
-            handler.register("reai:about", "About")
+            handler.register("reai:about", "About", icon=self.state.icon_id)
             handler.attach_to_menu(MENU, SETMENU_ENSURE_SEP)
 
     def unregister_actions(self):

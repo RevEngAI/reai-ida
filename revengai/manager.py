@@ -9,17 +9,18 @@ from revengai.conf import RevEngConfiguration
 class RevEngState(object):
     def __init__(self):
         self.gui = None
-        self.icon_id: int = 0
+        self.icon_id = 0
         self.config = RevEngConfiguration()
 
     def start_plugin(self):
+        self.icon_id = load_custom_icon(file_name=join(dirname(__file__), "resources/favicon.png"),
+                                        format="png")
+
         from revengai.ida_ui import RevEngGUI
 
         self.gui = RevEngGUI(self)
 
         self.gui.show_windows()
-
-        self.icon_id = load_custom_icon(file_name=join(dirname(__file__), "resources/favicon.png"), format="png")
 
     def stop_plugin(self):
         if self.gui:
