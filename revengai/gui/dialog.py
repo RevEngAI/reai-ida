@@ -124,7 +124,7 @@ class StatusForm(BaseForm):
 
         Form.__init__(self,
                       r"""BUTTON CANCEL NONE
-Binary Analysis History
+RevEng.AI Toolkit: Binary Analysis History
       
 {FormChangeCb}
 <:{cEChooser}>
@@ -140,7 +140,7 @@ class UploadBinaryForm(BaseForm):
 
         Form.__init__(self,
                       r"""BUTTON YES* Analyse
-Upload Binary for Analysis
+RevEng.AI Toolkit: Upload Binary for Analysis
 
 {FormChangeCb}
 Choose your options for binary analysis
