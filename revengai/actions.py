@@ -6,15 +6,16 @@ import idc
 from idaapi import ask_file, get_imagebase, get_inf_structure, retrieve_input_file_size, show_wait_box, hide_wait_box
 
 from subprocess import run
-from requests import HTTPError, Response
+from requests import get, HTTPError, Response
 from os.path import basename, isfile
 from datetime import datetime
 
 from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, re_binary_id, RE_functions_rename
 
+from revengai import __version__
 from revengai.api import RE_explain, RE_analyze_functions, RE_functions_dump, RE_search, RE_recent_analysis
 from revengai.misc.qtutils import inthread, inmain
-from revengai.gui.dialog import Dialog, StatusForm, UploadBinaryForm, AboutForm
+from revengai.gui.dialog import Dialog, StatusForm, UploadBinaryForm, AboutForm, UpdateForm
 from revengai.manager import RevEngState
 from revengai.features.auto_analyze import AutoAnalysisDialog
 from revengai.features.function_similarity import FunctionSimilarityDialog
@@ -74,7 +75,7 @@ def upload_binary(state: RevEngState) -> None:
             else:
                 inmain(idc.warning,
                        f"Please be advised that the largest size for processing a binary file is"
-                       f" {state.config.LIMIT // (1024**2)} MB.")
+                       f" {state.config.LIMIT // (1024 ** 2)} MB.")
 
         f = UploadBinaryForm()
 
@@ -116,7 +117,8 @@ def check_analyze(state: RevEngState) -> None:
                 inmain(Dialog.showInfo, "Check Binary Analysis Status", f"Binary analysis status: {status}")
             except HTTPError as e:
                 logger.error("Error getting binary analysis status: %s",
-                             e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience."))
+                             e.response.json().get("error",
+                                                   "An unexpected error occurred. Sorry for the inconvenience."))
 
                 inmain(Dialog.showError, "Check Binary Analysis Status",
                        """Error getting binary analysis status.\n\nPlease check:
@@ -173,7 +175,8 @@ def explain_function(state: RevEngState) -> None:
                     ret = run(f"rabin2 -I {fpath} | grep 'lang '", shell=True, capture_output=True)
 
                     res: Response = RE_explain(pseudo_code,
-                                               ret.stdout.split(b' ')[-1].strip().decode() if ret.returncode == 0 else None)
+                                               ret.stdout.split(b' ')[
+                                                   -1].strip().decode() if ret.returncode == 0 else None)
 
                     error = res.json().get("error", None)
                     if error:
@@ -322,7 +325,8 @@ def analysis_history(state: RevEngState) -> None:
                 logger.error("Unable to obtain binary analysis history. %s", e)
 
                 error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
-                inmain(Dialog.showError, "Binary Analysis History", f"Failed to obtain binary analysis history: {error}")
+                inmain(Dialog.showError, "Binary Analysis History",
+                       f"Failed to obtain binary analysis history: {error}")
 
         inthread(bg_task)
 
@@ -463,3 +467,24 @@ def about(_) -> None:
     f = AboutForm()
     f.Show()
     f.Free()
+
+
+def update(_) -> None:
+    try:
+        res: Response = get("https://github.com/RevEngAI/reai-ida/releases/latest", timeout=30)
+
+        res.raise_for_status()
+
+        version_stable = res.url.split("/")[-1]
+
+        f = UpdateForm("Good, you are already using the latest stable version!"
+                       if version_stable == __version__ else
+                       f"Kindly download the latest stable version {version_stable}.")
+
+        f.Show()
+        f.Free()
+    except HTTPError as e:
+        logger.warning("RevEng.AI Toolkit failed to connect to GitHub to check for the latest plugin update. %s",
+                       e)
+        Dialog.showInfo("Check for Update",
+                        "RevEng.AI Toolkit has failed to connect to the internet (Github). Try again later.")

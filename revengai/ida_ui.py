@@ -145,6 +145,11 @@ class RevEngConfigForm_t(PluginForm):
             handler.register("reai:about", "About", icon=self.state.icon_id)
             handler.attach_to_menu(MENU, SETMENU_ENSURE_SEP)
 
+            # context menu for Check for Update
+            handler = Handler("update", self.state)
+            handler.register("reai:update", "Check for Update")
+            handler.attach_to_menu(MENU)
+
     def unregister_actions(self):
         # Remove ui hook
         self._hooks.unhook()
@@ -155,6 +160,7 @@ class RevEngConfigForm_t(PluginForm):
 
         # Unregister menu actions
         unregister_action("reai:about")
+        unregister_action("reai:update")
 
         with open(join(abspath(dirname(realpath(__file__))), "conf/actions.json")) as fd:
             for action in load(fd):

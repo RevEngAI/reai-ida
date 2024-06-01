@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import abc
 import logging
 from os.path import dirname, join
 
@@ -49,7 +50,25 @@ class Dialog(object):
         return msgBox.exec()
 
 
-class StatusForm(Form):
+class BaseForm(Form):
+    __metaclass__ = abc.ABCMeta
+
+    def OnFormChange(self, _) -> int:
+        """
+        Triggered when an event occurs on form
+        """
+        return 1
+
+    def Show(self) -> int:
+        # Compile the form once
+        if not self.Compiled():
+            self.Compile()
+
+        # Execute the form
+        return self.Execute()
+
+
+class StatusForm(BaseForm):
     class StatusFormChooser(Choose):
         def __init__(self, title: str, state: RevEngState, items: list,
                      flags: int = CH_CAN_DEL | CH_CAN_EDIT | CH_MULTI | CH_MODAL | CH_NO_STATUS_BAR):
@@ -114,22 +133,8 @@ Binary Analysis History
                           "cEChooser": Form.EmbeddedChooserControl(self.EChooser)
                       })
 
-    def OnFormChange(self, _) -> int:
-        """
-        Triggered when an event occurs on form
-        """
-        return 1
 
-    def Show(self) -> int:
-        # Compile the form once
-        if not self.Compiled():
-            self.Compile()
-
-        # Execute the form
-        return self.Execute()
-
-
-class UploadBinaryForm(Form):
+class UploadBinaryForm(BaseForm):
     def __init__(self):
         self.invert = False
 
@@ -153,22 +158,8 @@ Privacy:
                           "iTags": Form.StringInput(swidth=40, tp=Form.FT_ASCII)
                       })
 
-    def OnFormChange(self, _) -> int:
-        """
-        Triggered when an event occurs on form
-        """
-        return 1
 
-    def Show(self) -> int:
-        # Compile the form once
-        if not self.Compiled():
-            self.Compile()
-
-        # Execute the form
-        return self.Execute()
-
-
-class AboutForm(Form):
+class AboutForm(BaseForm):
     def __init__(self):
         self.invert = False
 
@@ -185,18 +176,32 @@ Find more info at https://reveng.ai/
                           "FormChangeCb": Form.FormChangeCb(self.OnFormChange),
                       })
 
-    # callback to be executed when any form control changed
     def OnFormChange(self, fid):
         if fid == -2:   # Goto homepage
             from webbrowser import open_new_tab
 
             open_new_tab("https://reveng.ai/")
-        return 1
+        return super().OnFormChange(fid)
 
-    def Show(self) -> int:
-        # Compile the form once
-        if not self.Compiled():
-            self.Compile()
 
-        # Execute the form
-        return self.Execute()
+class UpdateForm(BaseForm):
+    def __init__(self, message: str):
+        self.invert = False
+
+        Form.__init__(self,
+                      r"""BUTTON YES* Open Reveng.AI Website
+RevEng.AI Toolkit: Check for Update
+
+{FormChangeCb}
+Your RevEng.AI Toolkit IDA plugin is v%s.
+%s
+""" % (__version__, message), {
+                          "FormChangeCb": Form.FormChangeCb(self.OnFormChange),
+                      })
+
+    def OnFormChange(self, fid):
+        if fid == -2:  # Goto homepage
+            from webbrowser import open_new_tab
+
+            open_new_tab(f"{RevEngConfiguration.PORTAL}/integrations")
+        return super().OnFormChange(fid)
