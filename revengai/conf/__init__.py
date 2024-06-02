@@ -8,6 +8,7 @@ from idaapi import get_user_idadir, retrieve_input_file_sha256
 
 from reait.api import re_conf, RE_health, RE_settings
 
+from revengai.api import RE_models
 from revengai.conf.database import RevEngDatabase
 from revengai.log.log import configure_loggers
 from revengai.misc.qtutils import inthread
@@ -24,6 +25,7 @@ class RevEngConfiguration(object):
     LIMIT = 10 * 1024**2  # File size limit to upload 10MB
     PORTAL = "https://portal.reveng.ai"   # Web portal
     OPTIONS = {}    # file options currently supported by the RevEng.AI platform
+    MODELS = []     # models that are currently being used for analysis
 
     def __init__(self):
         makedirs(RevEngConfiguration._dir, mode=0o755, exist_ok=True)
@@ -78,6 +80,12 @@ class RevEngConfiguration(object):
 
                                 RevEngConfiguration.PORTAL = response.get("portal", RevEngConfiguration.PORTAL)
                                 RevEngConfiguration.LIMIT = response.get("max_file_size", RevEngConfiguration.LIMIT)
+                                RevEngConfiguration.MODELS = response.get("valid_models", RevEngConfiguration.MODELS)
+
+                            response = RE_models().json()
+
+                            if response["success"]:
+                                RevEngConfiguration.MODELS = [model["model_name"] for model in response["models"]]
                     except HTTPError:
                         pass
 

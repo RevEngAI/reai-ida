@@ -36,7 +36,7 @@ def upload_binary(state: RevEngState) -> None:
     fpath = idc.get_input_file_path()
 
     if is_condition_met(state, fpath) and is_file_supported(state, fpath):
-        def bg_task(tags: list = None, scope: str = "PRIVATE", debug_fpath: str = None) -> None:
+        def bg_task(model: str, tags: list = None, scope: str = "PRIVATE", debug_fpath: str = None) -> None:
             file_size = inmain(retrieve_input_file_size)
 
             if state.config.LIMIT > file_size:
@@ -55,8 +55,7 @@ def upload_binary(state: RevEngState) -> None:
                         inmain(state.config.database.add_upload, fpath, sha_256_hash)
 
                         res = RE_analyse(fpath=fpath, binary_scope=scope,
-                                         debug_fpath=debug_fpath,
-                                         model_name=state.config.get("model"),
+                                         debug_fpath=debug_fpath, model_name=model,
                                          tags=tags, symbols=symbols, duplicate=True)
 
                         analysis = res.json()
@@ -92,8 +91,8 @@ def upload_binary(state: RevEngState) -> None:
 
             symbols["functions"] = functions
 
-            inthread(bg_task, f.iTags.value.split(","),
-                     "PUBLIC" if f.iScope.value else "PRIVATE", f.iDebugFile.value)
+            inthread(bg_task, state.config.MODELS[f.iModel.value],
+                     f.iTags.value.split(","), "PUBLIC" if f.iScope.value else "PRIVATE", f.iDebugFile.value)
 
         f.Free()
 
