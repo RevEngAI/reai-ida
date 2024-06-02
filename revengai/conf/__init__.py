@@ -23,6 +23,7 @@ class RevEngConfiguration(object):
 
     LIMIT = 10 * 1024**2  # File size limit to upload 10MB
     PORTAL = "https://portal.reveng.ai"   # Web portal
+    OPTIONS = {}    # file options currently supported by the RevEng.AI platform
 
     def __init__(self):
         makedirs(RevEngConfiguration._dir, mode=0o755, exist_ok=True)
@@ -72,6 +73,9 @@ class RevEngConfiguration(object):
                             response = RE_settings().json()
 
                             if response["success"]:
+                                for option in ("isa_options", "file_options", "platform_options",):
+                                    RevEngConfiguration.OPTIONS[option] = response.get(option, None)
+
                                 RevEngConfiguration.PORTAL = response.get("portal", RevEngConfiguration.PORTAL)
                                 RevEngConfiguration.LIMIT = response.get("max_file_size", RevEngConfiguration.LIMIT)
                     except HTTPError:

@@ -6,11 +6,13 @@ import idc
 from idaapi import ask_file, get_imagebase, get_inf_structure, retrieve_input_file_size, show_wait_box, hide_wait_box
 
 from subprocess import run
+
 from requests import get, HTTPError, Response
 from os.path import basename, isfile
 from datetime import datetime
 
-from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, re_binary_id, RE_functions_rename, RE_analyze_functions
+from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, re_binary_id, RE_functions_rename, \
+    RE_analyze_functions, file_type
 
 from revengai import __version__
 from revengai.api import RE_explain, RE_functions_dump, RE_search, RE_recent_analysis
@@ -33,7 +35,7 @@ def setup_wizard(state: RevEngState) -> None:
 def upload_binary(state: RevEngState) -> None:
     fpath = idc.get_input_file_path()
 
-    if is_condition_met(state, fpath):
+    if is_condition_met(state, fpath) and is_file_supported(state, fpath):
         def bg_task(tags: list = None, scope: str = "PRIVATE", debug_fpath: str = None) -> None:
             file_size = inmain(retrieve_input_file_size)
 
@@ -460,6 +462,22 @@ def is_condition_met(state: RevEngState, fpath: str) -> bool:
         idc.warning("No input file provided.")
     else:
         return True
+    return False
+
+
+def is_file_supported(state: RevEngState, fpath: str) -> bool:
+    try:
+        file_format, isa_format = file_type(fpath)
+
+        logger.info("Underlying binary: %s -> format: %s target: %s", fpath, file_format, isa_format)
+
+        if any(file_format == fmt for fmt in state.config.OPTIONS.get("file_options", [])) and \
+                any(isa_format == fmt for fmt in state.config.OPTIONS.get("isa_options", [])):
+            return True
+    except Exception:
+        pass
+
+    idc.warning(f"{basename(fpath)} file format is not currently supported by RevEng.AI")
     return False
 
 
