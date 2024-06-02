@@ -10,10 +10,10 @@ from requests import get, HTTPError, Response
 from os.path import basename, isfile
 from datetime import datetime
 
-from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, re_binary_id, RE_functions_rename
+from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, re_binary_id, RE_functions_rename, RE_analyze_functions
 
 from revengai import __version__
-from revengai.api import RE_explain, RE_analyze_functions, RE_functions_dump, RE_search, RE_recent_analysis
+from revengai.api import RE_explain, RE_functions_dump, RE_search, RE_recent_analysis
 from revengai.misc.qtutils import inthread, inmain
 from revengai.gui.dialog import Dialog, StatusForm, UploadBinaryForm, AboutForm, UpdateForm
 from revengai.manager import RevEngState

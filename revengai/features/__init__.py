@@ -7,13 +7,12 @@ import idaapi
 from PyQt5.QtCore import QRect
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QDialog, QDesktopWidget
-from reait.api import RE_functions_rename
+from reait.api import RE_functions_rename, RE_analyze_functions
 
 from idaapi import get_imagebase
 
 from requests import HTTPError, Response
 
-from revengai.api import RE_analyze_functions
 from revengai.manager import RevEngState
 from revengai.misc.qtutils import inthread, inmain
 
