@@ -23,9 +23,9 @@ class RevEngConfiguration(object):
     auto_start = True   # Enable RevEng.AI plugin automatically
 
     LIMIT = 10 * 1024**2  # File size limit to upload 10MB
-    PORTAL = "https://portal.reveng.ai"   # Web portal
-    OPTIONS = {}    # file options currently supported by the RevEng.AI platform
-    MODELS = []     # models that are currently being used for analysis
+    PORTAL = "https://portal.reveng.ai"   # RevEng.AI Web portal
+    OPTIONS = {}    # File options currently supported by RevEng.AI for analysis
+    MODELS = []     # List of models that are currently being used for analysis
 
     def __init__(self):
         makedirs(RevEngConfiguration._dir, mode=0o755, exist_ok=True)
@@ -92,6 +92,7 @@ class RevEngConfiguration(object):
                 inthread(bg_task)
         else:
             self.config["host"] = re_conf["host"]
+            RevEngConfiguration.MODELS = [re_conf["model"],]
 
     @property
     def config(self) -> dict:
