@@ -25,6 +25,7 @@ setup(
     version=__version__,
     python_requires=">=3.9",
     author="Yannick Tournier",
+    maintainer="Yannick Tournier",
     author_email="yannick@reveng.ai",
     packages=find_packages(),
     install_requires=required,
@@ -32,6 +33,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/RevEngAI/reai-ida",
+    platforms="Cross Platform",
     py_modules=["reveng",],
     package_data={
         "ida_plugins": extra_files,
