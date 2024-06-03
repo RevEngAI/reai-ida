@@ -135,8 +135,13 @@ RevEng.AI Toolkit: Binary Analysis History
 
 
 class UploadBinaryForm(BaseForm):
-    def __init__(self):
+    def __init__(self, state: RevEngState):
         self.invert = False
+
+        try:
+            index = state.config.MODELS.index(state.config.get("model"))
+        except ValueError:
+            index = 0
 
         Form.__init__(self,
                       r"""BUTTON YES* Analyse
@@ -157,7 +162,7 @@ Privacy:
                           "iScope": Form.RadGroupControl(("rOptPrivate", "rOptPublic",)),
                           "iDebugFile": Form.FileInput(swidth=40, open=True),
                           "iTags": Form.StringInput(swidth=40, tp=Form.FT_ASCII),
-                          "iModel": Form.DropdownListControl(swidth=40, items=RevEngConfiguration.MODELS)
+                          "iModel": Form.DropdownListControl(swidth=40, selval=index, items=state.config.MODELS)
                       })
 
 

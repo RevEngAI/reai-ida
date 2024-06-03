@@ -78,7 +78,7 @@ def upload_binary(state: RevEngState) -> None:
                        f"Please be advised that the largest size for processing a binary file is"
                        f" {state.config.LIMIT // (1024 ** 2)} MB.")
 
-        f = UploadBinaryForm()
+        f = UploadBinaryForm(state)
 
         if f.Show():
             symbols: dict = {"base_addr": get_imagebase()}
