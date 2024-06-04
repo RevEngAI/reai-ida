@@ -9,7 +9,7 @@ from subprocess import run
 
 from requests import get, HTTPError, Response
 from os.path import basename, isfile
-from datetime import datetime
+from datetime import date, datetime
 
 from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, re_binary_id, RE_functions_rename, \
     RE_analyze_functions, file_type
@@ -307,9 +307,15 @@ def analysis_history(state: RevEngState) -> None:
                 results.sort(key=lambda binary: datetime.fromisoformat(binary["creation"]).timestamp(), reverse=True)
 
                 binaries = []
+                today = date.today()
+
                 for binary in results:
+                    creation = datetime.fromisoformat(binary["creation"]).astimezone()
+
                     binaries.append((binary.get("binary_name"), str(binary["binary_id"]), binary["status"],
-                                     datetime.fromisoformat(binary["creation"]).strftime("%d/%m/%Y, %H:%M:%S"),))
+                                     creation.strftime("Today at %H:%M:%S")
+                                     if creation.date() == today else
+                                     creation.strftime("%Y-%m-%d, %H:%M:%S"),))
 
                     inmain(state.config.database.add_analysis,
                            binary["sha_256_hash"], binary["binary_id"], binary["status"], binary["creation"])
