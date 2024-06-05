@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from requests import get, post, Response
 
-from reait.api import reveng_req, re_binary_id, re_bid_search, ReaitError
+from reait.api import reveng_req, re_binary_id
 
 
 def RE_models() -> Response:
