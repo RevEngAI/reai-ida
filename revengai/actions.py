@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 
+import idaapi
 import idautils
 import idc
 from idaapi import ask_file, get_imagebase, get_inf_structure, retrieve_input_file_size, show_wait_box, hide_wait_box
@@ -303,7 +304,11 @@ def analysis_history(state: RevEngState) -> None:
             try:
                 res = RE_search(fpath)
 
-                results = res.json()["query_results"]
+                sha_256_hash = re_binary_id(fpath)
+
+                results = list(filter(lambda binary: binary["sha_256_hash"] == sha_256_hash,
+                                      res.json()["query_results"]))
+
                 results.sort(key=lambda binary: datetime.fromisoformat(binary["creation"]).timestamp(), reverse=True)
 
                 binaries = []
