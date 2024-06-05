@@ -42,7 +42,6 @@ class Ui_AutoAnalysisPanel(object):
         self.label_2.setObjectName("label_2")
         self.hboxlayout.addWidget(self.label_2)
         self.collectionsFilter = QtWidgets.QLineEdit(self.tab)
-        self.collectionsFilter.setAlignment(QtCore.Qt.AlignCenter|QtCore.Qt.AlignHCenter|QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
         self.collectionsFilter.setClearButtonEnabled(True)
         self.collectionsFilter.setObjectName("collectionsFilter")
         self.hboxlayout.addWidget(self.collectionsFilter)
@@ -155,4 +154,5 @@ class Ui_AutoAnalysisPanel(object):
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_2), _translate("AutoAnalysisPanel", "Results"))
         self.fetchButton.setText(_translate("AutoAnalysisPanel", "Fetch Results"))
         self.renameButton.setText(_translate("AutoAnalysisPanel", "Rename"))
+        self.collectionsFilter.setPlaceholderText(_translate("AutoAnalysisPanel", "Search Collection…"))
         self.resultsFilter.setPlaceholderText(_translate("AutoAnalysisPanel", "Search Function…"))
