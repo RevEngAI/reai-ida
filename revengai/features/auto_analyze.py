@@ -23,7 +23,6 @@ from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
 from revengai.ui.auto_analysis_panel import Ui_AutoAnalysisPanel
 
-
 logger = logging.getLogger("REAI")
 
 
@@ -51,7 +50,7 @@ class AutoAnalysisDialog(BaseDialog):
         self.ui.resultsTable.customContextMenuRequested.connect(self._table_menu)
 
         self.ui.fetchButton.clicked.connect(self._start_analysis)
-        self.ui.renameButton.clicked.connect(self._rename_function)
+        self.ui.renameButton.clicked.connect(self._rename_functions)
 
         self.ui.resultsFilter.textChanged.connect(self._filter)
         self.ui.collectionsFilter.textChanged.connect(self._filter)
@@ -180,7 +179,7 @@ class AutoAnalysisDialog(BaseDialog):
                         if func_addr:
                             resultsData.append((next((function["name"] for function in self._functions
                                                       if func_addr == function["start_addr"]), "Unknown"),
-                                               "N/A", None, err_msg,))
+                                                "N/A", None, err_msg,))
                 finally:
                     pos += len(chunk)
                     inmain(self.ui.progressBar.setProperty, "value", pos)
@@ -265,7 +264,26 @@ class AutoAnalysisDialog(BaseDialog):
             inmain(self.ui.fetchButton.setEnabled, True)
             inmain(self.ui.fetchButton.setFocus)
 
-    def _rename_function(self, selected = None) -> None:
+    def _rename_functions(self):
+        batches = []
+
+        for row_item in self.ui.resultsTable.model().get_datas():
+            if isinstance(row_item[2], CheckableItem) and row_item[2].checkState == Qt.Checked:
+                self._rename_function(row_item, batches)
+
+        if len(batches):
+            cnt = len(batches)
+
+            # trunk the list of unrenamed functions
+            del batches[5:]
+
+            if len(batches) != cnt:
+                batches.append("\n     • …")
+
+            idc.warning(f"Can't rename the following{'' if cnt == 1 else ' ' + str(cnt)} function{'s'[:cnt ^ 1]}, "
+                        f"name already exists for:{''.join(batches)}")
+
+    def _rename_function(self, selected, batches: list = None) -> None:
         if selected and len(selected) > 3 and isinstance(selected[2], SimpleItem):
             symbol = selected[2].data
 
@@ -276,11 +294,11 @@ class AutoAnalysisDialog(BaseDialog):
                             symbol["org_func_name"], symbol["nearest_neighbor_function_name"], symbol["confidence"])
             else:
                 logger.warning("Symbol name %s already exists", symbol["nearest_neighbor_function_name"])
-                idc.warning(f"Can't rename {symbol['org_func_name']}. Name {symbol['nearest_neighbor_function_name']} already exists.")
-        else:
-            for row_item in self.ui.resultsTable.model().get_datas():
-                if isinstance(row_item[2], CheckableItem) and row_item[2].checkState == Qt.Checked:
-                    self._rename_function(row_item)
+
+                if batches is not None:
+                    batches.append(f"\n     • {symbol['org_func_name']} ➡ {symbol['nearest_neighbor_function_name']}")
+                else:
+                    idc.warning(f"Can't rename {symbol['org_func_name']}. Name {symbol['nearest_neighbor_function_name']} already exists.")
 
     def _selected_collections(self) -> list:
         model = self.ui.collectionsTable.model()
