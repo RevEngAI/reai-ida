@@ -16,6 +16,7 @@ from revengai.api import RE_models
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
 
+
 logger = logging.getLogger("REAI")
 
 
