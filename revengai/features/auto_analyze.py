@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+from re import sub
 from enum import IntEnum
 
 import idc
@@ -9,7 +10,7 @@ from PyQt5.QtWidgets import QMenu
 from idaapi import hide_wait_box, show_wait_box
 from idautils import Functions
 
-from requests import Response, HTTPError
+from requests import Response, HTTPError, RequestException
 
 from reait.api import RE_nearest_symbols_batch
 
@@ -166,7 +167,7 @@ class AutoAnalysisDialog(BaseDialog):
                                                 CheckableItem(symbol),
                                                 "Can be renamed with a confidence level of "
                                                 f"{float(str(symbol['confidence'])[:6]) * 100:#.02f}%",))
-                except HTTPError as e:
+                except RequestException as e:
                     logger.error("Fetching a chunk of auto analysis failed. Reason: %s", e)
 
                     self._analysis[Analysis.UNSUCCESSFUL] += len(chunk)
@@ -296,7 +297,8 @@ class AutoAnalysisDialog(BaseDialog):
                 logger.warning("Symbol name %s already exists", symbol["nearest_neighbor_function_name"])
 
                 if batches is not None:
-                    batches.append(f"\n     • {symbol['org_func_name']} ➡ {symbol['nearest_neighbor_function_name']}")
+                    batches.append(sub(r"^(.{10}).*\s+(.{10}).*$", "\n     • \g<1>… ➡ \g<2>…",
+                                       f"{symbol['org_func_name']} {symbol['nearest_neighbor_function_name']}"))
                 else:
                     idc.warning(f"Can't rename {symbol['org_func_name']}. Name {symbol['nearest_neighbor_function_name']} already exists.")
 
