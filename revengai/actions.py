@@ -1,14 +1,13 @@
 # -*- coding: utf-8 -*-
 import logging
 
-import idaapi
 import idautils
 import idc
 from idaapi import ask_file, get_imagebase, get_inf_structure, retrieve_input_file_size, show_wait_box, hide_wait_box
 
 from subprocess import run
 
-from requests import get, HTTPError, Response
+from requests import get, HTTPError, Response, RequestException
 from os.path import basename, isfile
 from datetime import date, datetime
 
@@ -68,10 +67,14 @@ def upload_binary(state: RevEngState) -> None:
 
                         logger.info("Binary analysis %s for: %s",
                                     "succeed" if analysis["success"] else "failed", basename(fpath))
-                except HTTPError as e:
+                except RequestException as e:
                     logger.error("Error analyzing %s. Reason: %s", basename(fpath), e)
-                    inmain(hide_wait_box)
-                    inmain(idc.warning, f"Error analysing {basename(fpath)}.\nReason: {e.response.json()['error']}")
+
+                    err_msg = ""
+                    if isinstance(e, HTTPError):
+                        err_msg = f"\nReason: {e.response.json()['error']}"
+
+                    inmain(idc.warning, f"Error analysing {basename(fpath)}.{err_msg}")
                 finally:
                     inmain(hide_wait_box)
             else:
