@@ -206,7 +206,10 @@ class AutoAnalysisDialog(BaseDialog):
             inmain(self.ui.resultsTable.setColumnWidth, 3, width * .3)
         except HTTPError as e:
             logger.error("Fetching auto analysis failed. Reason: %s", e)
-            inmain(Dialog.showError, "Auto Analysis", f"Auto Analysis Error: {e.response.json()['error']}")
+
+            Dialog.showError("Auto Analysis", f"Auto Analysis Error: {e.response.json()['error']}")
+        except RequestException as e:
+            logger.error("An unexpected error has occurred. %s", e)
         finally:
             inmain(hide_wait_box)
             inmain(self._tab_changed, 1)
@@ -259,11 +262,11 @@ class AutoAnalysisDialog(BaseDialog):
         except HTTPError as e:
             logger.error("Getting collections failed. Reason: %s", e)
 
-            inmain(hide_wait_box)
-            inmain(Dialog.showError, "Auto Analysis", f"Auto Analysis Error: {e.response.json()['error']}")
-        else:
-            inmain(hide_wait_box)
+            Dialog.showError("Auto Analysis", f"Auto Analysis Error: {e.response.json()['error']}")
+        except RequestException as e:
+            logger.error("An unexpected error has occurred. %s", e)
         finally:
+            inmain(hide_wait_box)
             inmain(self._tab_changed, 0)
             inmain(self.ui.tabWidget.setCurrentIndex, 0)
             inmain(self.ui.fetchButton.setEnabled, True)

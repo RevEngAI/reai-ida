@@ -8,7 +8,7 @@ from idaapi import ASKBTN_YES, hide_wait_box, show_wait_box
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIntValidator, QCursor
 
-from requests import Response, HTTPError
+from requests import Response, HTTPError, RequestException
 
 from reait.api import RE_nearest_symbols_batch
 
@@ -36,7 +36,7 @@ class FunctionSimilarityDialog(BaseDialog):
         if start_addr is not idc.BADADDR:
             self.v_addr = start_addr - self.base_addr
         else:
-            self.v_addr = 0
+            self.v_addr = idc.BADADDR
             logger.error("Pointer location not in valid function")
             Dialog.showError("Find Similar Functions", "Cursor position not in a function.")
 
@@ -73,7 +73,7 @@ class FunctionSimilarityDialog(BaseDialog):
         super(FunctionSimilarityDialog, self).closeEvent(event)
 
     def _fetch(self):
-        if self.v_addr > 0:
+        if self.v_addr != idc.BADADDR:
             inthread(self._load,
                      self._selected_collections(),
                      (100 - int(self.ui.confidenceSlider.property("value"))) / 100)
@@ -94,9 +94,10 @@ class FunctionSimilarityDialog(BaseDialog):
             function_id = self.analyzed_functions.get(self.v_addr, None)
 
             if function_id is None:
-                inmain(idc.warning, "No matches found.")
-                logger.error("No similar functions found for: %s",
-                             inmain(IDAUtils.get_demangled_func_name, self.v_addr))
+                func_name = inmain(IDAUtils.get_demangled_func_name, self.v_addr + self.base_addr)
+
+                inmain(idc.warning, f"No matches found for {func_name}.")
+                logger.error("No similar functions found for: %s", func_name)
                 return
 
             inmain(self.ui.progressBar.setProperty, "value", 50)
@@ -125,7 +126,9 @@ class FunctionSimilarityDialog(BaseDialog):
                              inmain(IDAUtils.get_demangled_func_name, inmain(idc.here)), (1 - distance) * 100)
         except HTTPError as e:
             error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
-            inmain(Dialog.showError, "Function Renaming", error)
+            Dialog.showError("Function Renaming", error)
+        except RequestException as e:
+            logger.error("An unexpected error has occurred. %s", e)
         finally:
             inmain(hide_wait_box)
             inmain(self.ui.tabWidget.setCurrentIndex, 1)
@@ -160,7 +163,7 @@ class FunctionSimilarityDialog(BaseDialog):
                                                       "Do you also want to rename the function arguments?"):
                     from revengai.actions import function_signature
 
-                    function_signature(self.state, self.v_addr)
+                    function_signature(self.state, self.v_addr + self.base_addr)
 
     def _quick_search(self):
         try:
@@ -182,11 +185,11 @@ class FunctionSimilarityDialog(BaseDialog):
         except HTTPError as e:
             logger.error("Getting collections failed. Reason: %s", e)
 
-            inmain(hide_wait_box)
-            inmain(Dialog.showError, "Function Rename", f"Function Rename Error: {e.response.json()['error']}")
-        else:
-            inmain(hide_wait_box)
+            Dialog.showError("Function Rename", f"Function Rename Error: {e.response.json()['error']}")
+        except RequestException as e:
+            logger.error("An unexpected error has occurred. %s", e)
         finally:
+            inmain(hide_wait_box)
             inmain(self.ui.fetchButton.setEnabled, True)
             inmain(self.ui.fetchButton.setFocus)
 

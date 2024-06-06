@@ -8,7 +8,7 @@ import idaapi
 from PyQt5.QtCore import QRect
 from PyQt5.QtGui import QPixmap
 from reait.api import RE_authentication
-from requests import HTTPError
+from requests import HTTPError, RequestException
 
 from PyQt5.QtWidgets import QWizardPage, QFormLayout, QLineEdit, QLabel, QWizard, QComboBox, QLayout, QDesktopWidget
 
@@ -108,6 +108,8 @@ class UserCredentialsPage(BasePage):
 
                 error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
                 Dialog.showError("Setup Wizard", error)
+            except RequestException as e:
+                logger.error("An unexpected error has occurred. %s", e)
             finally:
                 idaapi.hide_wait_box()
         return False
