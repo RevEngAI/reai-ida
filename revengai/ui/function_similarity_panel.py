@@ -42,7 +42,6 @@ class Ui_FunctionSimilarityPanel(object):
         self.label.setObjectName("label")
         self.hboxlayout.addWidget(self.label)
         self.collectionsFilter = QtWidgets.QLineEdit(self.tab)
-        self.collectionsFilter.setAlignment(QtCore.Qt.AlignCenter|QtCore.Qt.AlignHCenter|QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
         self.collectionsFilter.setClearButtonEnabled(True)
         self.collectionsFilter.setObjectName("collectionsFilter")
         self.hboxlayout.addWidget(self.collectionsFilter)
@@ -163,3 +162,4 @@ class Ui_FunctionSimilarityPanel(object):
         self.fetchButton.setText(_translate("FunctionSimilarityPanel", "Fetch Results"))
         self.renameButton.setText(_translate("FunctionSimilarityPanel", "Rename"))
         self.lineEdit.setText(_translate("FunctionSimilarityPanel", "5"))
+        self.collectionsFilter.setPlaceholderText(_translate("AutoAnalysisPanel", "Search Collection…"))
