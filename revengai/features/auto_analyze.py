@@ -171,7 +171,11 @@ class AutoAnalysisDialog(BaseDialog):
                     logger.error("Fetching a chunk of auto analysis failed. Reason: %s", e)
 
                     self._analysis[Analysis.UNSUCCESSFUL] += len(chunk)
-                    err_msg = e.response.json().get("error", "Fetching Function Symbol Failed")
+
+                    err_msg = "Fetching Function Symbol Failed"
+
+                    if isinstance(e, HTTPError):
+                        err_msg = e.response.json().get("error", err_msg)
 
                     for function_id in chunk:
                         func_addr = next((func_addr for func_addr, func_id in self.analyzed_functions.items()
@@ -297,8 +301,8 @@ class AutoAnalysisDialog(BaseDialog):
                 logger.warning("Symbol name %s already exists", symbol["nearest_neighbor_function_name"])
 
                 if batches is not None:
-                    batches.append(sub(r"^(.{10}).*\s+(.{10}).*$", "\n     • \g<1>… ➡ \g<2>…",
-                                       f"{symbol['org_func_name']} {symbol['nearest_neighbor_function_name']}"))
+                    batches.append(sub(r"^(.{10}).*\|(.{10}).*$", "\n     • \g<1>… ➡ \g<2>…",
+                                       f"{symbol['org_func_name']}|{symbol['nearest_neighbor_function_name']}"))
                 else:
                     idc.warning(f"Can't rename {symbol['org_func_name']}. Name {symbol['nearest_neighbor_function_name']} already exists.")
 
