@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 import abc
 import logging
-from os.path import dirname, join
 
-from PyQt5.QtGui import QIcon, QPixmap
+import idaapi
 from idc import get_input_file_path
 from idaapi import CH_CAN_DEL, CH_CAN_EDIT, CH_MULTI, CH_MODAL, CH_NO_STATUS_BAR, CHCOL_DEC, CHCOL_PLAIN, Choose, Form
 
@@ -15,6 +14,7 @@ from reait.api import RE_delete
 
 from revengai import __version__
 from revengai.conf import RevEngConfiguration
+from revengai.gui import Requests
 from revengai.manager import RevEngState
 from revengai.misc.qtutils import inthread
 
@@ -24,30 +24,12 @@ logger = logging.getLogger("REAI")
 
 class Dialog(object):
     @staticmethod
-    def showInfo(title: str, message: str) -> int:
-        msgBox = QMessageBox()
-
-        msgBox.setModal(True)
-        msgBox.setWindowTitle(title)
-        msgBox.setWindowIcon(QIcon(join(dirname(__file__), "../resources/favicon.png")))
-
-        msgBox.setText(message)
-        msgBox.setIconPixmap(QPixmap(join(dirname(__file__), "../resources/favicon.png")))
-
-        return msgBox.exec()
+    def showInfo(title: str, message: str) -> None:
+        idaapi.execute_sync(Requests.MsgBox(title, message, -1), idaapi.MFF_FAST)
 
     @staticmethod
-    def showError(title: str, message: str) -> int:
-        msgBox = QMessageBox()
-
-        msgBox.setModal(True)
-        msgBox.setWindowTitle(title)
-        msgBox.setWindowIcon(QIcon(join(dirname(__file__), "../resources/favicon.png")))
-
-        msgBox.setText(message)
-        msgBox.setIcon(QMessageBox.Warning)
-
-        return msgBox.exec()
+    def showError(title: str, message: str) -> None:
+        idaapi.execute_sync(Requests.MsgBox(title, message, QMessageBox.Warning), idaapi.MFF_FAST)
 
 
 class BaseForm(Form):
