@@ -61,6 +61,9 @@ class Hooks(UI_Hooks):
 
         self.state = state
 
+    def ready_to_run(self) -> None:
+        load_recent_analyses(self.state)
+
     def populating_widget_popup(self, form, popup):
         fpath = get_input_file_path()
 
@@ -119,8 +122,6 @@ class RevEngConfigForm_t(PluginForm):
         self.register_actions()
 
     def register_actions(self):
-        load_recent_analyses(self.state)
-
         # Add ui hook
         self._hooks.hook()
 
