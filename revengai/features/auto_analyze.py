@@ -147,7 +147,7 @@ class AutoAnalysisDialog(BaseDialog):
 
             # Launch parallel tasks
             with ThreadPoolExecutor() as executor:
-                def bg_task(chunk: list[int]) -> any:
+                def worker(chunk: list[int]) -> any:
                     try:
                         return RE_nearest_symbols_batch(function_ids=chunk, distance=confidence,
                                                         collections=collections, nns=1).json()["function_matches"]
@@ -155,7 +155,7 @@ class AutoAnalysisDialog(BaseDialog):
                         return ex
 
                 # Start the ANN batch operations and mark each future with its chunk
-                futures = {executor.submit(bg_task, chunk): chunk
+                futures = {executor.submit(worker, chunk): chunk
                            for chunk in AutoAnalysisDialog._divide_chunks(function_ids)}
 
                 for future in as_completed(futures):

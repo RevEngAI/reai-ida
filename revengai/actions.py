@@ -6,6 +6,7 @@ import idc
 from idaapi import ask_file, get_imagebase, get_inf_structure, retrieve_input_file_size, show_wait_box, hide_wait_box
 
 from subprocess import run
+from threading import Timer
 
 from requests import get, HTTPError, Response, RequestException
 from os.path import basename, isfile
@@ -68,6 +69,18 @@ def upload_binary(state: RevEngState) -> None:
 
                         logger.info("Binary analysis %s for: %s",
                                     "succeed" if analysis["success"] else "failed", basename(fpath))
+
+                        # Periodically check the status of the uploaded binary
+                        def _worker(binary_id: int, delay: float = 60):
+                            try:
+                                status = RE_status(fpath, binary_id).json()["status"]
+
+                                if status == "Processing":
+                                    Timer(delay, _worker, args=(binary_id, delay,)).start()
+                            except RequestException as ex:
+                                logger.error("Error getting binary analysis status. Reason: %s", ex)
+
+                        Timer(60, _worker, args=(analysis["binary_id"],)).start()
                 except RequestException as e:
                     logger.error("Error analyzing %s. Reason: %s", basename(fpath), e)
 
