@@ -91,11 +91,11 @@ class RevEngDatabase(object):
         finally:
             self.conn.commit()
 
-    def get_last_analysis(self, sha_256_hash: str) -> int:
+    def get_last_analysis(self, sha_256_hash: str, status: str = "Complete") -> int:
         try:
             with closing(self.conn.cursor()) as cursor:
-                cursor.execute("SELECT binary_id FROM analysis WHERE sha_256_hash = ? ORDER BY binary_id DESC LIMIT 1",
-                               (sha_256_hash,))
+                cursor.execute("SELECT binary_id FROM analysis WHERE sha_256_hash = ? and status = ? ORDER BY binary_id DESC LIMIT 1",
+                               (sha_256_hash, status,))
 
                 result = cursor.fetchone()
                 return result[0] if result and len(result) > 0 else 0

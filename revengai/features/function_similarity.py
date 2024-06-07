@@ -47,9 +47,11 @@ class FunctionSimilarityDialog(BaseDialog):
         self.ui.lineEdit.setValidator(QIntValidator(1, 256, self))
 
         self.ui.collectionsFilter.textChanged.connect(self._filter)
+        self.ui.collectionsTable.horizontalHeader().setDefaultAlignment(Qt.AlignLeft)
         self.ui.collectionsTable.setModel(RevEngCheckableTableModel(data=[], columns=[1], parent=self,
                                                                     header=["Collection Name", "Include",]))
 
+        self.ui.resultsTable.horizontalHeader().setDefaultAlignment(Qt.AlignLeft)
         self.ui.resultsTable.setModel(RevEngTableModel(data=[], parent=self,
                                                        header=["Function Name", "Confidence", "Source File",]))
 

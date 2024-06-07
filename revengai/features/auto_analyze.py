@@ -41,20 +41,21 @@ class AutoAnalysisDialog(BaseDialog):
         self.ui = Ui_AutoAnalysisPanel()
         self.ui.setupUi(self)
 
+        self.ui.collectionsFilter.textChanged.connect(self._filter)
+        self.ui.collectionsTable.horizontalHeader().setDefaultAlignment(Qt.AlignLeft)
         self.ui.collectionsTable.setModel(RevEngCheckableTableModel(data=[], columns=[1], parent=self,
                                                                     header=["Collection Name", "Include",]))
 
+        self.ui.resultsFilter.textChanged.connect(self._filter)
+        self.ui.resultsTable.customContextMenuRequested.connect(self._table_menu)
+        self.ui.resultsTable.horizontalHeader().setDefaultAlignment(Qt.AlignLeft)
         self.ui.resultsTable.setModel(RevEngCheckableTableModel(data=[], columns=[2], parent=self,
                                                                 header=["Function Name", "Destination Function Name",
                                                                         "Successful", "Reason",]))
 
-        self.ui.resultsTable.customContextMenuRequested.connect(self._table_menu)
-
         self.ui.fetchButton.clicked.connect(self._start_analysis)
         self.ui.renameButton.clicked.connect(self._rename_functions)
 
-        self.ui.resultsFilter.textChanged.connect(self._filter)
-        self.ui.collectionsFilter.textChanged.connect(self._filter)
 
         self.ui.confidenceSlider.valueChanged.connect(self._confidence)
         self.ui.tabWidget.tabBarClicked.connect(self._tab_changed)

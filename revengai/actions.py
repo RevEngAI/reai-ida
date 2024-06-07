@@ -11,11 +11,12 @@ from requests import get, HTTPError, Response, RequestException
 from os.path import basename, isfile
 from datetime import date, datetime, timedelta
 
-from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, re_binary_id, RE_functions_rename, \
-    RE_analyze_functions, file_type
+from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, re_binary_id, RE_analyze_functions, file_type, \
+    RE_functions_rename
 
 from revengai import __version__
 from revengai.api import RE_explain, RE_functions_dump, RE_search, RE_recent_analysis
+from revengai.features.sync_functions import SyncFunctionsDialog
 from revengai.misc.qtutils import inthread, inmain
 from revengai.gui.dialog import Dialog, StatusForm, UploadBinaryForm, AboutForm, UpdateForm
 from revengai.manager import RevEngState
@@ -359,22 +360,32 @@ def load_recent_analyses(state: RevEngState) -> None:
                     inmain(state.config.database.add_analysis, analysis["sha_256_hash"],
                            analysis["binary_id"], analysis["status"], analysis["creation"], analysis["model_name"])
 
-                if fpath and isfile(fpath):
-                    state.config.set("binary_id",
-                                     inmain(state.config.database.get_last_analysis, re_binary_id(fpath)))
-                else:
+                params = [re_binary_id(fpath)]
+
+                binaries = list(filter(lambda binary: binary["sha_256_hash"] == params[0],
+                                       RE_search(fpath).json()["query_results"]))
+
+                if len(binaries) == 0:
                     state.config.set("binary_id", None)
-            except HTTPError as e:
+                else:
+                    params += [binary["binary_id"] for binary in binaries]
+
+                    inmain(state.config.database.execute_sql,
+                           f"DELETE FROM analysis WHERE sha_256_hash = ? AND binary_id NOT IN "
+                           f"({('?, ' * len(binaries))[:-2]})", tuple(params))
+
+                    state.config.set("binary_id", inmain(state.config.database.get_last_analysis, params[0]))
+
+                    done, _ = is_analysis_complete(state, fpath)
+                    if done:
+                        inmain(sync_functions_name, state, fpath)
+            except RequestException as e:
                 logger.error("Error getting recent analyses: %s", e)
-            else:
-                inmain(sync_functions_name, state)
 
         inthread(bg_task)
 
 
-def sync_functions_name(state: RevEngState) -> None:
-    fpath = idc.get_input_file_path()
-
+def sync_functions_name(state: RevEngState, fpath: str) -> None:
     if state.config.is_valid() and fpath and isfile(fpath):
         state.config.init_current_analysis()
 
@@ -382,22 +393,37 @@ def sync_functions_name(state: RevEngState) -> None:
             try:
                 res: Response = RE_analyze_functions(fpath, state.config.get("binary_id", 0))
 
+                data = None if state.config.auto_sync else []
                 for function in res.json()["functions"]:
-                    fe = next((func for func in functions if function["function_vaddr"] == func["start_addr"]), None)
+                    func_name = next((func["name"] for func in functions
+                                      if function["function_vaddr"] == func["start_addr"]
+                                      and not func["name"].startswith("sub_")), None)
 
-                    if fe and fe["name"] != function["function_name"]:
-                        try:
-                            RE_functions_rename(function["function_id"], fe["name"])
-                        except HTTPError as e:
-                            logger.warning("Failed to sync functionId %d. %s",
-                                           function["function_id"], e.response.reason)
-            except HTTPError as e:
+                    if func_name and func_name != function["function_name"]:
+                        if data is not None:
+                            function["function_name"] = func_name
+                            function["function_vaddr"] += base_addr
+
+                            data.append(function)
+                        else:
+                            try:
+                                RE_functions_rename(function["function_id"], func_name)
+                            except HTTPError as e:
+                                logger.warning("Failed to sync functionId %d. %s",
+                                               function["function_id"], e.response.reason)
+
+                if data and len(data):
+                    dialog = inmain(SyncFunctionsDialog, state, fpath, data)
+                    inmain(dialog.exec_)
+            except RequestException as e:
                 logger.error("Error syncing functions: %s", e)
 
         functions = []
+        base_addr = get_imagebase()
+
         for func_ea in idautils.Functions():
             functions.append({"name": IDAUtils.get_demangled_func_name(func_ea),
-                              "start_addr": idc.get_func_attr(func_ea, idc.FUNCATTR_START)})
+                              "start_addr": idc.get_func_attr(func_ea, idc.FUNCATTR_START) - base_addr})
 
         inthread(bg_task)
 

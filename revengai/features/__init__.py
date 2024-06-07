@@ -23,11 +23,12 @@ logger = logging.getLogger("REAI")
 class BaseDialog(QDialog):
     __metaclass__ = abc.ABCMeta
 
-    def __init__(self, state: RevEngState, fpath: str):
+    def __init__(self, state: RevEngState, fpath: str, analyse: bool = True):
         QDialog.__init__(self)
 
         self.path = fpath
         self.state = state
+        self.analyse = analyse
         self.analyzed_functions = {}
 
         self.base_addr = get_imagebase()
@@ -46,7 +47,8 @@ class BaseDialog(QDialog):
         self.move(screen.width() // 2 - self.width() // 2,
                   screen.height() // 2 - self.height() // 2)
 
-        inthread(self._get_analyze_functions)
+        if self.analyse:
+            inthread(self._get_analyze_functions)
 
     def closeEvent(self, event):
         super(BaseDialog, self).closeEvent(event)
@@ -63,8 +65,9 @@ class BaseDialog(QDialog):
             logger.error("Error getting analysed functions: %s",
                          e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience."))
 
-    def _set_function_renamed(self, func_addr: int, new_func_name: str) -> None:
-        func_id = self.analyzed_functions.get(func_addr)
+    def _set_function_renamed(self, func_addr: int, new_func_name: str, func_id: int = 0) -> None:
+        if not func_id:
+            func_id = self.analyzed_functions.get(func_addr, None)
 
         if func_id:
             try:
