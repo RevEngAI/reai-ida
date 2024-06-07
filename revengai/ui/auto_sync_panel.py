@@ -65,7 +65,6 @@ class Ui_SyncFunctionsPanel(object):
         self.applyButton.setObjectName("applyButton")
         self.horizontalLayout.addWidget(self.applyButton)
         self.cancelButton = QtWidgets.QPushButton(SyncFunctionsPanel)
-        self.cancelButton.setEnabled(True)
         self.cancelButton.setMinimumSize(QtCore.QSize(100, 0))
         self.cancelButton.setObjectName("cancelButton")
         self.horizontalLayout.addWidget(self.cancelButton)
@@ -77,5 +76,5 @@ class Ui_SyncFunctionsPanel(object):
     def retranslateUi(self, SyncFunctionsPanel):
         _translate = QtCore.QCoreApplication.translate
         SyncFunctionsPanel.setWindowTitle(_translate("SyncFunctionsPanel", "RevEng.AI Toolkit: Sync Functions"))
-        self.applyButton.setText(_translate("SyncFunctionsPanel", "&S&ync"))
-        self.cancelButton.setText(_translate("SyncFunctionsPanel", "&C&ancel"))
+        self.applyButton.setText(_translate("SyncFunctionsPanel", "Sync"))
+        self.cancelButton.setText(_translate("SyncFunctionsPanel", "Cancel"))
