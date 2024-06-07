@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+from concurrent.futures import as_completed, ThreadPoolExecutor
 from re import sub
 from enum import IntEnum
 
@@ -23,6 +24,7 @@ from revengai.models.checkable_model import RevEngCheckableTableModel
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
 from revengai.ui.auto_analysis_panel import Ui_AutoAnalysisPanel
+
 
 logger = logging.getLogger("REAI")
 
@@ -143,52 +145,67 @@ class AutoAnalysisDialog(BaseDialog):
 
             inmain(self.ui.progressBar.setProperty, "value", pos)
 
-            for chunk in AutoAnalysisDialog._divide_chunks(function_ids):
-                try:
-                    res = RE_nearest_symbols_batch(function_ids=chunk, distance=confidence,
-                                                   collections=collections, nns=1)
+            # Launch parallel tasks
+            with ThreadPoolExecutor() as executor:
+                def bg_task(chunk: list[int]) -> any:
+                    try:
+                        return RE_nearest_symbols_batch(function_ids=chunk, distance=confidence,
+                                                        collections=collections, nns=1).json()["function_matches"]
+                    except Exception as ex:
+                        return ex
 
-                    for symbol in res.json()["function_matches"]:
-                        func_addr = next((func_addr for func_addr, func_id in self.analyzed_functions.items()
-                                          if symbol["origin_function_id"] == func_id), None)
+                # Start the ANN batch operations and mark each future with its chunk
+                futures = {executor.submit(bg_task, chunk): chunk
+                           for chunk in AutoAnalysisDialog._divide_chunks(function_ids)}
 
-                        if func_addr:
-                            self._analysis[Analysis.SUCCESSFUL.value] += 1
+                for future in as_completed(futures):
+                    chunk = futures[future]
 
-                            symbol["function_addr"] = func_addr
-                            symbol["org_func_name"] = next((function["name"] for function in self._functions
-                                                            if func_addr == function["start_addr"]), "Unknown")
+                    try:
+                        res = future.result()
 
-                            logger.info("Found symbol '%s' with a confidence level of '%s",
-                                        symbol["nearest_neighbor_function_name"], str(symbol["confidence"]))
+                        if isinstance(res, Exception):
+                            logger.error("Fetching a chunk of auto analysis failed. Reason: %s", res)
 
-                            resultsData.append((symbol["org_func_name"],
-                                                f"{symbol['nearest_neighbor_function_name']} "
-                                                f"({symbol['nearest_neighbor_binary_name']})",
-                                                CheckableItem(symbol),
-                                                "Can be renamed with a confidence level of "
-                                                f"{float(str(symbol['confidence'])[:6]) * 100:#.02f}%",))
-                except RequestException as e:
-                    logger.error("Fetching a chunk of auto analysis failed. Reason: %s", e)
+                            self._analysis[Analysis.UNSUCCESSFUL] += len(chunk)
 
-                    self._analysis[Analysis.UNSUCCESSFUL] += len(chunk)
+                            err_msg = "Fetching Function Symbol Failed"
 
-                    err_msg = "Fetching Function Symbol Failed"
+                            if isinstance(res, HTTPError):
+                                err_msg = res.response.json().get("error", err_msg)
 
-                    if isinstance(e, HTTPError):
-                        err_msg = e.response.json().get("error", err_msg)
+                            for function_id in chunk:
+                                func_addr = next((func_addr for func_addr, func_id in self.analyzed_functions.items()
+                                                  if function_id == func_id), None)
 
-                    for function_id in chunk:
-                        func_addr = next((func_addr for func_addr, func_id in self.analyzed_functions.items()
-                                          if function_id == func_id), None)
+                                if func_addr:
+                                    resultsData.append((next((function["name"] for function in self._functions
+                                                              if func_addr == function["start_addr"]), "Unknown"),
+                                                        "N/A", None, err_msg,))
+                        else:
+                            for symbol in res:
+                                func_addr = next((func_addr for func_addr, func_id in self.analyzed_functions.items()
+                                                  if symbol["origin_function_id"] == func_id), None)
 
-                        if func_addr:
-                            resultsData.append((next((function["name"] for function in self._functions
-                                                      if func_addr == function["start_addr"]), "Unknown"),
-                                                "N/A", None, err_msg,))
-                finally:
-                    pos += len(chunk)
-                    inmain(self.ui.progressBar.setProperty, "value", pos)
+                                if func_addr:
+                                    self._analysis[Analysis.SUCCESSFUL.value] += 1
+
+                                    symbol["function_addr"] = func_addr
+                                    symbol["org_func_name"] = next((function["name"] for function in self._functions
+                                                                    if func_addr == function["start_addr"]), "Unknown")
+
+                                    logger.info("Found symbol '%s' with a confidence level of '%s",
+                                                symbol["nearest_neighbor_function_name"], str(symbol["confidence"]))
+
+                                    resultsData.append((symbol["org_func_name"],
+                                                        f"{symbol['nearest_neighbor_function_name']} "
+                                                        f"({symbol['nearest_neighbor_binary_name']})",
+                                                        CheckableItem(symbol),
+                                                        "Can be renamed with a confidence level of "
+                                                        f"{float(str(symbol['confidence'])[:6]) * 100:#.02f}%",))
+                    finally:
+                        pos += len(chunk)
+                        inmain(self.ui.progressBar.setProperty, "value", pos)
 
             for idx, func in enumerate(self._functions):
                 if not any(data[0] == func["name"] for data in resultsData):
