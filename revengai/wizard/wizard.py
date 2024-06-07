@@ -123,7 +123,7 @@ class UserCredentialsPage(BasePage):
         self.api_key.setToolTip("API key from your account settings")
 
         self.server_url = QLineEdit(self)
-        self.server_url.setToolTip("URL hosting the RevEng.AI server")
+        self.server_url.setToolTip("URL hosting the RevEng.AI platform")
 
         layout = QFormLayout(self)
 

@@ -41,7 +41,7 @@ class SyncFunctionsDialog(BaseDialog):
         self.ui.syncButton.clicked.connect(self._synchronise)
         self.ui.cancelButton.clicked.connect(self._cancel)
         self.ui.selectAll.stateChanged.connect(self._select_all)
-        self.ui.description.setText(f"Synchronise <i>{basename(fpath)}</i> and RevEng.AI server for each function name that differs.")
+        self.ui.description.setText(f"Synchronise <i>{basename(fpath)}</i> and RevEng.AI platform for each function name that differs.")
 
     def showEvent(self, event):
         super().showEvent(event)
