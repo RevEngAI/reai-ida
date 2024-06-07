@@ -38,7 +38,7 @@ class Ui_SyncFunctionsPanel(object):
         self.vboxlayout.setSpacing(4)
         self.vboxlayout.setObjectName("vboxlayout")
         self.functionsList = QtWidgets.QTableView(self.groupBox)
-        self.functionsList.setContextMenuPolicy(QtCore.Qt.NoContextMenu)
+        self.functionsList.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.functionsList.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.functionsList.setSelectionMode(QtWidgets.QAbstractItemView.MultiSelection)
         self.functionsList.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
