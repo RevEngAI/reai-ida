@@ -2,9 +2,9 @@
 import abc
 import logging
 
-import idaapi
 from idc import get_input_file_path
-from idaapi import CH_CAN_DEL, CH_CAN_EDIT, CH_MULTI, CH_MODAL, CH_NO_STATUS_BAR, CHCOL_DEC, CHCOL_PLAIN, Choose, Form
+from idaapi import CH_CAN_DEL, CH_CAN_EDIT, CH_MULTI, CH_MODAL, CH_NO_STATUS_BAR, CHCOL_DEC, CHCOL_PLAIN, \
+    Choose, Form, MFF_FAST, execute_sync
 
 from PyQt5.QtWidgets import QMessageBox
 
@@ -25,11 +25,11 @@ logger = logging.getLogger("REAI")
 class Dialog(object):
     @staticmethod
     def showInfo(title: str, message: str) -> None:
-        idaapi.execute_sync(Requests.MsgBox(title, message, -1), idaapi.MFF_FAST)
+        execute_sync(Requests.MsgBox(title, message, -1), MFF_FAST)
 
     @staticmethod
     def showError(title: str, message: str) -> None:
-        idaapi.execute_sync(Requests.MsgBox(title, message, QMessageBox.Warning), idaapi.MFF_FAST)
+        execute_sync(Requests.MsgBox(title, message, QMessageBox.Warning), MFF_FAST)
 
 
 class BaseForm(Form):

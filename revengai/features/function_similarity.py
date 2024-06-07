@@ -36,7 +36,6 @@ class FunctionSimilarityDialog(BaseDialog):
         if start_addr is not idc.BADADDR:
             self.v_addr = start_addr - self.base_addr
         else:
-            self.v_addr = idc.BADADDR
             logger.error("Pointer location not in valid function")
             Dialog.showError("Find Similar Functions", "Cursor position not in a function.")
 

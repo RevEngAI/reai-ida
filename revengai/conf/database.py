@@ -102,11 +102,12 @@ class RevEngDatabase(object):
         except Error as e:
             logger.error("Error getting last analysis for hash: %s. %s", sha_256_hash, e)
 
-    def add_analysis(self, sha_256_hash: str, bid: int, status: str = "", creation: str = "", model_name: str = "") -> None:
+    def add_analysis(self, sha_256_hash: str, bid: int, status: str = "",
+                     creation: str = "", model_name: str = "") -> None:
         try:
             with closing(self.conn.cursor()) as cursor:
-                cursor.execute("INSERT OR REPLACE INTO analysis(sha_256_hash, binary_id, status, creation, model_name) VALUES(?, ?, ?, ?, ?)",
-                               (sha_256_hash, bid, status, creation, model_name,))
+                cursor.execute("INSERT OR REPLACE INTO analysis (sha_256_hash, binary_id, status, creation, model_name)"
+                               " VALUES (?, ?, ?, ?, ?)", (sha_256_hash, bid, status, creation, model_name,))
         except Error as e:
             logger.error("Error adding analysis for bid: %d, status: %s, hash: %s. %s",
                          bid, status, sha_256_hash, e)
@@ -128,5 +129,14 @@ class RevEngDatabase(object):
                 cursor.execute("DELETE FROM analysis WHERE binary_id = ?", (bid,))
         except Error as e:
             logger.error("Error deleting analysis from database for bid: %d. %s", bid, e)
+        finally:
+            self.conn.commit()
+
+    def execute_sql(self, sql: str, params: tuple[any] = None) -> None:
+        try:
+            with closing(self.conn.cursor()) as cursor:
+                cursor.execute(sql, params)
+        except Error as e:
+            logger.error("Error executing %s with params: %s. %s", sql, params, e)
         finally:
             self.conn.commit()

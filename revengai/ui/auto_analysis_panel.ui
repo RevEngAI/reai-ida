@@ -16,6 +16,10 @@
   <property name="windowTitle">
    <string>RevEng.AI Toolkit: Auto Analysis</string>
   </property>
+  <property name="windowIcon">
+   <iconset>
+    <normaloff>../resources/favicon.png</normaloff>../resources/favicon.png</iconset>
+  </property>
   <property name="layoutDirection">
    <enum>Qt::LeftToRight</enum>
   </property>
@@ -38,7 +42,7 @@
    <item>
     <widget class="QTabWidget" name="tabWidget">
      <property name="currentIndex">
-      <number>1</number>
+      <number>0</number>
      </property>
      <property name="tabBarAutoHide">
       <bool>false</bool>
@@ -86,6 +90,9 @@
          </item>
          <item>
           <widget class="QLineEdit" name="collectionsFilter">
+           <property name="placeholderText">
+            <string>Search Collections…</string>
+           </property>
            <property name="clearButtonEnabled">
             <bool>true</bool>
            </property>
@@ -187,6 +194,9 @@
          </item>
          <item>
           <widget class="QLineEdit" name="resultsFilter">
+           <property name="placeholderText">
+            <string>Search Functions…</string>
+           </property>
            <property name="clearButtonEnabled">
             <bool>true</bool>
            </property>
