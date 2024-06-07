@@ -33,8 +33,6 @@ class BaseDialog(QDialog):
 
         self.base_addr = get_imagebase()
 
-        state.config.init_current_analysis()
-
         self.setModal(True)
         self.setWindowIcon(QIcon(join(dirname(__file__), "../resources/favicon.png")))
 

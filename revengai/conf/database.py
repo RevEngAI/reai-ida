@@ -98,7 +98,13 @@ class RevEngDatabase(object):
                                (sha_256_hash, status,))
 
                 result = cursor.fetchone()
-                return result[0] if result and len(result) > 0 else 0
+
+                analysis_id = result[0] if result and len(result) > 0 else 0
+
+                if analysis_id:
+                    logger.info("Selecting current analysis ID %d for binary hash: %s", analysis_id, sha_256_hash)
+
+                return analysis_id
         except Error as e:
             logger.error("Error getting last analysis for hash: %s. %s", sha_256_hash, e)
 

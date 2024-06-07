@@ -4,7 +4,7 @@ from json import loads, dumps
 from os.path import join, exists
 
 from requests import HTTPError
-from idaapi import get_user_idadir, retrieve_input_file_sha256
+from idaapi import get_user_idadir, retrieve_input_file_sha256, msg
 
 from reait.api import re_conf, RE_health, RE_settings
 
@@ -65,8 +65,6 @@ class RevEngConfiguration(object):
                 self._config = loads(fd.read())
 
             if self.is_valid():
-                self.init_current_analysis()
-
                 re_conf["host"] = self.config["host"]
                 re_conf["apikey"] = self.config["apikey"]
 
@@ -100,7 +98,7 @@ class RevEngConfiguration(object):
         return self._config
 
     def is_valid(self) -> bool:
-        return all(self.get(name) is not None for name in ("apikey", "host", "model",))
+        return all(self.get(name) is not None for name in ("apikey", "host",))
 
     @property
     def database(self) -> RevEngDatabase:
@@ -111,3 +109,5 @@ class RevEngConfiguration(object):
 
         if sha_256_hash:
             self.set("binary_id", self.database.get_last_analysis(sha_256_hash.hex()))
+
+            msg(f"Selecting current analysis ID {self.get('binary_id')}")

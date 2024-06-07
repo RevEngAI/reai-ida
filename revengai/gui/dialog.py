@@ -3,7 +3,7 @@ import abc
 import logging
 
 from idc import get_input_file_path
-from idaapi import CH_CAN_DEL, CH_CAN_EDIT, CH_MULTI, CH_MODAL, CH_NO_STATUS_BAR, CHCOL_DEC, CHCOL_PLAIN, \
+from idaapi import CH_CAN_DEL, CH_CAN_EDIT, CH_CAN_REFRESH, CH_MODAL, CH_NO_STATUS_BAR, CHCOL_DEC, CHCOL_PLAIN, \
     Choose, Form, MFF_FAST, execute_sync
 
 from PyQt5.QtWidgets import QMessageBox
@@ -53,9 +53,9 @@ class BaseForm(Form):
 class StatusForm(BaseForm):
     class StatusFormChooser(Choose):
         def __init__(self, title: str, state: RevEngState, items: list,
-                     flags: int = CH_CAN_DEL | CH_CAN_EDIT | CH_MULTI | CH_MODAL | CH_NO_STATUS_BAR):
+                     flags: int = CH_CAN_DEL | CH_CAN_EDIT | CH_CAN_REFRESH | CH_MODAL | CH_NO_STATUS_BAR):
             Choose.__init__(self, title=title, flags=flags, embedded=True, icon=state.icon_id,
-                            popup_names=["", "Delete Analysis", "View Analysis Report",],
+                            popup_names=["", "Delete Analysis", "View Analysis Report", "Select as Current Analysis"],
                             cols=[["Binary Name", 30 | CHCOL_PLAIN],
                                   ["Analysis ID", 6 | CHCOL_DEC],
                                   ["Status", 8 | CHCOL_PLAIN],
@@ -80,22 +80,37 @@ class StatusForm(BaseForm):
             return len(self.items)
 
         def OnEditLine(self, sel) -> None:
-            logger.info("Analysis Report ID %s | %s",
-                        self.OnGetLine(sel[0])[1], self.OnGetLine(sel[0])[0])
+            pos = sel if isinstance(sel, int) else sel[0]
 
-            from webbrowser import open_new_tab
+            if pos >= 0:
+                logger.info("Analysis Report ID %s | %s",
+                            self.OnGetLine(pos)[1], self.OnGetLine(pos)[0])
 
-            open_new_tab(f"{self.state.config.PORTAL}/analyses/{self.OnGetLine(sel[0])[1]}")
+                from webbrowser import open_new_tab
+
+                open_new_tab(f"{self.state.config.PORTAL}/analyses/{self.OnGetLine(pos)[1]}")
+
+        def OnRefresh(self, sel) -> None:
+            pos = sel if isinstance(sel, int) else sel[0]
+
+            if 0 <= pos < self.OnGetSize():
+                logger.info("Selecting analysis ID %s as current", self.OnGetLine(pos)[1])
+
+                self.state.config.set("binary_id", self.OnGetLine(pos)[1])
 
         def OnDeleteLine(self, sel) -> tuple:
+            if isinstance(sel, int):
+                sel = [sel]
+
             for idx in sel:
-                logger.info("Delete analysis %s", self.OnGetLine(idx)[1])
+                logger.info("Delete analysis ID %s", self.OnGetLine(idx)[1])
 
                 inthread(RE_delete, self.fpath, self.OnGetLine(idx)[1])
 
                 self.state.config.database.delete_analysis(self.OnGetLine(idx)[1])
 
-                self.state.config.init_current_analysis()
+                if self.state.config.get("binary_id", 0) == self.OnGetLine(idx)[1]:
+                    self.state.config.init_current_analysis()
 
             self.items = [*filterfalse(lambda i: i in (self.OnGetLine(j) for j in sel), self.items)]
             return Choose.ALL_CHANGED, sel[0]

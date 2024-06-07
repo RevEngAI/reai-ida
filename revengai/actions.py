@@ -106,8 +106,6 @@ def check_analyze(state: RevEngState) -> None:
     fpath = idc.get_input_file_path()
 
     if is_condition_met(state, fpath):
-        state.config.init_current_analysis()
-
         def bg_task() -> None:
             try:
                 bid = state.config.get("binary_id", 0)
@@ -170,8 +168,6 @@ def explain_function(state: RevEngState) -> None:
     fpath = idc.get_input_file_path()
 
     if is_condition_met(state, fpath):
-        state.config.init_current_analysis()
-
         def bg_task(pseudo_code: str) -> None:
             if len(pseudo_code) > 0:
                 try:
@@ -226,8 +222,6 @@ def download_logs(state: RevEngState) -> None:
     fpath = idc.get_input_file_path()
 
     if is_condition_met(state, fpath):
-        state.config.init_current_analysis()
-
         def bg_task() -> None:
             try:
                 res: Response = RE_logs(fpath, console=False, binary_id=state.config.get("binary_id", 0))
@@ -258,8 +252,6 @@ def function_signature(state: RevEngState, func_addr: int = 0) -> None:
     fpath = idc.get_input_file_path()
 
     if is_condition_met(state, fpath):
-        state.config.init_current_analysis()
-
         def bg_task(start_addr: int) -> None:
             try:
                 if start_addr is not idc.BADADDR:
@@ -300,8 +292,6 @@ def analysis_history(state: RevEngState) -> None:
     fpath = idc.get_input_file_path()
 
     if is_condition_met(state, fpath):
-        state.config.init_current_analysis()
-
         def bg_task() -> None:
             try:
                 res: Response = RE_search(fpath)
@@ -349,8 +339,6 @@ def load_recent_analyses(state: RevEngState) -> None:
     fpath = idc.get_input_file_path()
 
     if state.config.is_valid():
-        state.config.init_current_analysis()
-
         def bg_task() -> None:
             try:
                 res: Response = RE_recent_analysis()
@@ -387,8 +375,6 @@ def load_recent_analyses(state: RevEngState) -> None:
 
 def sync_functions_name(state: RevEngState, fpath: str) -> None:
     if state.config.is_valid() and fpath and isfile(fpath):
-        state.config.init_current_analysis()
-
         def bg_task() -> None:
             try:
                 res: Response = RE_analyze_functions(fpath, state.config.get("binary_id", 0))
@@ -432,8 +418,6 @@ def function_breakdown(state: RevEngState, function_id: int = 0) -> None:
     fpath = idc.get_input_file_path()
 
     if is_condition_met(state, fpath):
-        state.config.init_current_analysis()
-
         def bg_task(func_ea: int, func_id: int = 0) -> None:
             func_name = inmain(IDAUtils.get_demangled_func_name, func_ea)
 
