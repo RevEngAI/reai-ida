@@ -88,7 +88,12 @@ class StatusForm(BaseForm):
 
                 from webbrowser import open_new_tab
 
-                open_new_tab(f"{self.state.config.PORTAL}/analyses/{self.OnGetLine(pos)[1]}")
+                url = f"{self.state.config.PORTAL}/analyses/"
+
+                if self.OnGetLine(pos)[2] == "Complete":
+                    url += self.OnGetLine(pos)[1]
+
+                open_new_tab(url)
 
         def OnRefresh(self, sel) -> None:
             pos = sel if isinstance(sel, int) else sel[0]
