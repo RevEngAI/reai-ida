@@ -65,6 +65,9 @@ class FunctionSimilarityDialog(BaseDialog):
 
         self._confidence(self.ui.confidenceSlider.sliderPosition())
 
+    def showTime(self):
+        logger.info("text: %s", self.ui.collectionsFilter.text())
+
     def showEvent(self, event):
         super(FunctionSimilarityDialog, self).showEvent(event)
 
@@ -220,10 +223,11 @@ class FunctionSimilarityDialog(BaseDialog):
 
         return collections
 
-    def _filter(self, filter_text) -> None:
-        for row in range(self.ui.collectionsTable.model().rowCount()):
-            item = self.ui.collectionsTable.model().index(row, 0)
-            self.ui.collectionsTable.setRowHidden(row, filter_text.lower() not in item.sibling(row, 0).data().lower())
+    def _filter(self, _) -> None:
+        self.typing_timer.start(self.searchDelay)     # Starts the countdown to call the filtering method
 
     def _confidence(self, value: int) -> None:
         self.ui.description.setText(f"Confidence: {value:#02d}")
+
+    def _filter_collections(self):
+        self._search_collection(self.ui.collectionsFilter.text().lower())

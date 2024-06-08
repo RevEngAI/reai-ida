@@ -4,7 +4,7 @@ import logging
 from os.path import dirname, join
 
 import idaapi
-from PyQt5.QtCore import QRect
+from PyQt5.QtCore import QRect, QTimer
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QDialog, QDesktopWidget
 from reait.api import RE_functions_rename, RE_analyze_functions
@@ -23,6 +23,8 @@ logger = logging.getLogger("REAI")
 class BaseDialog(QDialog):
     __metaclass__ = abc.ABCMeta
 
+    searchDelay = 300   # Delay, in milliseconds, between the user finishing typing and the search being performed
+
     def __init__(self, state: RevEngState, fpath: str, analyse: bool = True):
         QDialog.__init__(self)
 
@@ -32,6 +34,10 @@ class BaseDialog(QDialog):
         self.analyzed_functions = {}
 
         self.base_addr = get_imagebase()
+
+        self.typing_timer = QTimer(self)
+        self.typing_timer.setSingleShot(True)   # Ensure the timer will fire only once after it was started
+        self.typing_timer.timeout.connect(self._filter_collections)
 
         self.setModal(True)
         self.setWindowIcon(QIcon(join(dirname(__file__), "../resources/favicon.png")))
@@ -88,3 +94,6 @@ class BaseDialog(QDialog):
 
     def _get_function_id(self, func_addr: int) -> int:
         return self.analyzed_functions.get(func_addr, 0)
+
+    def _filter_collections(self):
+        pass

@@ -237,11 +237,14 @@ class AutoAnalysisDialog(BaseDialog):
             inmain(self.ui.progressBar.setProperty, "value", 0)
 
     def _filter(self, filter_text) -> None:
-        table = self.ui.collectionsTable if self.ui.tabWidget.currentIndex() == 0 else self.ui.resultsTable
+        if self.ui.tabWidget.currentIndex() == 0:
+            self.typing_timer.start(self.searchDelay)     # Starts the countdown to call the filtering method
+        else:
+            table = self.ui.resultsTable
 
-        for row in range(table.model().rowCount()):
-            item = table.model().index(row, 0)
-            table.setRowHidden(row, filter_text.lower() not in item.sibling(row, 0).data().lower())
+            for row in range(table.model().rowCount()):
+                item = table.model().index(row, 0)
+                table.setRowHidden(row, filter_text.lower() not in item.sibling(row, 0).data().lower())
 
     def _confidence(self, value: int) -> None:
         if self.ui.tabWidget.currentIndex() == 0:
@@ -336,6 +339,9 @@ class AutoAnalysisDialog(BaseDialog):
                 regex.append(model.index(idx, 0).data(Qt.DisplayRole))
 
         return regex
+
+    def _filter_collections(self):
+        self._search_collection(self.ui.collectionsFilter.text().lower())
 
     # Yield successive n-sized
     # chunks from l.
