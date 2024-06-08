@@ -37,18 +37,25 @@ def RE_search(fpath: str) -> Response:
     return res
 
 
-def RE_quick_search(model: str) -> Response:
-    res: Response = reveng_req(get, f"v1/collections/quick/search", params={"model_name": model})
+def RE_collection_search(search: str) -> Response:
+    res: Response = reveng_req(get, f"v1/collections/quick/search", params={"search_term": search})
 
     res.raise_for_status()
     return res
 
 
-def RE_recent_analysis(scope: str = "ALL", nb_analysis: int = 100) -> Response:
+def RE_recent_analysis(status: str = "All", scope: str = "ALL", nb_analysis: int = 50) -> Response:
     res: Response = reveng_req(get, "v1/analyse/recent",
-                               json_data={"status": "All",
+                               json_data={"status": status,
                                           "scope": scope,
                                           "n": nb_analysis})
+
+    res.raise_for_status()
+    return res
+
+
+def RE_functions_dump(function_ids: list[int]) -> Response:
+    res: Response = reveng_req(get, "v1/functions/dump", json_data={"function_id_list": function_ids})
 
     res.raise_for_status()
     return res

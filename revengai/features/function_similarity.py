@@ -12,7 +12,7 @@ from requests import Response, HTTPError, RequestException
 
 from reait.api import RE_nearest_symbols_batch
 
-from revengai.api import RE_quick_search
+from revengai.api import RE_collection_search
 from revengai.features import BaseDialog
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
@@ -68,7 +68,7 @@ class FunctionSimilarityDialog(BaseDialog):
     def showEvent(self, event):
         super(FunctionSimilarityDialog, self).showEvent(event)
 
-        inthread(self._quick_search)
+        inthread(self._search_collection)
 
     def closeEvent(self, event):
         super(FunctionSimilarityDialog, self).closeEvent(event)
@@ -164,15 +164,15 @@ class FunctionSimilarityDialog(BaseDialog):
                                                       "Do you also want to rename the function arguments?"):
                     from revengai.actions import function_signature
 
-                    function_signature(self.state, self.v_addr + self.base_addr)
+                    function_signature(self.state, self.v_addr + self.base_addr, self._get_function_id(self.v_addr))
 
-    def _quick_search(self):
+    def _search_collection(self, search: str = None):
         try:
             inmain(show_wait_box, "HIDECANCEL\nGetting RevEng.AI collections…")
 
             inmain(self.ui.fetchButton.setEnabled, False)
 
-            res: Response = RE_quick_search(self.state.config.get("model"))
+            res: Response = RE_collection_search(search)
 
             collections = []
 

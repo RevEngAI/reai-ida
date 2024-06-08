@@ -65,7 +65,7 @@ class BaseDialog(QDialog):
 
     def _set_function_renamed(self, func_addr: int, new_func_name: str, func_id: int = 0) -> None:
         if not func_id:
-            func_id = self.analyzed_functions.get(func_addr, None)
+            func_id = self._get_function_id(func_addr)
 
         if func_id:
             try:
@@ -85,3 +85,6 @@ class BaseDialog(QDialog):
         from revengai.actions import function_breakdown
 
         function_breakdown(self.state, func_id)
+
+    def _get_function_id(self, func_addr: int) -> int:
+        return self.analyzed_functions.get(func_addr, 0)

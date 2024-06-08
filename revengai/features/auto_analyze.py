@@ -15,7 +15,7 @@ from requests import Response, HTTPError, RequestException
 
 from reait.api import RE_nearest_symbols_batch
 
-from revengai.api import RE_quick_search
+from revengai.api import RE_collection_search
 from revengai.features import BaseDialog
 from revengai.misc.utils import IDAUtils
 from revengai.misc.qtutils import inthread, inmain
@@ -80,7 +80,7 @@ class AutoAnalysisDialog(BaseDialog):
     def showEvent(self, event):
         super(AutoAnalysisDialog, self).showEvent(event)
 
-        inthread(self._load_collections)
+        inthread(self._search_collection)
 
     def closeEvent(self, event):
         super(AutoAnalysisDialog, self).closeEvent(event)
@@ -260,13 +260,13 @@ class AutoAnalysisDialog(BaseDialog):
                                         f"Skipped Analyses: {self._analysis[Analysis.SKIPPED.value]}<br/>"
                                         f"Errored Analyses: {self._analysis[Analysis.UNSUCCESSFUL.value]}")
 
-    def _load_collections(self) -> None:
+    def _search_collection(self, search: str = None) -> None:
         try:
             inmain(show_wait_box, "HIDECANCEL\nGetting RevEng.AI collections…")
 
             inmain(self.ui.fetchButton.setEnabled, False)
 
-            res: Response = RE_quick_search(self.state.config.get("model"))
+            res: Response = RE_collection_search(search)
 
             collections = []
 

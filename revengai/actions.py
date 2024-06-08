@@ -261,37 +261,38 @@ def download_logs(state: RevEngState) -> None:
         inthread(bg_task)
 
 
-def function_signature(state: RevEngState, func_addr: int = 0) -> None:
+def function_signature(state: RevEngState, func_addr: int = 0, func_id: int = 0) -> None:
     fpath = idc.get_input_file_path()
 
     if is_condition_met(state, fpath):
-        def bg_task(start_addr: int) -> None:
+        def bg_task(func_ea: int) -> None:
             try:
-                if start_addr is not idc.BADADDR:
-                    start_addr -= inmain(get_imagebase)
+                if func_ea is not idc.BADADDR:
+                    function_ids = []
+                    if func_id:
+                        function_ids.append(func_id)
+                    else:
+                        res: Response = RE_analyze_functions(fpath, state.config.get("binary_id", 0))
 
-                    res: Response = RE_analyze_functions(fpath, state.config.get("binary_id", 0))
+                        start_addr = func_ea - inmain(get_imagebase)
+                        for function in res.json()["functions"]:
+                            if function["function_vaddr"] == start_addr:
+                                function_ids.append(function["function_id"])
+
+                    res = RE_functions_dump(function_ids)
 
                     for function in res.json()["functions"]:
-                        if function["function_vaddr"] == start_addr:
-                            res = RE_functions_dump([function["function_id"]])
+                        if any(function["function_id"] == function_id for function_id in function_ids):
+                            params = [f"{param['d_type']} {param['name']}" for param in function["params"]]
 
-                            dump = res.json()[0]
-
-                            # TODO Manage information of function arguments
-                            params = dump["params"]
-                            if dump["returns"]:
-                                return_type = dump["return_type"]
-
-                                # newtype = return_type
-                                #
-                                # if idc.SetType(start_addr, ""):
-                                #     logger.info("New function signature for 0x%X is '%s'",
-                                #                    start_addr, newtype)
-                                # else:
-                                #     logger.warning("Failed to set function type '%s' defined at address 0x%X",
-                                #                    newtype, start_addr)
-                            break
+                            func_sig = f"{function['return_type']} {inmain(IDAUtils.get_demangled_func_name(func_ea))}"\
+                                       f"({', '.join(params)})"
+                            logger.info("New function signature for address 0x%X is '%s'", func_ea, func_sig)
+                            # if idc.SetType(func_ea, func_sig):
+                            #     logger.info("New function signature for address 0x%X is '%s'", func_ea, func_sig)
+                            # else:
+                            #     logger.warning("Failed to set function type '%s' defined at address 0x%X",
+                            #                    func_sig, func_ea)
             except HTTPError as e:
                 logger.error("Unable to obtain function argument details. %s", e)
 
