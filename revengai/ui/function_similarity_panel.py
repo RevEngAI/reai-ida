@@ -157,6 +157,7 @@ class Ui_FunctionSimilarityPanel(object):
     def retranslateUi(self, FunctionSimilarityPanel):
         _translate = QtCore.QCoreApplication.translate
         FunctionSimilarityPanel.setWindowTitle(_translate("FunctionSimilarityPanel", "RevEng.AI Toolkit: Function Rename"))
+        self.label.setVisible(False)
         self.label.setText(_translate("FunctionSimilarityPanel", "Filter:"))
         self.checkBox.setText(_translate("FunctionSimilarityPanel", "Use Debug Symbols"))
         self.label_2.setText(_translate("FunctionSimilarityPanel", "Results:"))

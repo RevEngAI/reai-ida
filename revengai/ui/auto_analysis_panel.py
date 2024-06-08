@@ -151,11 +151,13 @@ class Ui_AutoAnalysisPanel(object):
     def retranslateUi(self, AutoAnalysisPanel):
         _translate = QtCore.QCoreApplication.translate
         AutoAnalysisPanel.setWindowTitle(_translate("AutoAnalysisPanel", "RevEng.AI Toolkit: Auto Analysis"))
+        self.label_2.setVisible(False)
         self.label_2.setText(_translate("AutoAnalysisPanel", "Filter:"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab), _translate("AutoAnalysisPanel", "Collections"))
+        self.label_21.setVisible(False)
         self.label_21.setText(_translate("AutoAnalysisPanel", "Filter:"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_2), _translate("AutoAnalysisPanel", "Results"))
         self.fetchButton.setText(_translate("AutoAnalysisPanel", "Fetch Results"))
         self.renameButton.setText(_translate("AutoAnalysisPanel", "Rename"))
         self.collectionsFilter.setPlaceholderText(_translate("AutoAnalysisPanel", "Search Collection…"))
-        self.resultsFilter.setPlaceholderText(_translate("AutoAnalysisPanel", "Search Function…"))
+        self.resultsFilter.setPlaceholderText(_translate("AutoAnalysisPanel", "Filter Functions…"))

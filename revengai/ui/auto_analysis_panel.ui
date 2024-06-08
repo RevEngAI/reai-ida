@@ -195,7 +195,7 @@
          <item>
           <widget class="QLineEdit" name="resultsFilter">
            <property name="placeholderText">
-            <string>Search Functions…</string>
+            <string>Filter Functions…</string>
            </property>
            <property name="clearButtonEnabled">
             <bool>true</bool>
