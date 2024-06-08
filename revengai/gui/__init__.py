@@ -4,6 +4,8 @@ from os.path import join, dirname
 from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtWidgets import QMessageBox
 
+from idaapi import hide_wait_box
+
 
 class Requests(object):
     class MsgBox(object):
@@ -13,6 +15,8 @@ class Requests(object):
             self.icon = icon
 
         def __call__(self) -> bool:
+            hide_wait_box()
+
             msg_box = QMessageBox()
 
             msg_box.setModal(True)
