@@ -4,7 +4,7 @@ import logging
 
 from idc import get_input_file_path
 from idaapi import CH_CAN_DEL, CH_CAN_EDIT, CH_CAN_REFRESH, CH_MODAL, CH_NO_STATUS_BAR, CHCOL_DEC, CHCOL_PLAIN, \
-    Choose, Form, MFF_FAST, execute_sync
+    Choose, Form, MFF_FAST, execute_sync, open_url
 
 from PyQt5.QtWidgets import QMessageBox
 
@@ -86,14 +86,12 @@ class StatusForm(BaseForm):
                 logger.info("Analysis Report ID %s | %s",
                             self.OnGetLine(pos)[1], self.OnGetLine(pos)[0])
 
-                from webbrowser import open_new_tab
-
                 url = f"{self.state.config.PORTAL}/analyses/"
 
                 if self.OnGetLine(pos)[2] == "Complete":
                     url += self.OnGetLine(pos)[1]
 
-                open_new_tab(url)
+                open_url(url)
 
         def OnRefresh(self, sel) -> None:
             pos = sel if isinstance(sel, int) else sel[0]
@@ -187,9 +185,7 @@ Find more info at https://reveng.ai/
 
     def OnFormChange(self, fid):
         if fid == -2:   # Goto homepage
-            from webbrowser import open_new_tab
-
-            open_new_tab("https://reveng.ai/")
+            open_url("https://reveng.ai/")
         return super().OnFormChange(fid)
 
 
@@ -210,7 +206,5 @@ Your RevEng.AI Toolkit IDA plugin is v%s.
 
     def OnFormChange(self, fid):
         if fid == -2:  # Goto homepage
-            from webbrowser import open_new_tab
-
-            open_new_tab(f"{RevEngConfiguration.PORTAL}/integrations")
+            open_url(f"{RevEngConfiguration.PORTAL}/integrations")
         return super().OnFormChange(fid)

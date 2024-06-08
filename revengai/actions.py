@@ -3,7 +3,8 @@ import logging
 
 import idautils
 import idc
-from idaapi import ask_file, get_imagebase, get_inf_structure, retrieve_input_file_size, show_wait_box, hide_wait_box
+from idaapi import ask_file, get_imagebase, get_inf_structure, retrieve_input_file_size, show_wait_box, hide_wait_box, \
+    open_url
 
 from subprocess import run
 from threading import Timer
@@ -465,9 +466,7 @@ def function_breakdown(state: RevEngState, function_id: int = 0) -> None:
                 logger.info("Redirection to the WEB browser to display the function breakdown ID %d | %s",
                             func_id, func_name)
 
-                from webbrowser import open_new_tab
-
-                open_new_tab(f"{state.config.PORTAL}/function/{func_id}")
+                open_url(f"{state.config.PORTAL}/function/{func_id}")
 
         inthread(bg_task, idc.get_func_attr(idc.here(), idc.FUNCATTR_START), function_id)
 
@@ -539,7 +538,7 @@ def update(_) -> None:
 
         f.Show()
         f.Free()
-    except HTTPError as e:
+    except RequestException as e:
         logger.warning("RevEng.AI Toolkit failed to connect to GitHub to check for the latest plugin update. %s",
                        e)
         Dialog.showInfo("Check for Update",
