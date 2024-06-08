@@ -161,7 +161,8 @@ class FunctionSimilarityDialog(BaseDialog):
                             selected[0].text, selected[0].data["confidence"])
 
                 if False and ASKBTN_YES == idc.ask_yn(ASKBTN_YES,
-                                                      "Do you also want to rename the function arguments?"):
+                                                      "HIDECANCEL\nWould you also like to update the function declaration?"):
+                    # Prevent circular import
                     from revengai.actions import function_signature
 
                     function_signature(self.state, self.v_addr + self.base_addr, self._get_function_id(self.v_addr))
@@ -186,7 +187,7 @@ class FunctionSimilarityDialog(BaseDialog):
         except HTTPError as e:
             logger.error("Getting collections failed. Reason: %s", e)
 
-            Dialog.showError("Function Rename", f"Function Rename Error: {e.response.json()['error']}")
+            Dialog.showError("Function Rename", f"Function Rename Error: {e.response.json().get('error', 'unknown')}")
         except RequestException as e:
             logger.error("An unexpected error has occurred. %s", e)
         finally:

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 import logging
 
-import idautils
 import idc
+from idautils import Functions
 from idaapi import ask_file, get_imagebase, get_inf_structure, retrieve_input_file_size, show_wait_box, hide_wait_box, \
     open_url
 
@@ -103,7 +103,7 @@ def upload_binary(state: RevEngState) -> None:
             symbols: dict = {"base_addr": get_imagebase()}
 
             functions = []
-            for func_ea in idautils.Functions():
+            for func_ea in Functions():
                 functions.append({"name": IDAUtils.get_demangled_func_name(func_ea),
                                   "start_addr": idc.get_func_attr(func_ea, idc.FUNCATTR_START),
                                   "end_addr": idc.get_func_attr(func_ea, idc.FUNCATTR_END)})
@@ -268,37 +268,38 @@ def function_signature(state: RevEngState, func_addr: int = 0, func_id: int = 0)
     if is_condition_met(state, fpath):
         def bg_task(func_ea: int) -> None:
             try:
-                if func_ea is not idc.BADADDR:
-                    function_ids = []
-                    if func_id:
-                        function_ids.append(func_id)
-                    else:
-                        res: Response = RE_analyze_functions(fpath, state.config.get("binary_id", 0))
+                function_ids = []
+                if func_id:
+                    function_ids.append(func_id)
+                else:
+                    res: Response = RE_analyze_functions(fpath, state.config.get("binary_id", 0))
 
-                        start_addr = func_ea - inmain(get_imagebase)
-                        for function in res.json()["functions"]:
-                            if function["function_vaddr"] == start_addr:
-                                function_ids.append(function["function_id"])
-
-                    res = RE_functions_dump(function_ids)
-
+                    start_addr = func_ea - inmain(get_imagebase)
                     for function in res.json()["functions"]:
-                        if any(function["function_id"] == function_id for function_id in function_ids):
-                            params = [f"{param['d_type']} {param['name']}" for param in function["params"]]
+                        if function["function_vaddr"] == start_addr:
+                            function_ids.append(function["function_id"])
 
-                            func_sig = f"{function['return_type']} {inmain(IDAUtils.get_demangled_func_name(func_ea))}"\
-                                       f"({', '.join(params)})"
-                            logger.info("New function signature for address 0x%X is '%s'", func_ea, func_sig)
-                            # if idc.SetType(func_ea, func_sig):
-                            #     logger.info("New function signature for address 0x%X is '%s'", func_ea, func_sig)
-                            # else:
-                            #     logger.warning("Failed to set function type '%s' defined at address 0x%X",
-                            #                    func_sig, func_ea)
+                res = RE_functions_dump(function_ids)
+
+                for function in res.json()["functions"]:
+                    if any(function["function_id"] == function_id for function_id in function_ids):
+                        r_type = "void" if function["return_type"] == "undefined" else function["return_type"]
+                        params = ", ".join([f"{param['d_type'].replace('typedef ', '')} {param['name']}"
+                                            for param in function["params"]])
+
+                        func_sig = f"{r_type} {inmain(idc.get_func_name, func_ea)}({params})"
+
+                        if inmain(idc.SetType, func_ea, func_sig):
+                            logger.info("New function declaration '%s' set at address 0x%X", func_sig, func_ea)
+                        else:
+                            logger.warning("Failed to set function declaration '%s' at address 0x%X", func_sig, func_ea)
+                            Dialog.showInfo("Function Declaration",
+                                            f"Failed to update the function declaration with:\n{func_sig}")
             except HTTPError as e:
                 logger.error("Unable to obtain function argument details. %s", e)
 
                 error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
-                Dialog.showError("Binary Analysis Logs", f"Failed to obtain function argument details: {error}")
+                Dialog.showError("Function Signature", f"Failed to obtain function argument details: {error}")
 
         inthread(bg_task, idc.get_func_attr(func_addr if func_addr > 0 else idc.here(), idc.FUNCATTR_START))
 
@@ -422,7 +423,7 @@ def sync_functions_name(state: RevEngState, fpath: str) -> None:
         functions = []
         base_addr = get_imagebase()
 
-        for func_ea in idautils.Functions():
+        for func_ea in Functions():
             functions.append({"name": IDAUtils.get_demangled_func_name(func_ea),
                               "start_addr": idc.get_func_attr(func_ea, idc.FUNCATTR_START) - base_addr})
 
