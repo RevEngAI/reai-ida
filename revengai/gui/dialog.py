@@ -60,6 +60,7 @@ class StatusForm(BaseForm):
                                   ["Analysis ID", 6 | CHCOL_DEC],
                                   ["Status", 8 | CHCOL_PLAIN],
                                   ["Submitted Date", 14 | CHCOL_PLAIN],])
+
             self.state = state
             self.items = items
             self.fpath = get_input_file_path()
