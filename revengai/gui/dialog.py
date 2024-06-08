@@ -4,7 +4,7 @@ import logging
 
 from idc import get_input_file_path
 from idaapi import CH_CAN_DEL, CH_CAN_EDIT, CH_CAN_REFRESH, CH_MODAL, CH_NO_STATUS_BAR, CHCOL_DEC, CHCOL_PLAIN, \
-    Choose, Form, MFF_FAST, execute_sync, open_url
+    Choose, Form, MFF_FAST, execute_sync, open_url, hide_wait_box
 
 from PyQt5.QtWidgets import QMessageBox
 
@@ -25,10 +25,12 @@ logger = logging.getLogger("REAI")
 class Dialog(object):
     @staticmethod
     def showInfo(title: str, message: str) -> None:
+        execute_sync(hide_wait_box(), MFF_FAST)
         execute_sync(Requests.MsgBox(title, message, -1), MFF_FAST)
 
     @staticmethod
     def showError(title: str, message: str) -> None:
+        execute_sync(hide_wait_box(), MFF_FAST)
         execute_sync(Requests.MsgBox(title, message, QMessageBox.Warning), MFF_FAST)
 
 
