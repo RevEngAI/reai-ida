@@ -207,10 +207,12 @@ class AutoAnalysisDialog(BaseDialog):
                         pos += len(chunk)
                         inmain(self.ui.progressBar.setProperty, "value", pos)
 
-            for idx, func in enumerate(self._functions):
+            for func in self._functions:
                 if not any(data[0] == func["name"] for data in resultsData):
                     self._analysis[Analysis.SKIPPED.value] += 1
-                    resultsData.insert(idx, (func["name"], "N/A", None, "No Function Symbol Found",))
+                    resultsData.append((func["name"], "N/A", None, "No Function Symbol Found",))
+
+            resultsData.sort(key=lambda tup: tup[0])
 
             self._analysis[Analysis.TOTAL.value] = len(resultsData)
 
