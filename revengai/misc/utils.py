@@ -54,7 +54,7 @@ class IDAUtils(object):
                 idc.set_func_cmt(func.start_ea, comment, False)
 
     @staticmethod
-    def decompile_func(func_ea: int) -> str:
+    def decompile_func(func_ea: int) -> Optional[str]:
         if idaapi.init_hexrays_plugin() and IDAUtils.is_in_valid_segment(func_ea):
             func = idaapi.get_func(func_ea)
             if not func:
@@ -68,7 +68,7 @@ class IDAUtils(object):
                     for sline in cfunc.get_pseudocode():
                         lines.append(idaapi.tag_remove(sline.line))
                     return "\n".join(lines)
-        return ""
+        return None
 
     @staticmethod
     def disasm_func(func_ea: int) -> str:
