@@ -65,9 +65,6 @@ class FunctionSimilarityDialog(BaseDialog):
 
         self._confidence(self.ui.confidenceSlider.sliderPosition())
 
-    def showTime(self):
-        logger.info("text: %s", self.ui.collectionsFilter.text())
-
     def showEvent(self, event):
         super(FunctionSimilarityDialog, self).showEvent(event)
 
