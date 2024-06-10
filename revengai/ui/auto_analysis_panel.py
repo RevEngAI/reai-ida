@@ -10,6 +10,7 @@
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
+from revengai.gui.custom_flow_layout import CustomFlowLayout
 from revengai.gui.slider import Slider
 
 
@@ -36,6 +37,11 @@ class Ui_AutoAnalysisPanel(object):
         self.vboxlayout.setContentsMargins(2, 2, 2, 2)
         self.vboxlayout.setSpacing(4)
         self.vboxlayout.setObjectName("vboxlayout")
+        self.central_widget = QtWidgets.QWidget()
+        self.layoutFilter = CustomFlowLayout(parent=self.central_widget)
+        self.layoutFilter.setObjectName("layoutFilter")
+        self.central_widget.setLayout(self.layoutFilter)
+        self.vboxlayout.addWidget(self.central_widget)
         self.collectionsFilter = QtWidgets.QLineEdit(self.tab)
         self.collectionsFilter.setClearButtonEnabled(True)
         self.collectionsFilter.setObjectName("collectionsFilter")
