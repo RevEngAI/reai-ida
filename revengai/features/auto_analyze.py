@@ -340,15 +340,8 @@ class AutoAnalysisDialog(BaseDialog):
                 else:
                     idc.warning(f"Can't rename {symbol['org_func_name']}. Name {symbol['nearest_neighbor_function_name']} already exists.")
 
-    def _selected_collections(self) -> list:
-        model = self.ui.collectionsTable.model()
-
-        regex = []
-        for idx in range(model.rowCount()):
-            if model.index(idx, 1).data(Qt.CheckStateRole) == Qt.Checked:
-                regex.append(model.index(idx, 0).data(Qt.DisplayRole))
-
-        return regex
+    def _selected_collections(self) -> list[str]:
+        return [self.ui.layoutFilter.itemAt(idx).widget().objectName() for idx in range(self.ui.layoutFilter.count())]
 
     def _filter_collections(self):
         self._search_collection(self.ui.collectionsFilter.text().lower())

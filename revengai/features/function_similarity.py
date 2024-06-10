@@ -216,14 +216,7 @@ class FunctionSimilarityDialog(BaseDialog):
             menu.exec_(QCursor.pos())
 
     def _selected_collections(self) -> list[str]:
-        model = self.ui.collectionsTable.model()
-
-        collections = []
-        for idx in range(model.rowCount()):
-            if model.index(idx, 1).data(Qt.CheckStateRole) == Qt.Checked:
-                collections.append(model.index(idx, 0).data(Qt.DisplayRole))
-
-        return collections
+        return [self.ui.layoutFilter.itemAt(idx).widget().objectName() for idx in range(self.ui.layoutFilter.count())]
 
     def _filter(self, _) -> None:
         self.typing_timer.start(self.searchDelay)     # Starts the countdown to call the filtering method
