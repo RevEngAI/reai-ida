@@ -282,9 +282,13 @@ class AutoAnalysisDialog(BaseDialog):
             collections = []
 
             for collection in res.json()["collections"]:
-                collections.append((IconItem(collection["collection_name"],
-                                             "lock.png" if collection["collection_scope"] == "PRIVATE" else "unlock.png"),
-                                    CheckableItem(checked=False),))
+                if isinstance(collection, str):
+                    collections.append((collection, CheckableItem(checked=False),))
+                else:
+                    collections.append((IconItem(collection["collection_name"],
+                                                 "lock.png" if collection["collection_scope"] == "PRIVATE" else
+                                                 "unlock.png"),
+                                        CheckableItem(checked=False),))
 
             inmain(inmain(self.ui.collectionsTable.model).fill_table, collections)
             inmain(self.ui.collectionsTable.setColumnWidth, 0, inmain(self.ui.collectionsTable.width) * .9)

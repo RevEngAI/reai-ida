@@ -38,7 +38,8 @@ def RE_search(fpath: str) -> Response:
 
 
 def RE_collection_search(search: str) -> Response:
-    res: Response = reveng_req(get, f"v1/collections/quick/search", params={"search_term": search})
+    res: Response = reveng_req(get, f"v1/collections/quick/search",
+                               params={"search_term": search if search else ""})
 
     res.raise_for_status()
     return res

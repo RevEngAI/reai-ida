@@ -160,8 +160,9 @@ class FunctionSimilarityDialog(BaseDialog):
                             IDAUtils.get_demangled_func_name(idc.here()),
                             selected[0].text, selected[0].data["confidence"])
 
-                if False and ASKBTN_YES == idc.ask_yn(ASKBTN_YES,
-                                                      "HIDECANCEL\nWould you also like to update the function declaration?"):
+                if self.state.project_cfg.get("func_type") and \
+                        ASKBTN_YES == idc.ask_yn(ASKBTN_YES,
+                                                 "HIDECANCEL\nWould you also like to update the function declaration?"):
                     # Prevent circular import
                     from revengai.actions import function_signature
 
@@ -178,9 +179,13 @@ class FunctionSimilarityDialog(BaseDialog):
             collections = []
 
             for collection in res.json()["collections"]:
-                collections.append((IconItem(collection["collection_name"],
-                                             "lock.png" if collection["collection_scope"] == "PRIVATE" else "unlock.png"),
-                                    CheckableItem(checked=False),))
+                if isinstance(collection, str):
+                    collections.append((collection, CheckableItem(checked=False),))
+                else:
+                    collections.append((IconItem(collection["collection_name"],
+                                                 "lock.png" if collection["collection_scope"] == "PRIVATE" else
+                                                 "unlock.png"),
+                                        CheckableItem(checked=False),))
 
             inmain(inmain(self.ui.collectionsTable.model).fill_table, collections)
             inmain(self.ui.collectionsTable.setColumnWidth, 0, inmain(self.ui.collectionsTable.width) * .8)
