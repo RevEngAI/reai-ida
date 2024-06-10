@@ -492,11 +492,12 @@ def is_analysis_complete(state: RevEngState, fpath: str) -> tuple[bool, str]:
         return status == "Complete", status
     except HTTPError as e:
         error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
-        if any(word in error.lower()for word in ("invalid", "denied",)):
-            inmain(upload_binary, state)
+
+        # if any(word in error.lower()for word in ("invalid", "denied",)):
+        #     inmain(upload_binary, state)
 
         logger.error("Error getting binary analysis status: %s", error)
-        return False, "Processing"
+        return False, error if any(word in error.lower()for word in ("invalid", "denied",)) else "Processing"
 
 
 def is_condition_met(state: RevEngState, fpath: str) -> bool:

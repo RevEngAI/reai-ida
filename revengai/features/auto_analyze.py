@@ -141,6 +141,9 @@ class AutoAnalysisDialog(BaseDialog):
 
                 if function_id:
                     function_ids.append(function_id)
+                else:
+                    self._analysis[Analysis.SKIPPED.value] += 1
+                    resultsData.append((func["name"], "N/A", None, "No Function Symbol Found",))
 
             pos = 1 + nb_func
 
@@ -212,11 +215,6 @@ class AutoAnalysisDialog(BaseDialog):
                     finally:
                         pos += len(chunk)
                         inmain(self.ui.progressBar.setProperty, "value", pos)
-
-            for func in self._functions:
-                if not any(data[0] == func["name"] for data in resultsData):
-                    self._analysis[Analysis.SKIPPED.value] += 1
-                    resultsData.append((func["name"], "N/A", None, "No Function Symbol Found",))
 
             resultsData.sort(key=lambda tup: tup[0])
 
