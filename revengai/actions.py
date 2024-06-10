@@ -290,6 +290,8 @@ def function_signature(state: RevEngState, func_addr: int = 0, func_id: int = 0)
                         func_sig = f"{r_type} {inmain(idc.get_func_name, func_ea)}({params})"
 
                         if inmain(idc.SetType, func_ea, func_sig):
+                            IDAUtils.refresh_pseudocode_view(func_ea)
+
                             logger.info("New function declaration '%s' set at address 0x%X", func_sig, func_ea)
                         else:
                             logger.warning("Failed to set function declaration '%s' at address 0x%X", func_sig, func_ea)

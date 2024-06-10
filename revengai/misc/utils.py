@@ -40,18 +40,24 @@ class IDAUtils(object):
         If the name already exists, check the `anyway` parameter:
             True - Add `_COUNTER` to the name (default IDA behaviour)
         """
-        return (IDAUtils.is_in_valid_segment(func_ea) and
-                (idaapi.set_name(func_ea, func_name, idaapi.SN_NOWARN | idaapi.SN_NOCHECK) or
-                 anyway and idaapi.force_name(func_ea, func_name)))
+        try:
+            return (IDAUtils.is_in_valid_segment(func_ea) and
+                    (idaapi.set_name(func_ea, func_name, idaapi.SN_NOWARN | idaapi.SN_NOCHECK) or
+                     anyway and idaapi.force_name(func_ea, func_name)))
+        finally:
+            idaapi.request_refresh(idaapi.IWID_DISASMS)
 
     @staticmethod
     def set_comment(func_ea: int, comment: str) -> None:
         if IDAUtils.is_in_valid_segment(func_ea):
-            func = idaapi.get_func(func_ea)
-            if not func:
-                logger.error("idaapi.get_func failed for function address: 0x%02X", func_ea)
-            else:
-                idc.set_func_cmt(func.start_ea, comment, False)
+            try:
+                func = idaapi.get_func(func_ea)
+                if not func:
+                    logger.error("idaapi.get_func failed for function address: 0x%02X", func_ea)
+                else:
+                    idc.set_func_cmt(func.start_ea, comment, False)
+            finally:
+                idaapi.request_refresh(idaapi.IWID_DISASMS)
 
     @staticmethod
     def decompile_func(func_ea: int) -> Optional[str]:
@@ -128,6 +134,20 @@ class IDAUtils(object):
                                  IDAUtils.get_demangled_func_name(func_ea),
                                  parsed_sig.group(3).split(", ")  # arguments
                                  )
+
+    @staticmethod
+    def refresh_pseudocode_view(func_ea: int) -> None:
+        """Refreshes the pseudocode view in IDA."""
+        names = [f"Pseudocode-{chr(ord('A') + i)}" for i in range(5)]
+        for name in names:
+            widget = idaapi.find_widget(name)
+            if widget:
+                vu = idaapi.get_widget_vdui(widget)
+
+                # Check if the address is in the same function
+                func = idaapi.get_func(vu.cfunc.entry_ea)
+                if idaapi.func_contains(func, func_ea):
+                    vu.refresh_view(True)
 
     @staticmethod
     def is_in_valid_segment(func_ea: int, segments: tuple[str] = None) -> bool:
