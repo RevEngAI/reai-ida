@@ -145,7 +145,7 @@ class Ui_AutoAnalysisPanel(object):
         self.verticalLayout.addLayout(self.horizontalLayout)
 
         self.retranslateUi(AutoAnalysisPanel)
-        self.tabWidget.setCurrentIndex(1)
+        self.tabWidget.setCurrentIndex(0)
         QtCore.QMetaObject.connectSlotsByName(AutoAnalysisPanel)
 
     def retranslateUi(self, AutoAnalysisPanel):
