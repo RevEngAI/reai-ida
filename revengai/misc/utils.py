@@ -2,8 +2,6 @@
 import logging
 from typing import Optional
 
-import ida_hexrays
-import ida_segment
 import idautils
 import idc
 import idaapi
@@ -21,7 +19,6 @@ class FunctionSignature(object):
     @param func_name:       Mangled function name
     @param func_args:       Array of type of function arguments
     """
-
     def __init__(self, return_type: str, call_convention: str, func_name: str, func_args: list):
         self.ret = return_type
         self.conv = call_convention
@@ -43,49 +40,55 @@ class IDAUtils(object):
         If the name already exists, check the `anyway` parameter:
             True - Add `_COUNTER` to the name (default IDA behaviour)
         """
-        return (IDAUtils.is_in_valid_segment(func_ea) and
-                (idaapi.set_name(func_ea, func_name, idaapi.SN_NOWARN | idaapi.SN_NOCHECK) or
-                 anyway and idaapi.force_name(func_ea, func_name)))
+        try:
+            return (IDAUtils.is_in_valid_segment(func_ea) and
+                    (idaapi.set_name(func_ea, func_name, idaapi.SN_NOWARN | idaapi.SN_NOCHECK) or
+                     anyway and idaapi.force_name(func_ea, func_name)))
+        finally:
+            idaapi.request_refresh(idaapi.IWID_DISASMS)
 
     @staticmethod
     def set_comment(func_ea: int, comment: str) -> None:
         if IDAUtils.is_in_valid_segment(func_ea):
-            func = idaapi.get_func(func_ea)
-            if not func:
-                logger.error(f"idaapi.get_func failed at function address: {func_ea:#x}")
-            else:
-                idc.set_func_cmt(func.start_ea, comment, False)
+            try:
+                func = idaapi.get_func(func_ea)
+                if not func:
+                    logger.error("idaapi.get_func failed for function address: 0x%02X", func_ea)
+                else:
+                    idc.set_func_cmt(func.start_ea, comment, False)
+            finally:
+                idaapi.request_refresh(idaapi.IWID_DISASMS)
 
     @staticmethod
-    def decompile_func(func_ea: int) -> str:
+    def decompile_func(func_ea: int) -> Optional[str]:
         if idaapi.init_hexrays_plugin() and IDAUtils.is_in_valid_segment(func_ea):
             func = idaapi.get_func(func_ea)
             if not func:
-                logger.error(f"idaapi.get_func failed at function address: {func_ea:#x}")
+                logger.error("idaapi.get_func failed at function address: 0x%02X", func_ea)
             else:
-                cfunc = idaapi.decompile(func.start_ea, flags=ida_hexrays.DECOMP_NO_WAIT)
+                cfunc = idaapi.decompile(func.start_ea, flags=idaapi.DECOMP_NO_WAIT)
                 if not cfunc:
-                    logger.error(f"idaapi.decompile failed at function address: {func_ea:#x}")
+                    logger.error("idaapi.decompile failed at function address: 0x%02X", func_ea)
                 else:
                     lines = []
                     for sline in cfunc.get_pseudocode():
                         lines.append(idaapi.tag_remove(sline.line))
                     return "\n".join(lines)
-        return ''
+        return None
 
     @staticmethod
     def disasm_func(func_ea: int) -> str:
         if IDAUtils.is_in_valid_segment(func_ea):
             func = idaapi.get_func(func_ea)
             if not func:
-                logger.error(f"idaapi.get_func failed at function address: {func_ea:#x}")
+                logger.error("idaapi.get_func failed at function address: 0x%02X", func_ea)
             else:
                 asm = []
                 for ea in idautils.FuncItems(func_ea):
                     inst = idaapi.generate_disasm_line(ea)
                     asm.append(idaapi.tag_remove(inst))
                 return "\n".join(asm)
-        return ''
+        return ""
 
     @staticmethod
     def create_find_struct(name: str) -> any:
@@ -103,31 +106,55 @@ class IDAUtils(object):
         return idc.get_func_name(func_ea)
 
     @staticmethod
-    def demangle(mangled_name: str) -> str:
-        return idc.demangle_name(mangled_name, idc.get_inf_attr(idc.INF_LONG_DEMNAMES))
+    def get_demangled_func_name(func_ea: int) -> str:
+        return IDAUtils.demangle(IDAUtils.get_func_name(func_ea))#.split("(")[0]
+
+    @staticmethod
+    def demangle(mangled_name: str, attr: int = idc.INF_SHORT_DN) -> str:
+        demangled_name = idc.demangle_name(mangled_name, idc.get_inf_attr(attr))
+
+        return demangled_name if demangled_name else mangled_name
 
     @staticmethod
     def get_function_signature(func_ea: int) -> Optional[FunctionSignature]:
         signature = idc.get_type(idc.get_func_attr(func_ea, idc.FUNCATTR_START))
 
         if not signature:
-            logger.error(f"idc.get_type failed at function address: {func_ea:#x}")
+            logger.error("idc.get_type failed at function address: 0x%02X", func_ea)
             return None
 
         parsed_sig = match(func_sig_pattern, signature)
 
         if not parsed_sig:
-            logger.error(f"Failed to run re.match for sig: {signature}")
+            logger.error("Failed to run re.match for sig: %s", signature)
             return None
 
         return FunctionSignature(parsed_sig.group(1),  # return type
                                  parsed_sig.group(2),  # calling convention
-                                 idc.get_func_name(func_ea),
-                                 parsed_sig.group(3).split(', ')  # arguments
+                                 IDAUtils.get_demangled_func_name(func_ea),
+                                 parsed_sig.group(3).split(", ")  # arguments
                                  )
 
     @staticmethod
-    def is_in_valid_segment(func_ea: int) -> bool:
-        segments = [ida_segment.get_segm_by_name(name) for name in (".init", ".text", ".fini",)]
+    def refresh_pseudocode_view(func_ea: int) -> None:
+        """Refreshes the pseudocode view in IDA."""
+        names = [f"Pseudocode-{chr(ord('A') + i)}" for i in range(5)]
+        for name in names:
+            widget = idaapi.find_widget(name)
+            if widget:
+                vu = idaapi.get_widget_vdui(widget)
 
-        return any(segment and segment.start_ea <= func_ea <= segment.end_ea for segment in segments) if segments else False
+                # Check if the address is in the same function
+                func = idaapi.get_func(vu.cfunc.entry_ea)
+                if idaapi.func_contains(func, func_ea):
+                    vu.refresh_view(True)
+
+    @staticmethod
+    def is_in_valid_segment(func_ea: int, segments: tuple[str] = None) -> bool:
+        segments = [idaapi.get_segm_by_name(name) for name in (segments if segments else (".init", ".text", ".fini",))]
+
+        return any(seg and seg.start_ea <= func_ea <= seg.end_ea for seg in segments) if segments else False
+
+    @staticmethod
+    def is_function(func_ea: int) -> bool:
+        return True if idaapi.get_func(func_ea) else False

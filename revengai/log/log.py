@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-
 from os import makedirs
 from pathlib import Path
 from shutil import rmtree

@@ -1,17 +1,21 @@
 # -*- coding: utf-8 -*-
-
 import abc
 import logging
+from os.path import dirname, join
 from sys import platform
 
+import idaapi
 from PyQt5.QtCore import QRect
-from requests import HTTPError, Response
+from PyQt5.QtGui import QPixmap
+from reait.api import RE_authentication
+from requests import HTTPError, RequestException
 
 from PyQt5.QtWidgets import QWizardPage, QFormLayout, QLineEdit, QLabel, QWizard, QComboBox, QLayout, QDesktopWidget
 
 from revengai.api import RE_models
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
+
 
 logger = logging.getLogger("REAI")
 
@@ -25,9 +29,11 @@ class RevEngSetupWizard(QWizard):
         self.addPage(UserCredentialsPage(self.state))
         self.addPage(UserAvailableModelsPage(self.state))
 
-        self.setWindowTitle("RevEng.AI Setup Wizard")
+        self.setWindowTitle("RevEng.AI Toolkit: Setup Wizard")
         self.setOptions(QWizard.CancelButtonOnLeft | QWizard.NoBackButtonOnStartPage)
         self.setWizardStyle(QWizard.MacStyle if platform == 'darwin' else QWizard.ModernStyle)
+        self.setPixmap(QWizard.BackgroundPixmap if platform == 'darwin' else QWizard.WatermarkPixmap,
+                       QPixmap(join(dirname(__file__), "../resources/logo.png")))
 
         self.button(QWizard.FinishButton).clicked.connect(self._save)
 
@@ -80,16 +86,32 @@ class UserCredentialsPage(BasePage):
     def validatePage(self):
         if not any(c.text() == "" for c in [self.api_key, self.server_url]):
             try:
+                idaapi.show_wait_box("HIDECANCEL\nChecking configuration…")
+
                 self.state.config.set("apikey", self.api_key.text())
                 self.state.config.set("host", self.server_url.text())
 
-                res: Response = RE_models()
+                response = RE_authentication().json()
 
-                self.state.config.set("models", res.json()["models"])
+                logger.info("%s", response["message"])
+
+                response = RE_models().json()
+
+                self.state.config.set("models", [model["model_name"] for model in response["models"]])
                 return True
             except HTTPError as e:
-                logger.error("Unable to retrieve all models used")
-                Dialog.showError("Setup Wizard", f"{e.response.json()['error']}")
+                # Reset host and API key if an error occurs
+                self.state.config.set("host")
+                self.state.config.set("apikey")
+
+                logger.error("Unable to retrieve any of the available models. %s", e)
+
+                error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
+                Dialog.showError("Setup Wizard", error)
+            except RequestException as e:
+                logger.error("An unexpected error has occurred. %s", e)
+            finally:
+                idaapi.hide_wait_box()
         return False
 
     def _get_title(self) -> str:
@@ -101,12 +123,12 @@ class UserCredentialsPage(BasePage):
         self.api_key.setToolTip("API key from your account settings")
 
         self.server_url = QLineEdit(self)
-        self.server_url.setToolTip("URL hosting the RevEng.AI server")
+        self.server_url.setToolTip("URL hosting the RevEng.AI platform")
 
         layout = QFormLayout(self)
 
         layout.addWidget(QLabel("<span style=\"font-weight:bold\">Setup Account Information</span>"))
-        layout.addRow(QLabel("API Key:"), self.api_key)
+        layout.addRow(QLabel("Personal Key:"), self.api_key)
         layout.addRow(QLabel("Hostname:"), self.server_url)
 
         return layout

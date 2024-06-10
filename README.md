@@ -8,6 +8,7 @@ IDA Pro Plugin for [RevEng.AI](https://reveng.ai/).
 - Downloading logs for analysis from RevEng.AI platform
 - Removing analysis from RevEng.AI platform
 - Renaming of function names given with similar binaries
+- Synchronise all functions with differing names between the local analysis and the RevEng.AI platform.
 - Configuration and persistence of plugin configuration (API key, host, model selection and analysis)
 
 # Install
@@ -45,6 +46,8 @@ Before we do any analysis we need to upload a file. Uploading a file is availabl
 
 Select `Upload Binary`, it will automatically ask whether you want analysis to be done on the file. Currently the analysis does not support customisation but will in the future.
 
+![analyse_file](assets/img/11.png)
+
 Once the file has been sent for analysis, an analysis ID is automatically set internally so any future actions that are specific to an analysis will use this ID.
 
 You can check the status of your request by selecting `Check Analysis Status` from either of the menus like before.
@@ -53,7 +56,15 @@ The status of any previous analysis done can be viewed by selecting `Binary Anal
 
 ![select_file](assets/img/4.png)
 
-**A right click allows you to delete all selected analyses**
+**A right click allows you to delete, view analysis report or set as current analysis for the selected analysis**
+
+## Binary Synchronisation
+
+When a previously analysed binary is selected, a popup-window is displayed, prompting you to synchronise all local functions whose name differs from that present on the RevEng.AI platform. 
+
+![auto_sync](assets/img/12.png)
+
+**A right click allows you to sync, jump to or breakdown the selected function**
 
 ## Function Renaming
 
@@ -68,6 +79,8 @@ Currently all available functions from all binaries are displayed in order of si
 ![rename_function_dialog](assets/img/6.png)
 
 Selecting an entry from the list and then pressing `Rename` will cause the function to be renamed within IDA.
+
+**A right click allows you to rename or breakdown the selected function**
 
 #### Auto Analysis
 You can also batch analyse the binary to rename functions using the `Auto Analyze Binary Symbol`.
@@ -98,4 +111,4 @@ Select the function you are interested in, and from the decompiler view select `
 # Software Requirements
 
 RevEng.AI IDA uses:
-- [reait](https://github.com/RevEngAI/reait) (version >= 0.0.20)
+- [reait](https://github.com/RevEngAI/reait)

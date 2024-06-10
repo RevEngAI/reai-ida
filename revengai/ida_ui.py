@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
-
 from json import load
 from os.path import abspath, dirname, isfile, join, realpath
 
 from idc import get_input_file_path, here
-from ida_kernwin import set_dock_pos, PluginForm, DP_TAB, unregister_action, attach_action_to_menu, register_action, \
-    action_desc_t, action_handler_t, AST_ENABLE_ALWAYS, create_menu, SETMENU_APP, SETMENU_INS, UI_Hooks, \
-    attach_action_to_popup, add_hotkey, del_hotkey, get_widget_type, BWN_DISASM, BWN_PSEUDOCODE
+from idaapi import set_dock_pos, PluginForm, unregister_action, attach_action_to_menu, register_action, UI_Hooks, \
+    action_desc_t, action_handler_t, create_menu, attach_action_to_popup, add_hotkey, del_hotkey, get_widget_type, \
+    AST_ENABLE_ALWAYS, BWN_DISASM, BWN_PSEUDOCODE, DP_TAB, SETMENU_APP, SETMENU_INS, SETMENU_ENSURE_SEP
 
 from revengai import actions
 from revengai.actions import load_recent_analyses
 from revengai.manager import RevEngState
 from revengai.misc.utils import IDAUtils
+
 
 MENU = "RevEng.AI Toolkit/"
 
@@ -37,7 +37,9 @@ class Handler(action_handler_t):
     def update(self, ctx):
         return AST_ENABLE_ALWAYS
 
-    def register(self, name, label, shortcut=None, tooltip=None, icon=-1) -> None:
+    def register(self, name, label, shortcut=None, tooltip=None, icon=-1) -> bool:
+        self.name = name
+
         action = action_desc_t(
             name,   # The action name. This acts like an ID and must be unique
             label,     # The action text
@@ -47,12 +49,10 @@ class Handler(action_handler_t):
             icon,      # Optional: the action icon (shows when in menus/toolbars)
         )
 
-        register_action(action)
+        return register_action(action)
 
-        self.name = name
-
-    def attach_to_menu(self, menu) -> None:
-        attach_action_to_menu(menu, self.name, SETMENU_INS)
+    def attach_to_menu(self, menu, flags: int = SETMENU_INS) -> bool:
+        return attach_action_to_menu(menu, self.name, flags)
 
 
 class Hooks(UI_Hooks):
@@ -60,6 +60,9 @@ class Hooks(UI_Hooks):
         super(Hooks, self).__init__()
 
         self.state = state
+
+    def ready_to_run(self) -> None:
+        load_recent_analyses(self.state)
 
     def populating_widget_popup(self, form, popup):
         fpath = get_input_file_path()
@@ -69,13 +72,13 @@ class Hooks(UI_Hooks):
             attach_action_to_popup(form, popup, None, None)
 
             # Add actions
-            with open(join(abspath(dirname(realpath(__file__))), "conf/actions.json"), "r") as fd:
+            with open(join(abspath(dirname(realpath(__file__))), "conf/actions.json")) as fd:
                 for action in load(fd):
                     if not action.get("disabled", False):
                         if self.state.config.is_valid():
                             if action["id"] == "reai:wizard" or \
-                                    (action["id"] == "reai:rename" and
-                                     not IDAUtils.is_in_valid_segment(here())) or \
+                                    (action["id"] in ("reai:rename", "reai:breakdown",) and
+                                     not IDAUtils.is_function(here())) or \
                                     (get_widget_type(form) != BWN_PSEUDOCODE and
                                      action["id"] in ("reai:explain", "reai:signature",)):
                                 continue
@@ -119,12 +122,10 @@ class RevEngConfigForm_t(PluginForm):
         self.register_actions()
 
     def register_actions(self):
-        load_recent_analyses(self.state)
-
         # Add ui hook
         self._hooks.hook()
 
-        with open(join(abspath(dirname(realpath(__file__))), "conf/actions.json"), "r") as fd:
+        with open(join(abspath(dirname(realpath(__file__))), "conf/actions.json")) as fd:
             for action in load(fd):
                 if not action.get("disabled", False) and \
                         (self.state.config.is_valid() or action["id"] == "reai:wizard"):
@@ -140,6 +141,16 @@ class RevEngConfigForm_t(PluginForm):
                     if hasattr(action, "shortcut") and handler.callback:
                         self._hotkeys.append(add_hotkey(action.get("shortcut"), handler.callback))
 
+            # context menu for About
+            handler = Handler("about", self.state)
+            handler.register("reai:about", "About", icon=self.state.icon_id)
+            handler.attach_to_menu(MENU, SETMENU_ENSURE_SEP)
+
+            # context menu for Check for Update
+            handler = Handler("update", self.state)
+            handler.register("reai:update", "Check for Update")
+            handler.attach_to_menu(MENU)
+
     def unregister_actions(self):
         # Remove ui hook
         self._hooks.unhook()
@@ -149,7 +160,10 @@ class RevEngConfigForm_t(PluginForm):
             del_hotkey(hotkey)
 
         # Unregister menu actions
-        with open(join(abspath(dirname(realpath(__file__))), "conf/actions.json"), "r") as fd:
+        unregister_action("reai:about")
+        unregister_action("reai:update")
+
+        with open(join(abspath(dirname(realpath(__file__))), "conf/actions.json")) as fd:
             for action in load(fd):
                 unregister_action(action["id"])
 

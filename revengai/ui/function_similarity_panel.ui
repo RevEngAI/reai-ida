@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>AutoAnalysisPanel</class>
- <widget class="QFrame" name="AutoAnalysisPanel">
+ <class>FunctionSimilarityPanel</class>
+ <widget class="QFrame" name="FunctionSimilarityPanel">
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -14,7 +14,7 @@
    <enum>Qt::NoContextMenu</enum>
   </property>
   <property name="windowTitle">
-   <string>RevEng.AI Toolkit: Auto Analysis</string>
+   <string>RevEng.AI Toolkit: Function Rename</string>
   </property>
   <property name="windowIcon">
    <iconset>
@@ -73,7 +73,7 @@
        <item>
         <layout class="QHBoxLayout">
          <item>
-          <widget class="QLabel" name="label_2">
+          <widget class="QLabel" name="label">
            <property name="text">
             <string>Filter:</string>
            </property>
@@ -91,7 +91,7 @@
          <item>
           <widget class="QLineEdit" name="collectionsFilter">
            <property name="placeholderText">
-            <string>Search Collections…</string>
+            <string>Search collections…</string>
            </property>
            <property name="clearButtonEnabled">
             <bool>true</bool>
@@ -149,6 +149,59 @@
          </attribute>
         </widget>
        </item>
+       <item>
+        <layout class="QHBoxLayout">
+         <item>
+          <widget class="QCheckBox" name="checkBox">
+           <property name="text">
+            <string>Use Debug Symbols</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="horizontalSpacer_3">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>400</width>
+             <height>10</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item>
+          <widget class="QLabel" name="label_2">
+           <property name="text">
+            <string>Results:</string>
+           </property>
+           <property name="textFormat">
+            <enum>Qt::PlainText</enum>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignCenter</set>
+           </property>
+           <property name="indent">
+            <number>0</number>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLineEdit" name="lineEdit">
+           <property name="text">
+            <string>5</string>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignCenter|Qt::AlignHCenter|Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+           </property>
+           <property name="clearButtonEnabled">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
       </layout>
      </widget>
      <widget class="QWidget" name="tab_2">
@@ -174,36 +227,6 @@
        <property name="bottomMargin">
         <number>2</number>
        </property>
-       <item>
-        <layout class="QHBoxLayout">
-         <item>
-          <widget class="QLabel" name="label_2">
-           <property name="text">
-            <string>Filter:</string>
-           </property>
-           <property name="textFormat">
-            <enum>Qt::PlainText</enum>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignCenter</set>
-           </property>
-           <property name="indent">
-            <number>0</number>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QLineEdit" name="resultsFilter">
-           <property name="placeholderText">
-            <string>Filter Functions…</string>
-           </property>
-           <property name="clearButtonEnabled">
-            <bool>true</bool>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </item>
        <item>
         <widget class="QTableView" name="resultsTable">
          <property name="contextMenuPolicy">

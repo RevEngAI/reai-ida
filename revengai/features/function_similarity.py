@@ -3,22 +3,23 @@ import logging
 
 import idc
 from PyQt5.QtWidgets import QMenu
-from idaapi import ASKBTN_YES
+from idaapi import ASKBTN_YES, hide_wait_box, show_wait_box
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIntValidator, QCursor
-from ida_nalt import get_imagebase
 
-from requests import Response, HTTPError
+from requests import Response, HTTPError, RequestException
 
-from reait.api import re_binary_id, RE_nearest_symbols_batch
+from reait.api import RE_nearest_symbols_batch
 
-from revengai.api import RE_quick_search, RE_analyze_functions
+from revengai.api import RE_collection_search
 from revengai.features import BaseDialog
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
 from revengai.misc.utils import IDAUtils
 from revengai.misc.qtutils import inthread, inmain
+from revengai.models import CheckableItem, IconItem, SimpleItem
+from revengai.models.checkable_model import RevEngCheckableTableModel
 from revengai.models.table_model import RevEngTableModel
 from revengai.ui.function_similarity_panel import Ui_FunctionSimilarityPanel
 
@@ -33,9 +34,8 @@ class FunctionSimilarityDialog(BaseDialog):
         start_addr = idc.get_func_attr(idc.here(), idc.FUNCATTR_START)
 
         if start_addr is not idc.BADADDR:
-            self.v_addr = start_addr - get_imagebase()
+            self.v_addr = start_addr - self.base_addr
         else:
-            self.v_addr = 0
             logger.error("Pointer location not in valid function")
             Dialog.showError("Find Similar Functions", "Cursor position not in a function.")
 
@@ -45,112 +45,191 @@ class FunctionSimilarityDialog(BaseDialog):
         self.ui.renameButton.setEnabled(False)
 
         self.ui.lineEdit.setValidator(QIntValidator(1, 256, self))
-        self.ui.tableView.setModel(RevEngTableModel([], ["Function Name", "Confidence", "From",], self))
 
-        self.ui.tableView.customContextMenuRequested.connect(self._table_menu)
+        self.ui.collectionsFilter.textChanged.connect(self._filter)
+        self.ui.collectionsTable.horizontalHeader().setDefaultAlignment(Qt.AlignLeft)
+        self.ui.collectionsTable.setModel(RevEngCheckableTableModel(data=[], columns=[1], parent=self,
+                                                                    header=["Collection Name", "Include",]))
+
+        self.ui.resultsTable.horizontalHeader().setDefaultAlignment(Qt.AlignLeft)
+        self.ui.resultsTable.setModel(RevEngTableModel(data=[], parent=self,
+                                                       header=["Function Name", "Confidence", "Source File",]))
+
+        self.ui.resultsTable.customContextMenuRequested.connect(self._table_menu)
+
+        self.ui.confidenceSlider.valueChanged.connect(self._confidence)
 
         self.ui.fetchButton.setFocus()
         self.ui.fetchButton.clicked.connect(self._fetch)
         self.ui.renameButton.clicked.connect(self._rename_symbol)
 
+        self._confidence(self.ui.confidenceSlider.sliderPosition())
+
     def showEvent(self, event):
         super(FunctionSimilarityDialog, self).showEvent(event)
-        inthread(self._quick_search)
+
+        inthread(self._search_collection)
+
+    def closeEvent(self, event):
+        super(FunctionSimilarityDialog, self).closeEvent(event)
 
     def _fetch(self):
-        if self.v_addr > 0:
-            inthread(self._load, self.ui.comboBox.currentData(),
-                     (100 - int(self.ui.doubleSpinBox.text().replace("%", "").replace(",", "."))) / 100.0)
+        if self.v_addr != idc.BADADDR:
+            inthread(self._load,
+                     self._selected_collections(),
+                     (100 - int(self.ui.confidenceSlider.property("value"))) / 100)
 
-    def _load(self, collections, distance):
+    def _load(self, collections: list[str], distance: float = 0.1):
         try:
-            model = inmain(self.ui.tableView.model)
-
+            model = inmain(self.ui.resultsTable.model)
+            
             inmain(model.fill_table, [])
             inmain(self.ui.fetchButton.setEnabled, False)
             inmain(self.ui.renameButton.setEnabled, False)
             inmain(self.ui.progressBar.setProperty, "value", 25)
+            inmain(show_wait_box, "HIDECANCEL\nGetting results…")
 
-            res: Response = RE_analyze_functions(self.path, self.state.config.get("binary_id", 0))
+            if not self.analyzed_functions or len(self.analyzed_functions) == 0:
+                self._get_analyze_functions()
 
-            fe = next((function for function in res.json() if function["function_vaddr"] == self.v_addr), None)
+            function_id = self.analyzed_functions.get(self.v_addr, None)
 
-            if fe is None:
-                inmain(idc.warning, "No similar functions found.")
-                logger.error("No similar functions found for: %s",
-                             inmain(idc.get_func_name, self.v_addr))
-            else:
-                inmain(self.ui.progressBar.setProperty, "value", 50)
+            if function_id is None:
+                func_name = inmain(IDAUtils.get_demangled_func_name, self.v_addr + self.base_addr)
 
-                res = RE_nearest_symbols_batch(function_ids=[fe["function_id"],],
-                                               nns=int(inmain(self.ui.lineEdit.text)),
-                                               ignore_hashes=[re_binary_id(self.path),],
-                                               model_name=self.state.config.get("model"),
-                                               distance=distance, collections=collections,
-                                               debug_enabled=inmain(self.ui.checkBox.isChecked))
+                inmain(idc.warning, f"No matches found for {func_name}.")
+                logger.error("No similar functions found for: %s", func_name)
+                return
 
-                inmain(self.ui.progressBar.setProperty, "value", 75)
+            inmain(self.ui.progressBar.setProperty, "value", 50)
 
-                data = []
-                for item in res.json():
-                    data.append([item["nearest_neighbor_function_name"],
-                                 item["confidence"],
-                                 item["nearest_neighbor_binary_name"]])
+            nb_results = inmain(self.ui.lineEdit.text)
 
-                inmain(model.fill_table, data)
-                inmain(self.ui.progressBar.setProperty, "value", 100)
-                inmain(self.ui.renameButton.setEnabled, len(data) > 0)
+            res = RE_nearest_symbols_batch(function_ids=[function_id,],
+                                           nns=int(nb_results) if nb_results else 1,
+                                           distance=distance, collections=collections,
+                                           debug_enabled=inmain(self.ui.checkBox.isChecked))
 
-                if len(data) == 0:
-                    inmain(idc.warning, "No similar functions found.")
-                    logger.error("No similar functions found for: %s",
-                                 inmain(idc.get_func_name, inmain(idc.here)))
+            inmain(self.ui.progressBar.setProperty, "value", 75)
+
+            data = []
+            for function in res.json()["function_matches"]:
+                data.append((SimpleItem(function["nearest_neighbor_function_name"], function),
+                             f"{float(str(function['confidence'])[:6]) * 100:#.02f}%",
+                             function["nearest_neighbor_binary_name"],))
+
+            inmain(model.fill_table, data)
+            inmain(self.ui.renameButton.setEnabled, len(data) > 0)
+
+            if len(data) == 0:
+                inmain(idc.warning, "No matches found. Try a different confidence value.")
+                logger.error("No similar functions found for: %s with confidence: %d",
+                             inmain(IDAUtils.get_demangled_func_name, inmain(idc.here)), (1 - distance) * 100)
         except HTTPError as e:
-            inmain(Dialog.showError, "Auto Analysis", e.response.json()["error"])
+            error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
+            Dialog.showError("Function Renaming", error)
+        except RequestException as e:
+            logger.error("An unexpected error has occurred. %s", e)
         finally:
+            inmain(hide_wait_box)
+            inmain(self.ui.tabWidget.setCurrentIndex, 1)
             inmain(self.ui.fetchButton.setEnabled, True)
             inmain(self.ui.progressBar.setProperty, "value", 0)
 
+            width: int = inmain(self.ui.resultsTable.width)
+
+            inmain(self.ui.resultsTable.setColumnWidth, 0, width * .38)
+            inmain(self.ui.resultsTable.setColumnWidth, 1, width * .12)
+            inmain(self.ui.resultsTable.setColumnWidth, 2, width * .5)
+
     def _rename_symbol(self):
-        rows = self.ui.tableView.selectionModel().selectedRows(column=0)
+        if not self.ui.resultsTable.selectedIndexes():
+            Dialog.showInfo("Function Renaming", "Select one of the listed functions that you wish to use.")
+            return
 
-        if len(rows) > 0:
-            new_func_name = self.ui.tableView.model().data(rows[0], Qt.DisplayRole)
+        rows = sorted(set(index.row() for index in self.ui.resultsTable.selectedIndexes()))
+        selected = self.ui.resultsTable.model().get_data(rows[0])
 
-            if not IDAUtils.set_name(self.v_addr, new_func_name):
-                Dialog.showError("Rename Function Error", "Symbol already exists.")
+        if selected and isinstance(selected[0], SimpleItem):
+            if not IDAUtils.set_name(self.v_addr + self.base_addr, selected[0].text):
+                Dialog.showError("Rename Function Error", f"Function {selected[0].text} already exists.")
             else:
-                inthread(self._set_function_renamed, self.v_addr, new_func_name)
+                inthread(self._set_function_renamed, self.v_addr, selected[0].text)
 
-                if False and ASKBTN_YES == idc.ask_yn(ASKBTN_YES,
-                                                      "Do you also want to rename the function arguments?"):
+                logger.info("Renowned %s in %s with confidence of '%s",
+                            IDAUtils.get_demangled_func_name(idc.here()),
+                            selected[0].text, selected[0].data["confidence"])
+
+                if self.state.project_cfg.get("func_type") and \
+                        ASKBTN_YES == idc.ask_yn(ASKBTN_YES,
+                                                 "HIDECANCEL\nWould you also like to update the function declaration?"):
+                    # Prevent circular import
                     from revengai.actions import function_signature
 
-                    function_signature(self.state, self.v_addr)
+                    function_signature(self.state, self.v_addr + self.base_addr, self._get_function_id(self.v_addr))
 
-    def _quick_search(self):
+    def _search_collection(self, search: str = None):
         try:
-            inmain(self.ui.comboBox.clear)
+            inmain(show_wait_box, "HIDECANCEL\nGetting RevEng.AI collections…")
 
-            res: Response = RE_quick_search(self.state.config.get("model"))
+            inmain(self.ui.fetchButton.setEnabled, False)
 
-            names = []
+            res: Response = RE_collection_search(search)
 
-            for collection in res.json():
-                names.append(collection["collection_name"])
+            collections = []
 
-            if len(names) == 0:
-                inmain(self.ui.label.setVisible, False)
-                inmain(self.ui.comboBox.setVisible, False)
-            else:
-                inmain(self.ui.comboBox.addItems, names)
-                inmain(self.ui.comboBox.setCurrentIndex, -1)
+            for collection in res.json()["collections"]:
+                if isinstance(collection, str):
+                    collections.append((collection, CheckableItem(checked=False),))
+                else:
+                    collections.append((IconItem(collection["collection_name"],
+                                                 "lock.png" if collection["collection_scope"] == "PRIVATE" else
+                                                 "unlock.png"),
+                                        CheckableItem(checked=False),))
+
+            inmain(inmain(self.ui.collectionsTable.model).fill_table, collections)
+            inmain(self.ui.collectionsTable.setColumnWidth, 0, inmain(self.ui.collectionsTable.width) * .8)
         except HTTPError as e:
-            logger.error("Getting collections failed: %s", e)
+            logger.error("Getting collections failed. Reason: %s", e)
+
+            Dialog.showError("Function Rename", f"Function Rename Error: {e.response.json().get('error', 'unknown')}")
+        except RequestException as e:
+            logger.error("An unexpected error has occurred. %s", e)
+        finally:
+            inmain(hide_wait_box)
+            inmain(self.ui.fetchButton.setEnabled, True)
+            inmain(self.ui.fetchButton.setFocus)
 
     def _table_menu(self) -> None:
-        if self.ui.tableView.selectedIndexes() and self.ui.renameButton.isEnabled():
+        rows = sorted(set(index.row() for index in self.ui.resultsTable.selectedIndexes()))
+        selected = self.ui.resultsTable.model().get_data(rows[0])
+
+        if selected and self.ui.renameButton.isEnabled() and isinstance(selected[0], SimpleItem):
             menu = QMenu()
             renameAction = menu.addAction(self.ui.renameButton.text())
             renameAction.triggered.connect(self._rename_symbol)
+
+            func_id = selected[0].data["nearest_neighbor_id"]
+            breakdownAction = menu.addAction("View Function Breakdown")
+            breakdownAction.triggered.connect(lambda: self._function_breakdown(func_id))
+
             menu.exec_(QCursor.pos())
+
+    def _selected_collections(self) -> list[str]:
+        model = self.ui.collectionsTable.model()
+
+        collections = []
+        for idx in range(model.rowCount()):
+            if model.index(idx, 1).data(Qt.CheckStateRole) == Qt.Checked:
+                collections.append(model.index(idx, 0).data(Qt.DisplayRole))
+
+        return collections
+
+    def _filter(self, _) -> None:
+        self.typing_timer.start(self.searchDelay)     # Starts the countdown to call the filtering method
+
+    def _confidence(self, value: int) -> None:
+        self.ui.description.setText(f"Confidence: {value:#02d}")
+
+    def _filter_collections(self):
+        self._search_collection(self.ui.collectionsFilter.text().lower())

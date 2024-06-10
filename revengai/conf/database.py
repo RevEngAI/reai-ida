@@ -7,7 +7,7 @@ from os.path import join, basename
 from sqlite3 import connect, Connection, Error
 from weakref import finalize
 
-from ida_diskio import get_user_idadir
+from idaapi import get_user_idadir
 
 
 logger = logging.getLogger("REAI")
@@ -53,7 +53,8 @@ class RevEngDatabase(object):
                 cursor.execute("""
                 CREATE TABLE IF NOT EXISTS analysis(
                 id INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE,
-                sha_256_hash TEXT NOT NULL, binary_id INTEGER NOT NULL UNIQUE, status TEXT, submitted TEXT);
+                sha_256_hash TEXT NOT NULL, binary_id INTEGER NOT NULL UNIQUE,
+                status TEXT, creation TEXT, model_name TEXT);
                 """)
         except Error as e:
             logger.error("Error creating tables to local database. %s", e)
@@ -90,22 +91,29 @@ class RevEngDatabase(object):
         finally:
             self.conn.commit()
 
-    def get_last_analysis(self, sha_256_hash: str) -> int:
+    def get_last_analysis(self, sha_256_hash: str, status: str = "Complete") -> int:
         try:
             with closing(self.conn.cursor()) as cursor:
-                cursor.execute("SELECT binary_id FROM analysis WHERE sha_256_hash = ? ORDER BY binary_id DESC LIMIT 1",
-                               (sha_256_hash,))
+                cursor.execute("SELECT binary_id FROM analysis WHERE sha_256_hash = ? and status = ? ORDER BY binary_id DESC LIMIT 1",
+                               (sha_256_hash, status,))
 
                 result = cursor.fetchone()
-                return result[0] if result and len(result) > 0 else 0
+
+                analysis_id = result[0] if result and len(result) > 0 else 0
+
+                if analysis_id:
+                    logger.info("Selecting current analysis ID %d for binary hash: %s", analysis_id, sha_256_hash)
+
+                return analysis_id
         except Error as e:
             logger.error("Error getting last analysis for hash: %s. %s", sha_256_hash, e)
 
-    def add_analysis(self, sha_256_hash: str, bid: int, status: str = "", submitted: str = "") -> None:
+    def add_analysis(self, sha_256_hash: str, bid: int, status: str = "",
+                     creation: str = "", model_name: str = "") -> None:
         try:
             with closing(self.conn.cursor()) as cursor:
-                cursor.execute("INSERT OR REPLACE INTO analysis(sha_256_hash, binary_id, status, submitted) VALUES(?, ?, ?, ?)",
-                               (sha_256_hash, bid, status, submitted,))
+                cursor.execute("INSERT OR REPLACE INTO analysis (sha_256_hash, binary_id, status, creation, model_name)"
+                               " VALUES (?, ?, ?, ?, ?)", (sha_256_hash, bid, status, creation, model_name,))
         except Error as e:
             logger.error("Error adding analysis for bid: %d, status: %s, hash: %s. %s",
                          bid, status, sha_256_hash, e)
@@ -127,5 +135,14 @@ class RevEngDatabase(object):
                 cursor.execute("DELETE FROM analysis WHERE binary_id = ?", (bid,))
         except Error as e:
             logger.error("Error deleting analysis from database for bid: %d. %s", bid, e)
+        finally:
+            self.conn.commit()
+
+    def execute_sql(self, sql: str, params: tuple[any] = None) -> None:
+        try:
+            with closing(self.conn.cursor()) as cursor:
+                cursor.execute(sql, params)
+        except Error as e:
+            logger.error("Error executing %s with params: %s. %s", sql, params, e)
         finally:
             self.conn.commit()
