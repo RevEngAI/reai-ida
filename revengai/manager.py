@@ -3,7 +3,7 @@ from os.path import dirname, join
 
 from idaapi import load_custom_icon, free_custom_icon
 
-from revengai.conf import RevEngConfiguration
+from revengai.conf import RevEngConfiguration, ProjectConfiguration
 
 
 class RevEngState(object):
@@ -11,6 +11,7 @@ class RevEngState(object):
         self.gui = None
         self.icon_id = 0
         self.config = RevEngConfiguration()
+        self.project_cfg = ProjectConfiguration()
 
     def start_plugin(self):
         self.icon_id = load_custom_icon(file_name=join(dirname(__file__), "resources/favicon.png"),

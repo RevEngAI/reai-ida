@@ -59,7 +59,8 @@ def upload_binary(state: RevEngState) -> None:
 
                         res = RE_analyse(fpath=fpath, binary_scope=scope,
                                          debug_fpath=debug_fpath, model_name=model,
-                                         tags=tags, symbols=symbols, duplicate=True)
+                                         tags=tags, symbols=symbols,
+                                         duplicate=state.project_cfg.get("duplicate_analysis"))
 
                         analysis = res.json()
 
@@ -72,16 +73,7 @@ def upload_binary(state: RevEngState) -> None:
                                     "succeed" if analysis["success"] else "failed", basename(fpath))
 
                         # Periodically check the status of the uploaded binary
-                        def _worker(binary_id: int, delay: float = 60):
-                            try:
-                                status = RE_status(fpath, binary_id).json()["status"]
-
-                                if status == "Processing":
-                                    Timer(delay, _worker, args=(binary_id, delay,)).start()
-                            except RequestException as ex:
-                                logger.error("Error getting binary analysis status. Reason: %s", ex)
-
-                        Timer(60, _worker, args=(analysis["binary_id"],)).start()
+                        periodic_check(fpath, analysis["binary_id"])
                 except RequestException as e:
                     logger.error("Error analyzing %s. Reason: %s", basename(fpath), e)
 
@@ -129,6 +121,9 @@ def check_analyze(state: RevEngState) -> None:
                 status = res.json()["status"]
 
                 if bid:
+                    if status == "Processing":
+                        periodic_check(fpath, bid)
+
                     inmain(state.config.database.update_analysis, bid, status)
 
                 logger.info("Got binary analysis status: %s", status)
@@ -385,9 +380,10 @@ def load_recent_analyses(state: RevEngState) -> None:
 
                     state.config.set("binary_id", inmain(state.config.database.get_last_analysis, params[0]))
 
-                    done, _ = is_analysis_complete(state, fpath)
-                    if done:
-                        inmain(sync_functions_name, state, fpath)
+                    if state.project_cfg.get("auto_sync"):
+                        done, _ = is_analysis_complete(state, fpath)
+                        if done:
+                            inmain(sync_functions_name, state, fpath)
             except RequestException as e:
                 logger.error("Error getting recent analyses: %s", e)
 
@@ -486,12 +482,15 @@ def is_analysis_complete(state: RevEngState, fpath: str) -> tuple[bool, str]:
         status = res.json()["status"]
 
         if bid:
+            if status == "Processing":
+                periodic_check(fpath, bid)
+
             inmain(state.config.database.update_analysis, bid, status)
 
         return status == "Complete", status
     except HTTPError as e:
         error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
-        if "invalid" in error.lower():
+        if ("invalid", "denied") in error.lower():
             upload_binary(state)
 
         logger.error("Error getting binary analysis status: %s", error)
@@ -549,3 +548,16 @@ def update(_) -> None:
                        e)
         Dialog.showInfo("Check for Update",
                         "RevEng.AI Toolkit has failed to connect to the internet (Github). Try again later.")
+
+
+def periodic_check(fpath: str, binary_id: int) -> None:
+    def _worker(bid: int, delay: float = 60):
+        try:
+            status = RE_status(fpath, bid).json()["status"]
+
+            if status == "Processing":
+                Timer(delay, _worker, args=(bid, delay,)).start()
+        except RequestException as ex:
+            logger.error("Error getting binary analysis status. Reason: %s", ex)
+
+    Timer(60, _worker, args=(binary_id,)).start()

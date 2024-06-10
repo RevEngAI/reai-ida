@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from os import makedirs
 from json import loads, dumps
-from os.path import join, exists
+from os.path import join, exists, dirname
 
 from requests import HTTPError
 from idaapi import get_user_idadir, retrieve_input_file_sha256, msg
@@ -111,3 +111,25 @@ class RevEngConfiguration(object):
             self.set("binary_id", self.database.get_last_analysis(sha_256_hash.hex()))
 
             msg(f"Selecting current analysis ID {self.get('binary_id')}")
+
+
+class ProjectConfiguration(object):
+    def __init__(self):
+        self._path = join(dirname(__file__), "default_conf.json")
+        self._project_conf = {}
+
+        self.load()
+
+    @property
+    def project_config(self) -> dict:
+        return self._project_conf
+
+    def get(self, name: str, default_val: any = None) -> any:
+        return self.project_config.get(name, default_val)
+
+    def load(self):
+        try:
+            with open(self._path) as fd:
+                self._project_conf = loads(fd)
+        except FileNotFoundError:
+            pass

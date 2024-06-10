@@ -1,0 +1,6 @@
+{
+  "auto_sync": true,
+  "ann_chunk_size": 5,
+  "parallelize_query": true,
+  "duplicate_analysis": true
+}

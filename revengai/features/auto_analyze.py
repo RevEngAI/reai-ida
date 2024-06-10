@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+from os import cpu_count
 from concurrent.futures import as_completed, ThreadPoolExecutor
 from re import sub
 from enum import IntEnum
@@ -145,8 +146,12 @@ class AutoAnalysisDialog(BaseDialog):
 
             inmain(self.ui.progressBar.setProperty, "value", pos)
 
+            max_workers = 1
+            if self.state.project_cfg.get("parallelize_query"):
+                max_workers += min(cpu_count(), nb_func // self.state.project_cfg.get("ann_chunk_size"))
+
             # Launch parallel tasks
-            with ThreadPoolExecutor() as executor:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 def worker(chunk: list[int]) -> any:
                     try:
                         return RE_nearest_symbols_batch(function_ids=chunk, distance=confidence,
@@ -156,7 +161,8 @@ class AutoAnalysisDialog(BaseDialog):
 
                 # Start the ANN batch operations and mark each future with its chunk
                 futures = {executor.submit(worker, chunk): chunk
-                           for chunk in AutoAnalysisDialog._divide_chunks(function_ids)}
+                           for chunk in AutoAnalysisDialog._divide_chunks(function_ids,
+                                                                          self.state.project_cfg.get("ann_chunk_size"))}
 
                 for future in as_completed(futures):
                     chunk = futures[future]
