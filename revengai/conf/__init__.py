@@ -130,6 +130,6 @@ class ProjectConfiguration(object):
     def load(self):
         try:
             with open(self._path) as fd:
-                self._project_conf = loads(fd)
+                self._project_conf = loads(fd.read())
         except FileNotFoundError:
             pass
