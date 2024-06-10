@@ -121,7 +121,7 @@ def check_analyze(state: RevEngState) -> None:
                 status = res.json()["status"]
 
                 if bid:
-                    if status == "Processing":
+                    if status in ("Queued", "Processing",):
                         periodic_check(fpath, bid)
 
                     inmain(state.config.database.update_analysis, bid, status)
@@ -484,7 +484,7 @@ def is_analysis_complete(state: RevEngState, fpath: str) -> tuple[bool, str]:
         status = res.json()["status"]
 
         if bid:
-            if status == "Processing":
+            if status in ("Queued", "Processing",):
                 periodic_check(fpath, bid)
 
             inmain(state.config.database.update_analysis, bid, status)
@@ -492,8 +492,8 @@ def is_analysis_complete(state: RevEngState, fpath: str) -> tuple[bool, str]:
         return status == "Complete", status
     except HTTPError as e:
         error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
-        if ("invalid", "denied") in error.lower():
-            upload_binary(state)
+        if any(word in error.lower()for word in ("invalid", "denied",)):
+            inmain(upload_binary, state)
 
         logger.error("Error getting binary analysis status: %s", error)
         return False, "Processing"
@@ -513,7 +513,7 @@ def is_file_supported(state: RevEngState, fpath: str) -> bool:
     try:
         file_format, isa_format = file_type(fpath)
 
-        logger.info("Underlying binary: %s -> format: %s target: %s", fpath, file_format, isa_format)
+        logger.info("Underlying binary: %s -> format: %s, target: %s", fpath, file_format, isa_format)
 
         if any(file_format == fmt for fmt in state.config.OPTIONS.get("file_options", [])) and \
                 any(isa_format == fmt for fmt in state.config.OPTIONS.get("isa_options", [])):
