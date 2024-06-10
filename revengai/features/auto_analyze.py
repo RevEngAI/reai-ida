@@ -221,13 +221,6 @@ class AutoAnalysisDialog(BaseDialog):
             self._analysis[Analysis.TOTAL.value] = len(resultsData)
 
             inmain(inmain(self.ui.resultsTable.model).fill_table, resultsData)
-
-            width: int = inmain(self.ui.resultsTable.width)
-
-            inmain(self.ui.resultsTable.setColumnWidth, 0, width * .2)
-            inmain(self.ui.resultsTable.setColumnWidth, 1, width * .4)
-            inmain(self.ui.resultsTable.setColumnWidth, 2, width * .1)
-            inmain(self.ui.resultsTable.setColumnWidth, 3, width * .3)
         except HTTPError as e:
             logger.error("Fetching auto analysis failed. Reason: %s", e)
 
@@ -241,6 +234,13 @@ class AutoAnalysisDialog(BaseDialog):
             inmain(self.ui.fetchButton.setEnabled, True)
             inmain(self.ui.confidenceSlider.setEnabled, True)
             inmain(self.ui.progressBar.setProperty, "value", 0)
+
+            width: int = inmain(self.ui.resultsTable.width)
+
+            inmain(self.ui.resultsTable.setColumnWidth, 0, width * .2)
+            inmain(self.ui.resultsTable.setColumnWidth, 1, width * .4)
+            inmain(self.ui.resultsTable.setColumnWidth, 2, width * .1)
+            inmain(self.ui.resultsTable.setColumnWidth, 3, width * .3)
 
     def _filter(self, filter_text) -> None:
         if self.ui.tabWidget.currentIndex() == 0:
