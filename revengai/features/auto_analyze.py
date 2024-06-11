@@ -6,7 +6,7 @@ from re import sub
 from enum import IntEnum
 
 import idc
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QModelIndex
 from PyQt5.QtGui import QCursor
 from PyQt5.QtWidgets import QMenu
 from idaapi import hide_wait_box, show_wait_box
@@ -48,6 +48,8 @@ class AutoAnalysisDialog(BaseDialog):
         self.ui.collectionsTable.horizontalHeader().setDefaultAlignment(Qt.AlignLeft)
         self.ui.collectionsTable.setModel(RevEngCheckableTableModel(data=[], columns=[1], parent=self,
                                                                     header=["Collection Name", "Include",]))
+
+        self.ui.collectionsTable.model().dataChanged.connect(self._state_change)
 
         self.ui.resultsFilter.textChanged.connect(self._filter)
         self.ui.resultsTable.customContextMenuRequested.connect(self._table_menu)
@@ -281,12 +283,13 @@ class AutoAnalysisDialog(BaseDialog):
 
             for collection in res.json()["collections"]:
                 if isinstance(collection, str):
-                    collections.append((collection, CheckableItem(checked=False),))
+                    collections.append((collection,
+                                        CheckableItem(checked=self.ui.layoutFilter.is_present(collection)),))
                 else:
                     collections.append((IconItem(collection["collection_name"],
                                                  "lock.png" if collection["collection_scope"] == "PRIVATE" else
                                                  "unlock.png"),
-                                        CheckableItem(checked=False),))
+                                        CheckableItem(checked=self.ui.layoutFilter.is_present(collection["collection_name"])),))
 
             inmain(inmain(self.ui.collectionsTable.model).fill_table, collections)
             inmain(self.ui.collectionsTable.setColumnWidth, 0, inmain(self.ui.collectionsTable.width) * .9)
@@ -345,6 +348,14 @@ class AutoAnalysisDialog(BaseDialog):
 
     def _filter_collections(self):
         self._search_collection(self.ui.collectionsFilter.text().lower())
+
+    def _state_change(self, index: QModelIndex):
+        item = self.ui.collectionsTable.model().get_data(index.row())
+
+        if item[1].checkState == Qt.Checked:
+            self.ui.layoutFilter.add_card(item[0])
+        else:
+            self.ui.layoutFilter.remove_card(item[0])
 
     # Yield successive n-sized
     # chunks from l.
