@@ -14,6 +14,8 @@ class CustomFlowLayout(QLayout):
 
         self.setSpacing(spacing)
 
+        self.callback = None
+
         self._items: list[QLayoutItem] = []
         self.__pending_positions: dict[QWidget, int] = {}
 
@@ -71,10 +73,13 @@ class CustomFlowLayout(QLayout):
         return size
 
     def removeItem(self, a0: QLayoutItem) -> None:
-        a0.widget().deleteLater()
+        self.removeWidget(a0.widget())
 
     def removeWidget(self, w: QWidget) -> None:
         w.deleteLater()
+
+        if self.callback:
+            self.callback(w.objectName())
 
     def setGeometry(self, rect: QRect) -> None:
         super().setGeometry(rect)
@@ -153,3 +158,6 @@ class CustomFlowLayout(QLayout):
 
     def is_present(self, text: str) -> bool:
         return any(item.widget().objectName() == text for item in self._items)
+
+    def register_cb(self, fn):
+        self.callback = fn
