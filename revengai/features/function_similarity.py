@@ -46,6 +46,8 @@ class FunctionSimilarityDialog(BaseDialog):
 
         self.ui.lineEdit.setValidator(QIntValidator(1, 256, self))
 
+        self.ui.layoutFilter.register_cb(self._callback)
+
         self.ui.collectionsFilter.textChanged.connect(self._filter)
         self.ui.collectionsTable.horizontalHeader().setDefaultAlignment(Qt.AlignLeft)
         self.ui.collectionsTable.setModel(RevEngCheckableTableModel(data=[], columns=[1], parent=self,
@@ -84,7 +86,7 @@ class FunctionSimilarityDialog(BaseDialog):
     def _load(self, collections: list[str], distance: float = 0.1):
         try:
             model = inmain(self.ui.resultsTable.model)
-            
+
             inmain(model.fill_table, [])
             inmain(self.ui.fetchButton.setEnabled, False)
             inmain(self.ui.renameButton.setEnabled, False)
@@ -237,3 +239,12 @@ class FunctionSimilarityDialog(BaseDialog):
             self.ui.layoutFilter.add_card(item[0])
         else:
             self.ui.layoutFilter.remove_card(item[0])
+
+    def _callback(self, text: str) -> None:
+        for row_item in self.ui.collectionsTable.model().get_datas():
+            if isinstance(row_item[1], CheckableItem) and \
+                    (isinstance(row_item[0], str) and row_item[0] == text or
+                     isinstance(row_item[0], SimpleItem) and row_item[0].text == text):
+                row_item[1].checkState = Qt.Unchecked
+
+        self.ui.collectionsTable.model().layoutChanged.emit()
