@@ -26,7 +26,7 @@ class RevEngCheckableTableModel(RevEngTableModel):
         if index.isValid() and role == Qt.CheckStateRole and index.column() in self._columns:
             if isinstance(self._data[index.row()][index.column()], CheckableItem):
                 self._data[index.row()][index.column()].checkState = value
-                self.dataChanged.emit(index)
+                self.dataChanged.emit(index, index)
                 return True
         return super().setData(index, value, role)
 
