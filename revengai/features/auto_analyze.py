@@ -177,13 +177,11 @@ class AutoAnalysisDialog(BaseDialog):
                                                                           self.state.project_cfg.get("ann_chunk_size"))}
 
                 if inmain(user_cancelled):
-                    logger.error(">>" * 10)
                     map(lambda f: f.cancel(), futures.keys())
                     executor.shutdown(wait=False, cancel_futures=True)
 
                 for future, chunk in futures.items():
                     if inmain(user_cancelled):
-                        logger.error(">>" * 20)
                         inmain(hide_wait_box)
                         executor.shutdown(wait=False, cancel_futures=True)
 
