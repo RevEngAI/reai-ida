@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import QLayout, QLayoutItem, QWidget, QSizePolicy, QCheckBo
 
 
 class CustomFlowLayout(QLayout):
-    def __init__(self, parent:QWidget = None, margin: int = 0, spacing: int = -1):
+    def __init__(self, parent: QWidget = None, margin: int = 0, spacing: int = -1):
         super().__init__(parent)
 
         if parent is not None:
@@ -140,6 +140,8 @@ class CustomFlowLayout(QLayout):
                 QCheckBox {
                     min-width: 2em;
                     border-radius: 3px;
+                    border: 2px solid gray;
+                    padding: 2px 2px 2px 2px;
                     background-color: #737373;
                 }
             """)
