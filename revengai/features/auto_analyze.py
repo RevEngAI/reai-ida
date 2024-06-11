@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 from os import cpu_count
-from concurrent.futures import as_completed, ThreadPoolExecutor
+from concurrent.futures import as_completed, ThreadPoolExecutor, CancelledError
 from re import sub
 from enum import IntEnum
 
@@ -9,7 +9,7 @@ import idc
 from PyQt5.QtCore import Qt, QModelIndex
 from PyQt5.QtGui import QCursor
 from PyQt5.QtWidgets import QMenu
-from idaapi import hide_wait_box, show_wait_box
+from idaapi import hide_wait_box, show_wait_box, user_cancelled
 from idautils import Functions
 
 from requests import Response, HTTPError, RequestException
@@ -113,22 +113,20 @@ class AutoAnalysisDialog(BaseDialog):
 
     def _auto_analysis(self) -> None:
         try:
+            inmain(show_wait_box, "Getting results…")
+
             self._analysis = [0,] * len(Analysis)
 
             inmain(self.ui.fetchButton.setEnabled, False)
             inmain(self.ui.renameButton.setEnabled, False)
             inmain(self.ui.confidenceSlider.setEnabled, False)
             inmain(self.ui.progressBar.setProperty, "value", 1)
-            inmain(show_wait_box, "HIDECANCEL\nGetting results…")
+
             inmain(inmain(self.ui.resultsTable.model).fill_table, [])
             inmain(self._tab_changed, inmain(self.ui.tabWidget.currentIndex))
 
             if not self.analyzed_functions or len(self.analyzed_functions) == 0:
                 self._get_analyze_functions()
-
-            collections = inmain(self._selected_collections)
-            confidence = 1 - (int(inmain(self.ui.confidenceSlider.property, "value")) /
-                              int(inmain(self.ui.confidenceSlider.property, "maximum")))
 
             resultsData = []
             function_ids = []
@@ -147,21 +145,28 @@ class AutoAnalysisDialog(BaseDialog):
                     function_ids.append(function_id)
                 else:
                     self._analysis[Analysis.SKIPPED.value] += 1
-                    resultsData.append((func["name"], "N/A", None, "No Function Symbol Found",))
+                    resultsData.append((func["name"], "N/A", None, "No Similar Function Found",))
 
             pos = 1 + nb_func
 
             inmain(self.ui.progressBar.setProperty, "value", pos)
 
             max_workers = 1
-            if self.state.project_cfg.get("parallelize_query"):
+            if self.state.project_cfg.get("parallelize_query") and not inmain(user_cancelled):
                 max_workers += min(cpu_count(), nb_func // self.state.project_cfg.get("ann_chunk_size"))
 
             # Launch parallel tasks
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                collections = inmain(self._selected_collections)
+                distance = 1.0 - (int(inmain(self.ui.confidenceSlider.property, "value")) /
+                                  int(inmain(self.ui.confidenceSlider.property, "maximum")))
+
                 def worker(chunk: list[int]) -> any:
                     try:
-                        return RE_nearest_symbols_batch(function_ids=chunk, distance=confidence,
+                        if inmain(user_cancelled):
+                            raise CancelledError("Auto analysis cancelled")
+
+                        return RE_nearest_symbols_batch(function_ids=chunk, distance=distance,
                                                         collections=collections, nns=1).json()["function_matches"]
                     except Exception as ex:
                         return ex
@@ -171,18 +176,26 @@ class AutoAnalysisDialog(BaseDialog):
                            for chunk in AutoAnalysisDialog._divide_chunks(function_ids,
                                                                           self.state.project_cfg.get("ann_chunk_size"))}
 
-                for future in as_completed(futures):
-                    chunk = futures[future]
+                if inmain(user_cancelled):
+                    logger.error(">>" * 10)
+                    map(lambda f: f.cancel(), futures.keys())
+                    executor.shutdown(wait=False, cancel_futures=True)
+
+                for future, chunk in futures.items():
+                    if inmain(user_cancelled):
+                        logger.error(">>" * 20)
+                        inmain(hide_wait_box)
+                        executor.shutdown(wait=False, cancel_futures=True)
 
                     try:
-                        res = future.result()
+                        res = CancelledError("Auto analysis cancelled") if future.cancelled() else future.result()
 
                         if isinstance(res, Exception):
                             logger.error("Fetching a chunk of auto analysis failed. Reason: %s", res)
 
                             self._analysis[Analysis.UNSUCCESSFUL] += len(chunk)
 
-                            err_msg = "Fetching Function Symbol Failed"
+                            err_msg = f"Auto Analysis {'Cancelled' if isinstance(res, CancelledError) else 'Failed'}"
 
                             if isinstance(res, HTTPError):
                                 err_msg = res.response.json().get("error", err_msg)
@@ -207,7 +220,7 @@ class AutoAnalysisDialog(BaseDialog):
                                     symbol["org_func_name"] = next((function["name"] for function in self._functions
                                                                     if func_addr == function["start_addr"]), "Unknown")
 
-                                    logger.info("Found symbol '%s' with a confidence level of '%s",
+                                    logger.info("Found similar function '%s' with a confidence level of '%s",
                                                 symbol["nearest_neighbor_function_name"], str(symbol["confidence"]))
 
                                     resultsData.append((symbol["org_func_name"],
