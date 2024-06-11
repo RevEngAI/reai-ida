@@ -18,7 +18,7 @@
   },
   {
     "id": "reai:auto_analyze",
-    "name": "Auto Analyze Binary Symbol",
+    "name": "Auto Analyse Binary",
     "callback": "auto_analyze",
     "shortcut": "Ctrl+Shift+A"
   },

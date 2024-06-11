@@ -44,7 +44,7 @@ class RevEngPlugin(plugin_t):
         self.state.start_plugin()
         self.initialized = True
 
-    def run(self, args=None):
+    def run(self, _=None):
         self.reload_plugin()
 
     def term(self):
