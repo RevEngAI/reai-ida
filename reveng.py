@@ -1,8 +1,29 @@
 # -*- coding: utf-8 -*-
 import logging
 
-from idaapi import plugin_t, PLUGIN_SKIP, PLUGIN_OK, PLUGIN_KEEP, IDA_SDK_VERSION
+# Third Party Python Modules
+required_modules_loaded = True
+try:
+    import reait.api
 
+    from requests.packages.urllib3 import disable_warnings
+    from requests.packages.urllib3.exceptions import InsecureRequestWarning, NotOpenSSLWarning
+
+    disable_warnings(NotOpenSSLWarning)
+
+    # Workaround to suppress warnings about SSL certificates
+    disable_warnings(InsecureRequestWarning)
+except ImportError:
+    required_modules_loaded &= False
+
+    from idc import msg
+
+    msg("RevEng.AI Toolkit requires Python module reait\n")
+
+
+from idaapi import execute_ui_requests, plugin_t, PLUGIN_SKIP, PLUGIN_OK, PLUGIN_KEEP, IDA_SDK_VERSION
+
+from revengai.gui import Requests
 from revengai.manager import RevEngState
 
 
@@ -66,4 +87,11 @@ class RevEngPlugin(plugin_t):
 
 
 def PLUGIN_ENTRY():
-    return RevEngPlugin()
+    global required_modules_loaded
+
+    if required_modules_loaded:
+        return RevEngPlugin()
+
+    execute_ui_requests((Requests.MsgBox(RevEngPlugin.wanted_name,
+                                         f"[{RevEngPlugin.wanted_name}] Unable to load all required modules."),))
+    return None
