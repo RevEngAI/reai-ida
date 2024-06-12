@@ -33,7 +33,7 @@ logger = logging.getLogger("REAI")
 class RevEngPlugin(plugin_t):
     # Variables required by IDA
     flags = 0  # Normal plugin
-    wanted_hotkey = "Ctrl-Shift-R"
+    wanted_hotkey = ""
     wanted_name = "RevEng.AI Toolkit"
     help = f"Configure IDA plugin for {wanted_name}"
     comment = f"AI-assisted reverse engineering from {wanted_name}"
@@ -63,7 +63,7 @@ class RevEngPlugin(plugin_t):
         if self.initialized:
             self.term()
 
-        logger.info("%s reloading...", self.wanted_name)
+        logger.info("Reloading %s...", self.wanted_name)
 
         self.state.start_plugin()
         self.initialized = True
