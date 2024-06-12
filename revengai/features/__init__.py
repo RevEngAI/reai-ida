@@ -40,7 +40,7 @@ class BaseDialog(QDialog):
         self.typing_timer.timeout.connect(self._filter_collections)
 
         self.setModal(True)
-        self.setWindowIcon(QIcon(join(dirname(__file__), "../resources/favicon.png")))
+        self.setWindowIcon(QIcon(join(dirname(__file__), "..", "resources", "favicon.png")))
 
     def showEvent(self, event):
         super(BaseDialog, self).showEvent(event)

@@ -33,7 +33,7 @@ class RevEngSetupWizard(QWizard):
         self.setOptions(QWizard.CancelButtonOnLeft | QWizard.NoBackButtonOnStartPage)
         self.setWizardStyle(QWizard.MacStyle if platform == 'darwin' else QWizard.ModernStyle)
         self.setPixmap(QWizard.BackgroundPixmap if platform == 'darwin' else QWizard.WatermarkPixmap,
-                       QPixmap(join(dirname(__file__), "../resources/logo.png")))
+                       QPixmap(join(dirname(__file__), "..", "resources", "logo.png")))
 
         self.button(QWizard.FinishButton).clicked.connect(self._save)
 

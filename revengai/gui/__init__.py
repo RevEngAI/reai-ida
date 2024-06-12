@@ -21,12 +21,12 @@ class Requests(object):
 
             msg_box.setModal(True)
             msg_box.setWindowTitle(self.title)
-            msg_box.setWindowIcon(QIcon(join(dirname(__file__), "../resources/favicon.png")))
+            msg_box.setWindowIcon(QIcon(join(dirname(__file__), "..", "resources", "favicon.png")))
 
             if self.icon != -1:
                 msg_box.setIcon(self.icon)
             else:
-                msg_box.setIconPixmap(QPixmap(join(dirname(__file__), "../resources/favicon.png")))
+                msg_box.setIconPixmap(QPixmap(join(dirname(__file__), "..", "resources", "favicon.png")))
 
             msg_box.setText(self.msg)
             msg_box.exec_()

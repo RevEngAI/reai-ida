@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 
-# Third Party Python Modules
+# Third-Party Python Modules
 required_modules_loaded = True
 try:
     import reait.api
