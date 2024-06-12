@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from json import load
-from os.path import abspath, dirname, isfile, join, realpath
+from os.path import dirname, isfile, join
 
 from idc import get_input_file_path, here
 from idaapi import set_dock_pos, PluginForm, unregister_action, attach_action_to_menu, register_action, UI_Hooks, \
@@ -72,7 +72,7 @@ class Hooks(UI_Hooks):
             attach_action_to_popup(form, popup, None, None)
 
             # Add actions
-            with open(join(abspath(dirname(realpath(__file__))), "conf/actions.json")) as fd:
+            with open(join(dirname(__file__), "conf", "actions.json")) as fd:
                 for action in load(fd):
                     if not action.get("disabled", False):
                         if self.state.config.is_valid():
@@ -125,7 +125,7 @@ class RevEngConfigForm_t(PluginForm):
         # Add ui hook
         self._hooks.hook()
 
-        with open(join(abspath(dirname(realpath(__file__))), "conf/actions.json")) as fd:
+        with open(join(dirname(__file__), "conf", "actions.json")) as fd:
             for action in load(fd):
                 if not action.get("disabled", False) and \
                         (self.state.config.is_valid() or action["id"] == "reai:wizard"):
@@ -163,7 +163,7 @@ class RevEngConfigForm_t(PluginForm):
         unregister_action("reai:about")
         unregister_action("reai:update")
 
-        with open(join(abspath(dirname(realpath(__file__))), "conf/actions.json")) as fd:
+        with open(join(dirname(__file__), "conf", "actions.json")) as fd:
             for action in load(fd):
                 unregister_action(action["id"])
 
