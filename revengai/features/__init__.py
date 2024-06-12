@@ -14,7 +14,6 @@ from idaapi import get_imagebase
 from requests import HTTPError, Response
 
 from revengai.manager import RevEngState
-from revengai.misc.icons import get_reai_icons
 from revengai.misc.qtutils import inthread, inmain
 
 
