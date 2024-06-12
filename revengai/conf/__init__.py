@@ -74,6 +74,11 @@ class RevEngConfiguration(object):
                 def bg_task() -> None:
                     try:
                         if RE_health():
+                            response = RE_models().json()
+
+                            if response["success"]:
+                                RevEngConfiguration.MODELS = [model["model_name"] for model in response["models"]]
+
                             response = RE_settings().json()
 
                             if response["success"]:
@@ -82,12 +87,6 @@ class RevEngConfiguration(object):
 
                                 RevEngConfiguration.PORTAL = response.get("portal", RevEngConfiguration.PORTAL)
                                 RevEngConfiguration.LIMIT = response.get("max_file_size", RevEngConfiguration.LIMIT)
-                                RevEngConfiguration.MODELS = response.get("valid_models", RevEngConfiguration.MODELS)
-
-                            response = RE_models().json()
-
-                            if response["success"]:
-                                RevEngConfiguration.MODELS = [model["model_name"] for model in response["models"]]
                     except RequestException:
                         pass
 
@@ -114,7 +113,7 @@ class RevEngConfiguration(object):
         if sha_256_hash:
             self.set("binary_id", self.database.get_last_analysis(sha_256_hash.hex()))
 
-            msg(f"Selecting current analysis ID {self.get('binary_id')}\n")
+            msg(f"[+] Selecting current analysis ID {self.get('binary_id')} for binary hash: {sha_256_hash.hex()}\n")
 
 
 class ProjectConfiguration(object):
