@@ -14,6 +14,7 @@ from idaapi import get_imagebase
 from requests import HTTPError, Response
 
 from revengai.manager import RevEngState
+from revengai.misc.icons import get_reai_icons
 from revengai.misc.qtutils import inthread, inmain
 
 
@@ -40,7 +41,7 @@ class BaseDialog(QDialog):
         self.typing_timer.timeout.connect(self._filter_collections)
 
         self.setModal(True)
-        self.setWindowIcon(QIcon(join(dirname(__file__), "../resources/favicon.png")))
+        self.setWindowIcon(QIcon(join(dirname(__file__), "..", "resources", "favicon.png")))
 
     def showEvent(self, event):
         super(BaseDialog, self).showEvent(event)

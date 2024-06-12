@@ -14,7 +14,7 @@ class RevEngState(object):
         self.project_cfg = ProjectConfiguration()
 
     def start_plugin(self):
-        self.icon_id = load_custom_icon(file_name=join(dirname(__file__), "resources/favicon.png"),
+        self.icon_id = load_custom_icon(file_name=join(dirname(__file__), "resources", "favicon.png"),
                                         format="png")
 
         from revengai.ida_ui import RevEngGUI
