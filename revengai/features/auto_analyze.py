@@ -299,10 +299,10 @@ class AutoAnalysisDialog(BaseDialog):
                     collections.append((collection,
                                         CheckableItem(checked=self.ui.layoutFilter.is_present(collection)),))
                 else:
-                    collections.append((IconItem(collection["collection_name"],
-                                                 "lock.png" if collection["collection_scope"] == "PRIVATE" else
+                    collections.append((IconItem(collection["name"],
+                                                 "lock.png" if collection["scope"] == "PRIVATE" else
                                                  "unlock.png"),
-                                        CheckableItem(checked=self.ui.layoutFilter.is_present(collection["collection_name"])),))
+                                        CheckableItem(checked=self.ui.layoutFilter.is_present(collection["name"])),))
 
             inmain(inmain(self.ui.collectionsTable.model).fill_table, collections)
             inmain(self.ui.collectionsTable.setColumnWidth, 0, inmain(self.ui.collectionsTable.width) * .9)

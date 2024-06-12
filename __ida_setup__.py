@@ -52,7 +52,7 @@ class IdaPluginInstallCommand(install):
 
         install_dir: str = self.root  # respect user-override install dir
 
-        if not install_dir:  # otherwise return the ida install dir
+        if not install_dir:  # otherwise return the IDA install dir
             install_dir = IdaPluginInstallCommand._get_install_dir()
 
         self.install_dependencies(dist, install_dir)
