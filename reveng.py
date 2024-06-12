@@ -6,10 +6,10 @@ required_modules_loaded = True
 try:
     import reait.api
 
-    from requests.packages.urllib3 import disable_warnings
-    from requests.packages.urllib3.exceptions import InsecureRequestWarning, NotOpenSSLWarning
+    from revengai.manager import RevEngState
 
-    disable_warnings(NotOpenSSLWarning)
+    from requests.packages.urllib3 import disable_warnings
+    from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
     # Workaround to suppress warnings about SSL certificates
     disable_warnings(InsecureRequestWarning)
@@ -18,13 +18,12 @@ except ImportError:
 
     from idc import msg
 
-    msg("RevEng.AI Toolkit requires Python module reait\n")
+    msg("[!] RevEng.AI Toolkit requires Python module reait.\n")
 
 
 from idaapi import execute_ui_requests, plugin_t, PLUGIN_SKIP, PLUGIN_OK, PLUGIN_KEEP, IDA_SDK_VERSION
 
 from revengai.gui import Requests
-from revengai.manager import RevEngState
 
 
 logger = logging.getLogger("REAI")
@@ -33,7 +32,7 @@ logger = logging.getLogger("REAI")
 class RevEngPlugin(plugin_t):
     # Variables required by IDA
     flags = 0  # Normal plugin
-    wanted_hotkey = "Ctrl-Shift-R"
+    wanted_hotkey = ""
     wanted_name = "RevEng.AI Toolkit"
     help = f"Configure IDA plugin for {wanted_name}"
     comment = f"AI-assisted reverse engineering from {wanted_name}"
@@ -63,7 +62,7 @@ class RevEngPlugin(plugin_t):
         if self.initialized:
             self.term()
 
-        logger.info("%s reloading...", self.wanted_name)
+        logger.info("Reloading %s...", self.wanted_name)
 
         self.state.start_plugin()
         self.initialized = True

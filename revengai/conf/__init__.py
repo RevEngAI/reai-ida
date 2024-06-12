@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-from os import makedirs
 from json import loads, dumps
-from os.path import join, exists, dirname
+from os import access, makedirs, R_OK
+from os.path import dirname, join, isfile
 
-from requests import HTTPError
-from idaapi import get_user_idadir, retrieve_input_file_sha256, msg
+from requests import RequestException
+from idaapi import get_user_idadir, retrieve_input_file_sha256, get_input_file_path, msg
 
 from reait.api import re_conf, RE_health, RE_settings
 
@@ -37,7 +37,8 @@ class RevEngConfiguration(object):
 
         configure_loggers(join(self._dir, self._logdir))
 
-        self.restore()
+        if get_input_file_path():
+            self.restore()
 
     def get(self, name: str, default_val: any = None) -> any:
         return self.config.get(name, default_val)
@@ -60,8 +61,10 @@ class RevEngConfiguration(object):
             fd.write(dumps(self.config))
 
     def restore(self) -> None:
-        if exists(join(self._dir, self._filename)):
-            with open(join(self._dir, self._filename)) as fd:
+        fpath = join(self._dir, self._filename)
+
+        if isfile(fpath) and access(fpath, R_OK):
+            with open(fpath) as fd:
                 self._config = loads(fd.read())
 
             if self.is_valid():
@@ -71,6 +74,11 @@ class RevEngConfiguration(object):
                 def bg_task() -> None:
                     try:
                         if RE_health():
+                            response = RE_models().json()
+
+                            if response["success"]:
+                                RevEngConfiguration.MODELS = [model["model_name"] for model in response["models"]]
+
                             response = RE_settings().json()
 
                             if response["success"]:
@@ -79,17 +87,12 @@ class RevEngConfiguration(object):
 
                                 RevEngConfiguration.PORTAL = response.get("portal", RevEngConfiguration.PORTAL)
                                 RevEngConfiguration.LIMIT = response.get("max_file_size", RevEngConfiguration.LIMIT)
-                                RevEngConfiguration.MODELS = response.get("valid_models", RevEngConfiguration.MODELS)
-
-                            response = RE_models().json()
-
-                            if response["success"]:
-                                RevEngConfiguration.MODELS = [model["model_name"] for model in response["models"]]
-                    except HTTPError:
+                    except RequestException:
                         pass
 
                 inthread(bg_task)
         else:
+            inthread(RE_health)
             self.config["host"] = re_conf["host"]
             RevEngConfiguration.MODELS = [re_conf["model"],]
 
@@ -110,7 +113,7 @@ class RevEngConfiguration(object):
         if sha_256_hash:
             self.set("binary_id", self.database.get_last_analysis(sha_256_hash.hex()))
 
-            msg(f"Selecting current analysis ID {self.get('binary_id')}")
+            msg(f"[+] Selecting current analysis ID {self.get('binary_id')} for binary hash: {sha_256_hash.hex()}\n")
 
 
 class ProjectConfiguration(object):
