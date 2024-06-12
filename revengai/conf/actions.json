@@ -2,7 +2,8 @@
   {
     "id": "reai:wizard",
     "name": "Run Setup Wizard",
-    "callback": "setup_wizard"
+    "callback": "setup_wizard",
+    "shortcut": "Ctrl+Shift+W"
   },
   {
     "id": "reai:upload",
