@@ -4,7 +4,7 @@ import logging
 import idc
 from idautils import Functions
 from idaapi import ask_file, get_imagebase, get_inf_structure, retrieve_input_file_size, show_wait_box, hide_wait_box, \
-    open_url
+    open_url, retrieve_input_file_sha256
 
 from subprocess import run, SubprocessError
 from threading import Timer
@@ -13,8 +13,7 @@ from requests import get, HTTPError, Response, RequestException
 from os.path import basename, isfile
 from datetime import date, datetime, timedelta
 
-from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, re_binary_id, RE_analyze_functions, file_type, \
-    RE_functions_rename
+from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, RE_analyze_functions, file_type, RE_functions_rename
 
 from revengai import __version__
 from revengai.api import RE_explain, RE_functions_dump, RE_search, RE_recent_analysis
@@ -314,8 +313,6 @@ def analysis_history(state: RevEngState) -> None:
             try:
                 res: Response = RE_search(fpath)
 
-                sha_256_hash = re_binary_id(fpath)
-
                 results = list(filter(lambda binary: binary["sha_256_hash"] == sha_256_hash,
                                       res.json()["query_results"]))
 
@@ -332,7 +329,8 @@ def analysis_history(state: RevEngState) -> None:
                                      if creation.date() == today else
                                      creation.strftime("Yesterday at %H:%M:%S")
                                      if creation.date() == today - timedelta(days=1) else
-                                     creation.strftime("%Y-%m-%d, %H:%M:%S"),))
+                                     creation.strftime("%Y-%m-%d, %H:%M:%S"),
+                                     binary["model_name"],))
 
                     inmain(state.config.database.add_analysis,
                            binary["sha_256_hash"], binary["binary_id"], binary["status"], binary["creation"])
@@ -350,12 +348,12 @@ def analysis_history(state: RevEngState) -> None:
                 error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
                 Dialog.showError("Binary Analysis History", f"Failed to obtain binary analysis history: {error}")
 
+        sha_256_hash = retrieve_input_file_sha256().hex()
+
         inthread(bg_task)
 
 
 def load_recent_analyses(state: RevEngState) -> None:
-    fpath = idc.get_input_file_path()
-
     if state.config.is_valid():
         def bg_task() -> None:
             try:
@@ -366,9 +364,9 @@ def load_recent_analyses(state: RevEngState) -> None:
                     inmain(state.config.database.add_analysis, analysis["sha_256_hash"],
                            analysis["binary_id"], analysis["status"], analysis["creation"], analysis["model_name"])
 
-                params = [re_binary_id(fpath)]
+                params = [sha_256_hash]
 
-                binaries = list(filter(lambda binary: binary["sha_256_hash"] == params[0],
+                binaries = list(filter(lambda binary: binary["sha_256_hash"] == sha_256_hash,
                                        RE_search(fpath).json()["query_results"]))
 
                 if len(binaries) == 0:
@@ -380,7 +378,7 @@ def load_recent_analyses(state: RevEngState) -> None:
                            f"DELETE FROM analysis WHERE sha_256_hash = ? AND binary_id NOT IN "
                            f"({('?, ' * len(binaries))[:-2]})", tuple(params))
 
-                    state.config.set("binary_id", inmain(state.config.database.get_last_analysis, params[0]))
+                    state.config.set("binary_id", inmain(state.config.database.get_last_analysis, sha_256_hash))
 
                     if state.project_cfg.get("auto_sync"):
                         done, _ = is_analysis_complete(state, fpath)
@@ -388,6 +386,9 @@ def load_recent_analyses(state: RevEngState) -> None:
                             inmain(sync_functions_name, state, fpath)
             except RequestException as e:
                 logger.error("Error getting recent analyses: %s", e)
+
+        fpath = idc.get_input_file_path()
+        sha_256_hash = retrieve_input_file_sha256().hex()
 
         inthread(bg_task)
 

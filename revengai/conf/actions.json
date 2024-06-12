@@ -30,13 +30,13 @@
   },
   {
     "id": "reai:signature",
-    "disabled": true,
+    "enabled": false,
     "name": "Update Function Signature",
     "callback": "function_signature"
   },
   {
     "id": "reai:explain",
-    "disabled": true,
+    "enabled": false,
     "name": "Explain this Function",
     "callback": "explain_function"
   },
@@ -48,7 +48,7 @@
   },
   {
     "id": "reai:history",
-    "name": "Binary Analysis History",
+    "name": "Binary Analyses History",
     "callback": "analysis_history",
     "shortcut": "Ctrl+Shift+H"
   },

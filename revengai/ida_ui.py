@@ -74,7 +74,7 @@ class Hooks(UI_Hooks):
             # Add actions
             with open(join(dirname(__file__), "conf", "actions.json")) as fd:
                 for action in load(fd):
-                    if not action.get("disabled", False):
+                    if action.get("enabled", True):
                         if self.state.config.is_valid():
                             if action["id"] == "reai:wizard" or \
                                     (action["id"] in ("reai:rename", "reai:breakdown",) and
@@ -127,8 +127,7 @@ class RevEngConfigForm_t(PluginForm):
 
         with open(join(dirname(__file__), "conf", "actions.json")) as fd:
             for action in load(fd):
-                if not action.get("disabled", False) and \
-                        (self.state.config.is_valid() or action["id"] == "reai:wizard"):
+                if action.get("enabled", True) and (self.state.config.is_valid() or action["id"] == "reai:wizard"):
                     # Register menu actions
                     handler = Handler(action["callback"], self.state)
                     handler.register(action["id"], action["name"],

@@ -3,8 +3,8 @@ import abc
 import logging
 
 from idc import get_input_file_path
-from idaapi import CH_CAN_DEL, CH_CAN_EDIT, CH_CAN_REFRESH, CH_MODAL, CH_NO_STATUS_BAR, CHCOL_DEC, CHCOL_PLAIN, \
-    Choose, Form, MFF_FAST, execute_sync, open_url
+from idaapi import CH_CAN_DEL, CH_CAN_EDIT, CH_CAN_REFRESH, CH_MODAL, \
+    CH_NO_STATUS_BAR, CHCOL_DEC, CHCOL_PLAIN, CH_NO_FILTER, Choose, Form, MFF_FAST, execute_sync, open_url
 
 from PyQt5.QtWidgets import QMessageBox
 
@@ -53,13 +53,14 @@ class BaseForm(Form):
 class StatusForm(BaseForm):
     class StatusFormChooser(Choose):
         def __init__(self, title: str, state: RevEngState, items: list,
-                     flags: int = CH_CAN_DEL | CH_CAN_EDIT | CH_CAN_REFRESH | CH_MODAL | CH_NO_STATUS_BAR):
+                     flags: int = CH_CAN_DEL | CH_CAN_EDIT | CH_CAN_REFRESH | CH_MODAL | CH_NO_STATUS_BAR | CH_NO_FILTER):
             Choose.__init__(self, title=title, flags=flags, embedded=True, icon=state.icon_id,
                             popup_names=["", "Delete Analysis", "View Analysis Report", "Select as Current Analysis"],
                             cols=[["Binary Name", 30 | CHCOL_PLAIN],
-                                  ["Analysis ID", 6 | CHCOL_DEC],
-                                  ["Status", 8 | CHCOL_PLAIN],
-                                  ["Submitted Date", 14 | CHCOL_PLAIN],])
+                                  ["Analysis ID", 5 | CHCOL_DEC],
+                                  ["Status", 6 | CHCOL_PLAIN],
+                                  ["Submitted Date", 13 | CHCOL_PLAIN],
+                                  ["Model Name", 12 | CHCOL_PLAIN],])
 
             self.state = state
             self.items = items
@@ -80,6 +81,17 @@ class StatusForm(BaseForm):
         def OnGetSize(self) -> int:
             return len(self.items)
 
+        def OnGetIcon(self, sel):
+            pos = sel if isinstance(sel, int) else sel[0]
+
+            if int(self.OnGetLine(pos)[1]) == self.state.config.get("binary_id"):
+                return self.icon
+            if self.OnGetLine(pos)[2] == "Error":
+                return 62
+            elif self.OnGetLine(pos)[2] == "Complete":
+                return 61
+            return 60
+
         def OnEditLine(self, sel) -> None:
             pos = sel if isinstance(sel, int) else sel[0]
 
@@ -97,10 +109,10 @@ class StatusForm(BaseForm):
         def OnRefresh(self, sel) -> None:
             pos = sel if isinstance(sel, int) else sel[0]
 
-            if 0 <= pos < self.OnGetSize():
+            if 0 <= pos < self.OnGetSize() and self.OnGetLine(pos)[2] != "Error":
                 logger.info("Selecting analysis ID %s as current", self.OnGetLine(pos)[1])
 
-                self.state.config.set("binary_id", self.OnGetLine(pos)[1])
+                self.state.config.set("binary_id", int(self.OnGetLine(pos)[1]))
 
         def OnDeleteLine(self, sel) -> tuple:
             if isinstance(sel, int):
@@ -125,13 +137,14 @@ class StatusForm(BaseForm):
 
         Form.__init__(self,
                       r"""BUTTON CANCEL NONE
-RevEng.AI Toolkit: Binary Analysis History
-      
+RevEng.AI Toolkit: Binary Analyses History
+
 {FormChangeCb}
+View and manage analyses of the current binary:
 <:{cEChooser}>
 """, {
                           "FormChangeCb": Form.FormChangeCb(self.OnFormChange),
-                          "cEChooser": Form.EmbeddedChooserControl(self.EChooser)
+                          "cEChooser": Form.EmbeddedChooserControl(self.EChooser),
                       })
 
 
