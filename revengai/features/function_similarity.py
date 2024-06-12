@@ -236,9 +236,9 @@ class FunctionSimilarityDialog(BaseDialog):
         item = self.ui.collectionsTable.model().get_data(index.row())
 
         if item[1].checkState == Qt.Checked:
-            self.ui.layoutFilter.add_card(item[0])
+            self.ui.layoutFilter.add_card(item[0].text if isinstance(item[0], SimpleItem) else item[0])
         else:
-            self.ui.layoutFilter.remove_card(item[0])
+            self.ui.layoutFilter.remove_card(item[0].text if isinstance(item[0], SimpleItem) else item[0])
 
     def _callback(self, text: str) -> None:
         for row_item in self.ui.collectionsTable.model().get_datas():

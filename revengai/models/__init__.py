@@ -7,7 +7,7 @@ from PyQt5.QtGui import QIcon
 
 
 class SimpleItem(object):
-    def __init__(self, text: str = None, data: Any = None):
+    def __init__(self, text: Optional[str], data: Any = None):
         self.text: str = text
         self.data: Any = data
 
@@ -35,6 +35,6 @@ class IconItem(SimpleItem):
 
 class CheckableItem(SimpleItem):
     def __init__(self, data: Any = None, checked: bool = True):
-        super().__init__(data=data)
+        super().__init__(text=None, data=data)
 
         self.checkState: int = Qt.Checked if checked else Qt.Unchecked
