@@ -48,7 +48,7 @@
   },
   {
     "id": "reai:history",
-    "name": "Binary Analysis History",
+    "name": "Binary Analyses History",
     "callback": "analysis_history",
     "shortcut": "Ctrl+Shift+H"
   },

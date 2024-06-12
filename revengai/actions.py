@@ -329,7 +329,8 @@ def analysis_history(state: RevEngState) -> None:
                                      if creation.date() == today else
                                      creation.strftime("Yesterday at %H:%M:%S")
                                      if creation.date() == today - timedelta(days=1) else
-                                     creation.strftime("%Y-%m-%d, %H:%M:%S"),))
+                                     creation.strftime("%Y-%m-%d, %H:%M:%S"),
+                                     binary["model_name"],))
 
                     inmain(state.config.database.add_analysis,
                            binary["sha_256_hash"], binary["binary_id"], binary["status"], binary["creation"])
