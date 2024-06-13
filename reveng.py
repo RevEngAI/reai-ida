@@ -33,7 +33,7 @@ logger = logging.getLogger("REAI")
 
 class RevEngPlugin(plugin_t):
     # Variables required by IDA
-    flags = 0 if IDA_SDK_VERSION > 820 else PLUGIN_HIDE
+    flags = 0 if IDA_SDK_VERSION > 810 else PLUGIN_HIDE
     wanted_hotkey = ""
     wanted_name = "RevEng.AI Toolkit"
     help = f"Configure IDA plugin for {wanted_name}"

@@ -617,3 +617,14 @@ def periodic_check(fpath: str, binary_id: int) -> None:
             logger.error("Error getting binary analysis status. Reason: %s", ex)
 
     Timer(60, _worker, args=(binary_id,)).start()
+
+
+def toolbar(state: RevEngState) -> None:
+    """
+    Workaround to show RevEng.AI logo in toolbar to create menu bar when clicked
+    """
+    from revengai.ida_ui import RevEngConfigForm_t
+
+    form = RevEngConfigForm_t(state)
+    form.register_actions(False)
+    del form
