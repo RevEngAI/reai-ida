@@ -60,8 +60,7 @@ class RevEngPlugin(plugin_t):
         logger.info("%s plugin starts", self.wanted_name)
 
         if self.state.config.auto_start:
-            if self.flags:
-                self.run()
+            self.run()
             return PLUGIN_KEEP
         return PLUGIN_OK
 
