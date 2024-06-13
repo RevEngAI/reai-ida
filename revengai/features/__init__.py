@@ -92,6 +92,12 @@ class BaseDialog(QDialog):
 
         function_breakdown(self.state, func_id)
 
+    def _generate_summaries(self, func_id: int) -> None:
+        # Prevent circular import
+        from revengai.actions import generate_summaries
+
+        generate_summaries(self.state, func_id)
+
     def _get_function_id(self, func_addr: int) -> int:
         return self.analyzed_functions.get(func_addr, 0)
 

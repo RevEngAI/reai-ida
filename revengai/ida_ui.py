@@ -4,8 +4,8 @@ from os.path import dirname, isfile, join
 
 from idc import get_input_file_path, here
 from idaapi import set_dock_pos, PluginForm, unregister_action, attach_action_to_menu, register_action, UI_Hooks, \
-    action_desc_t, action_handler_t, create_menu, attach_action_to_popup, add_hotkey, del_hotkey, get_widget_type, \
-    AST_ENABLE_ALWAYS, BWN_DISASM, BWN_PSEUDOCODE, DP_TAB, SETMENU_APP, SETMENU_INS, SETMENU_ENSURE_SEP
+    action_desc_t, action_handler_t, create_menu, delete_menu, attach_action_to_popup, add_hotkey, del_hotkey, \
+    get_widget_type, AST_ENABLE_ALWAYS, BWN_DISASM, BWN_PSEUDOCODE, DP_TAB, SETMENU_APP, SETMENU_INS, SETMENU_ENSURE_SEP
 
 from revengai import actions
 from revengai.actions import load_recent_analyses
@@ -73,12 +73,13 @@ class Hooks(UI_Hooks):
 
             # Add actions
             with open(join(dirname(__file__), "conf", "actions.json")) as fd:
+                func_ea = here()
                 for action in load(fd):
                     if action.get("enabled", True):
                         if self.state.config.is_valid():
                             if action["id"] == "reai:wizard" or \
-                                    (action["id"] in ("reai:rename", "reai:breakdown",) and
-                                     not IDAUtils.is_function(here())) or \
+                                    (action["id"] in ("reai:rename", "reai:breakdown", "reai:summary",) and
+                                     not IDAUtils.is_function(func_ea)) or \
                                     (get_widget_type(form) != BWN_PSEUDOCODE and
                                      action["id"] in ("reai:explain", "reai:signature",)):
                                 continue
@@ -97,6 +98,7 @@ class RevEngConfigForm_t(PluginForm):
         self.parent = None
 
         self._hotkeys = []
+        self._menus_names = []
 
         self._hooks = Hooks(self.state)
 
@@ -125,6 +127,9 @@ class RevEngConfigForm_t(PluginForm):
         # Add ui hook
         self._hooks.hook()
 
+        # Add menu bar item
+        create_menu("reai:menu", MENU[:-1], "View")
+
         with open(join(dirname(__file__), "conf", "actions.json")) as fd:
             for action in load(fd):
                 if action.get("enabled", True) and (self.state.config.is_valid() or action["id"] == "reai:wizard"):
@@ -134,7 +139,8 @@ class RevEngConfigForm_t(PluginForm):
                                      shortcut=action.get("shortcut"),
                                      tooltip=action.get("tooltip"),
                                      icon=action.get("icon", -1))
-                    handler.attach_to_menu(MENU)
+                    if handler.attach_to_menu(MENU):
+                        self._menus_names.append(handler.name)
 
                     # Register hotkey actions
                     if hasattr(action, "shortcut") and handler.callback:
@@ -143,15 +149,17 @@ class RevEngConfigForm_t(PluginForm):
             # context menu for About
             handler = Handler("about", self.state)
             handler.register("reai:about", "About", icon=self.state.icon_id)
-            handler.attach_to_menu(MENU, SETMENU_ENSURE_SEP)
+            if handler.attach_to_menu(MENU, SETMENU_ENSURE_SEP):
+                self._menus_names.append(handler.name)
 
             # context menu for Check for Update
             handler = Handler("update", self.state)
             handler.register("reai:update", "Check for Update")
-            handler.attach_to_menu(MENU)
+            if handler.attach_to_menu(MENU):
+                self._menus_names.append(handler.name)
 
     def unregister_actions(self):
-        # Remove ui hook
+        # Remove UI hook
         self._hooks.unhook()
 
         # Unregister hotkey actions
@@ -159,12 +167,11 @@ class RevEngConfigForm_t(PluginForm):
             del_hotkey(hotkey)
 
         # Unregister menu actions
-        unregister_action("reai:about")
-        unregister_action("reai:update")
+        for menu_name in self._menus_names:
+            unregister_action(menu_name)
 
-        with open(join(dirname(__file__), "conf", "actions.json")) as fd:
-            for action in load(fd):
-                unregister_action(action["id"])
+        # Remove menu bar item
+        delete_menu(MENU[:-1])
 
 
 class RevEngGUI(object):
@@ -172,7 +179,6 @@ class RevEngGUI(object):
         self.state = state
         self.config_form = RevEngConfigForm_t(self.state)
 
-        create_menu("reai:menu", MENU[:-1], "View")
         set_dock_pos(MENU[:-1], "IDA View-A", DP_TAB)
 
     def show_windows(self):

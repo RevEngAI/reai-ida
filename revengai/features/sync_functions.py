@@ -89,6 +89,9 @@ class SyncFunctionsDialog(BaseDialog):
             breakdownAction = menu.addAction("View Function Breakdown")
             breakdownAction.triggered.connect(lambda: self._function_breakdown(func_id))
 
+            # summariesAction = menu.addAction("Generate AI Summaries")
+            # summariesAction.triggered.connect(lambda: self._generate_summaries(func_id))
+
             menu.exec_(QCursor.pos())
 
     def _rename_symbol(self, function) -> None:

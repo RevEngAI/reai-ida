@@ -57,5 +57,11 @@
     "name": "View Function Breakdown",
     "callback": "function_breakdown",
     "shortcut": "Ctrl+Shift+B"
+  },
+  {
+    "id": "reai:summary",
+    "enabled": false,
+    "name": "Generate AI Summaries",
+    "callback": "generate_summaries"
   }
 ]
