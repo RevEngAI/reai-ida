@@ -139,10 +139,12 @@ class RevEngConfigForm_t(PluginForm):
             create_menu("reai:menubar", MENU[:-1], "View")
         else:
             # Add toolbar item
-            create_toolbar("reai:toolbar", MENU[:-1])
-            handler = Handler("toolbar", self.state)
-            handler.register("reai:toolbar", MENU[:-1], icon=self.state.icon_id)
-            handler.attach_to_toolbar("reai:toolbar")
+            if create_toolbar("reai:toolbar", MENU[:-1]):
+                handler = Handler("toolbar", self.state)
+                handler.register("reai:toolbar", MENU[:-1], icon=self.state.icon_id)
+                handler.attach_to_toolbar("reai:toolbar")
+            else:
+                self.register_actions(False)
 
         with open(join(dirname(__file__), "conf", "actions.json")) as fd:
             for action in load(fd):
