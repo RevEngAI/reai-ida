@@ -4,8 +4,9 @@ from os.path import dirname, isfile, join
 
 from idc import get_input_file_path, here
 from idaapi import set_dock_pos, PluginForm, unregister_action, attach_action_to_menu, register_action, UI_Hooks, \
-    action_desc_t, action_handler_t, create_menu, delete_menu, attach_action_to_popup, add_hotkey, del_hotkey, \
-    get_widget_type, AST_ENABLE_ALWAYS, BWN_DISASM, BWN_PSEUDOCODE, DP_TAB, SETMENU_APP, SETMENU_INS, SETMENU_ENSURE_SEP
+    action_desc_t, action_handler_t, create_menu, delete_menu, create_toolbar, delete_toolbar, \
+    attach_action_to_popup, attach_action_to_toolbar, add_hotkey, del_hotkey, get_widget_type, \
+    AST_ENABLE_ALWAYS, BWN_DISASM, BWN_PSEUDOCODE, DP_TAB, SETMENU_APP, SETMENU_INS, SETMENU_ENSURE_SEP, IDA_SDK_VERSION
 
 from revengai import actions
 from revengai.actions import load_recent_analyses
@@ -29,15 +30,15 @@ class Handler(action_handler_t):
             if func[0] == callback:
                 self.callback = func[1]
 
-    def activate(self, ctx):
+    def activate(self, _):
         if self.callback:
             self.callback(self.state)
-        return 1
+        return True
 
-    def update(self, ctx):
+    def update(self, _):
         return AST_ENABLE_ALWAYS
 
-    def register(self, name, label, shortcut=None, tooltip=None, icon=-1) -> bool:
+    def register(self, name: str, label: str, shortcut: str = None, tooltip: str = None, icon: int = -1) -> bool:
         self.name = name
 
         action = action_desc_t(
@@ -51,8 +52,11 @@ class Handler(action_handler_t):
 
         return register_action(action)
 
-    def attach_to_menu(self, menu, flags: int = SETMENU_INS) -> bool:
+    def attach_to_menu(self, menu: str, flags: int = SETMENU_INS) -> bool:
         return attach_action_to_menu(menu, self.name, flags)
+
+    def attach_to_toolbar(self, toolbar: str) -> bool:
+        return attach_action_to_toolbar(toolbar, self.name)
 
 
 class Hooks(UI_Hooks):
@@ -123,12 +127,22 @@ class RevEngConfigForm_t(PluginForm):
 
         self.register_actions()
 
-    def register_actions(self):
-        # Add ui hook
+    def register_actions(self, init: bool = True):
+        # Add UI hook
         self._hooks.hook()
 
-        # Add menu bar item
-        create_menu("reai:menu", MENU[:-1], "View")
+        if IDA_SDK_VERSION < 820:
+            # Add menubar item
+            create_menu("reai:menubar", MENU[:-1], "View")
+        elif not init:
+            delete_toolbar("reai:toolbar")
+            create_menu("reai:menubar", MENU[:-1], "View")
+        else:
+            # Add toolbar item
+            create_toolbar("reai:toolbar", MENU[:-1])
+            handler = Handler("toolbar", self.state)
+            handler.register("reai:toolbar", MENU[:-1], icon=self.state.icon_id)
+            handler.attach_to_toolbar("reai:toolbar")
 
         with open(join(dirname(__file__), "conf", "actions.json")) as fd:
             for action in load(fd):
@@ -170,8 +184,9 @@ class RevEngConfigForm_t(PluginForm):
         for menu_name in self._menus_names:
             unregister_action(menu_name)
 
-        # Remove menu bar item
-        delete_menu(MENU[:-1])
+        # Remove menubar and toolbar item
+        delete_menu("reai:menubar")
+        delete_toolbar("reai:toolbar")
 
 
 class RevEngGUI(object):
