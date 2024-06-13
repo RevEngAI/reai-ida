@@ -3,7 +3,8 @@ import logging
 
 from idc import get_inf_attr, INF_FILETYPE, FT_ELF, FT_PE, FT_MACHO, FT_EXE, FT_BIN, \
     INF_APPTYPE, APPT_LIBRARY, APPT_PROGRAM
-from idaapi import execute_ui_requests, plugin_t, PLUGIN_SKIP, PLUGIN_OK, PLUGIN_KEEP, IDA_SDK_VERSION
+from idaapi import execute_ui_requests, plugin_t, IDA_SDK_VERSION, \
+    PLUGIN_SKIP, PLUGIN_OK, PLUGIN_KEEP, PLUGIN_HIDE
 
 from revengai.gui import Requests
 
@@ -32,7 +33,7 @@ logger = logging.getLogger("REAI")
 
 class RevEngPlugin(plugin_t):
     # Variables required by IDA
-    flags = 0  # Normal plugin
+    flags = 0 if IDA_SDK_VERSION > 820 else PLUGIN_HIDE
     wanted_hotkey = ""
     wanted_name = "RevEng.AI Toolkit"
     help = f"Configure IDA plugin for {wanted_name}"
@@ -59,7 +60,8 @@ class RevEngPlugin(plugin_t):
         logger.info("%s plugin starts", self.wanted_name)
 
         if self.state.config.auto_start:
-            self.run()
+            if self.flags:
+                self.run()
             return PLUGIN_KEEP
         return PLUGIN_OK
 
