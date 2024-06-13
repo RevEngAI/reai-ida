@@ -8,7 +8,8 @@ IDA Pro Plugin for [RevEng.AI](https://reveng.ai/).
 - Downloading logs for analysis from RevEng.AI platform
 - Removing analysis from RevEng.AI platform
 - Renaming of function names given with similar binaries
-- Synchronise all functions with differing names between the local analysis and the RevEng.AI platform.
+- Generates AI summaries for the analysed function
+- Synchronise all functions with differing names between the local analysis and the RevEng.AI platform
 - Configuration and persistence of plugin configuration (API key, host, model selection and analysis)
 
 # Install
@@ -27,6 +28,10 @@ Ensure the latest version of the [reait](https://github.com/RevEngAI/reait) pack
 Open IDA and if the plugin has loaded successfully it should be visible under `RevEng.AI Toolkit` menu.
 
 ![menu](assets/img/1.png)
+
+If `RevEng.AI Toolkit` menu does not appear in the menubar, select `Edit > Plugins` then `RevEng.AI Toolkit`.
+
+![](assets/img/13.png)
 
 Before using the plugin, it needs to be configured. Select `Run Setup Wizard` from the menu shown in the previous image.
 
@@ -74,7 +79,7 @@ Right-clicking on any function name in an IDA View and selecting `Rename From Si
 
 ![rename_function_menu](assets/img/5.png)
 
-Currently all available functions from all binaries are displayed in order of similarity confidence. The user is able to filter on both binary and confidence levels
+Currently, all available functions from all binaries are displayed in order of similarity confidence. The user is able to filter on both binary and confidence levels
 
 ![rename_function_dialog](assets/img/6.png)
 
@@ -96,6 +101,17 @@ Move the slider to determine the confidence level you want to use for batch rena
 Once the analysis is complete, the results panel is enabled. This provides information on what symbols can be renamed, and to what, along with a message explaining why the change occurred.
 
 ![auto_analyze_results](assets/img/9.png)
+
+## Generate Block Summaries
+
+Right-clicking on any function name in an IDA View and selecting `Generate AI Summaries` will bring up the following window which allows you to generate block summaries.
+
+![generate_summaries](assets/img/14.png)
+
+Once clicked a dialog box appears 
+Once clicked, a dialog box appears inviting to confirm the generation of block summaries.
+
+![confirm_summaries](assets/img/15.png)
 
 ## Function Explanation
 
