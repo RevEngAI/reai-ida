@@ -75,8 +75,8 @@ class StatusForm(BaseForm):
         def SetItems(self, items: list) -> None:
             self.items = [] if items is None else items
 
-        def OnGetLine(self, n) -> any:
-            return self.items[n]
+        def OnGetLine(self, sel) -> any:
+            return self.items[sel]
 
         def OnGetSize(self) -> int:
             return len(self.items)
@@ -110,26 +110,29 @@ class StatusForm(BaseForm):
             pos = sel if isinstance(sel, int) else sel[0]
 
             if 0 <= pos < self.OnGetSize() and self.OnGetLine(pos)[2] != "Error":
-                logger.info("Selecting analysis ID %s as current", self.OnGetLine(pos)[1])
+                binary_id = int(self.OnGetLine(pos)[1])
 
-                self.state.config.set("binary_id", int(self.OnGetLine(pos)[1]))
+                logger.info("Selecting analysis ID %d as current", binary_id)
+
+                self.state.config.set("binary_id", binary_id)
 
         def OnDeleteLine(self, sel) -> tuple:
             if isinstance(sel, int):
                 sel = [sel]
 
             for idx in sel:
-                logger.info("Delete analysis ID %s", self.OnGetLine(idx)[1])
+                binary_id = int(self.OnGetLine(idx)[1])
+                logger.info("Delete analysis ID %d", binary_id)
 
-                inthread(RE_delete, self.fpath, self.OnGetLine(idx)[1])
+                inthread(RE_delete, self.fpath, binary_id)
 
-                self.state.config.database.delete_analysis(self.OnGetLine(idx)[1])
+                self.state.config.database.delete_analysis(binary_id)
 
-                if self.state.config.get("binary_id", 0) == self.OnGetLine(idx)[1]:
+                if self.state.config.get("binary_id", 0) == binary_id:
                     self.state.config.init_current_analysis()
 
             self.items = [*filterfalse(lambda i: i in (self.OnGetLine(j) for j in sel), self.items)]
-            return Choose.ALL_CHANGED, sel[0]
+            return Choose.ALL_CHANGED, sel
 
     def __init__(self, state: RevEngState, items: list):
         self.invert = False
