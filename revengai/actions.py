@@ -471,7 +471,7 @@ def function_breakdown(state: RevEngState, function_id: int = 0) -> None:
                 logger.info("Redirection to the WEB browser to display the function breakdown ID %d | %s",
                             func_id, func_name)
 
-                open_url(f"{state.config.PORTAL}/function/{func_id}")
+                inmain(open_url, f"{state.config.PORTAL}/function/{func_id}")
 
         inthread(bg_task, idc.get_func_attr(idc.here(), idc.FUNCATTR_START), function_id)
 
