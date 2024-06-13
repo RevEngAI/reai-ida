@@ -1,6 +1,12 @@
 # -*- coding: utf-8 -*-
 import logging
 
+from idc import get_inf_attr, INF_FILETYPE, FT_ELF, FT_PE, FT_MACHO, FT_EXE, FT_BIN, \
+    INF_APPTYPE, APPT_LIBRARY, APPT_PROGRAM
+from idaapi import execute_ui_requests, plugin_t, PLUGIN_SKIP, PLUGIN_OK, PLUGIN_KEEP, IDA_SDK_VERSION
+
+from revengai.gui import Requests
+
 # Third-Party Python Modules
 required_modules_loaded = True
 try:
@@ -19,11 +25,6 @@ except ImportError:
     from idc import msg
 
     msg("[!] RevEng.AI Toolkit requires Python module reait.\n")
-
-
-from idaapi import execute_ui_requests, plugin_t, PLUGIN_SKIP, PLUGIN_OK, PLUGIN_KEEP, IDA_SDK_VERSION
-
-from revengai.gui import Requests
 
 
 logger = logging.getLogger("REAI")
@@ -49,6 +50,10 @@ class RevEngPlugin(plugin_t):
         """
         if IDA_SDK_VERSION < 800:
             logger.warning("%s support 8.X IDA => skipping...", self.wanted_name)
+            return PLUGIN_SKIP
+        elif get_inf_attr(INF_APPTYPE) not in (APPT_LIBRARY, APPT_PROGRAM) and \
+                get_inf_attr(INF_FILETYPE) not in (FT_BIN, FT_PE, FT_ELF, FT_EXE, FT_MACHO,):
+            logger.warning("%s supports PE, ELF, RAW, EXE, DLL and Mach-O file types => skipping...", self.wanted_name)
             return PLUGIN_SKIP
 
         logger.info("%s plugin starts", self.wanted_name)
