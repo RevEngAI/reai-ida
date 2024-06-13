@@ -73,12 +73,13 @@ class Hooks(UI_Hooks):
 
             # Add actions
             with open(join(dirname(__file__), "conf", "actions.json")) as fd:
+                func_ea = here()
                 for action in load(fd):
                     if action.get("enabled", True):
                         if self.state.config.is_valid():
                             if action["id"] == "reai:wizard" or \
-                                    (action["id"] in ("reai:rename", "reai:breakdown",) and
-                                     not IDAUtils.is_function(here())) or \
+                                    (action["id"] in ("reai:rename", "reai:breakdown", "reai:summary",) and
+                                     not IDAUtils.is_function(func_ea)) or \
                                     (get_widget_type(form) != BWN_PSEUDOCODE and
                                      action["id"] in ("reai:explain", "reai:signature",)):
                                 continue

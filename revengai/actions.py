@@ -4,7 +4,7 @@ import logging
 import idc
 from idautils import Functions
 from idaapi import ask_file, get_imagebase, get_inf_structure, retrieve_input_file_size, show_wait_box, hide_wait_box, \
-    open_url, retrieve_input_file_sha256
+    open_url, retrieve_input_file_sha256, ask_buttons, ASKBTN_YES
 
 from subprocess import run, SubprocessError
 from threading import Timer
@@ -472,6 +472,50 @@ def function_breakdown(state: RevEngState, function_id: int = 0) -> None:
                             func_id, func_name)
 
                 inmain(open_url, f"{state.config.PORTAL}/function/{func_id}")
+
+        inthread(bg_task, idc.get_func_attr(idc.here(), idc.FUNCATTR_START), function_id)
+
+
+def generate_summaries(state: RevEngState, function_id: int = 0) -> None:
+    fpath = idc.get_input_file_path()
+
+    if is_condition_met(state, fpath) and \
+            ASKBTN_YES == ask_buttons("Generate", "Cancel", "", ASKBTN_YES,
+                                      "HIDECANCEL\nWould you like to generate summaries?\n\n"
+                                      "The cost of this operation is estimated to be 0.045 credits,\n"
+                                      "and will generate summaries for each node in the flow.\n"
+                                      "This action is irreversible and cannot be undone."):
+        def bg_task(func_ea: int, func_id: int = 0) -> None:
+            func_name = inmain(IDAUtils.get_demangled_func_name, func_ea)
+
+            if not func_id:
+                done, status = is_analysis_complete(state, fpath)
+                if not done:
+                    Dialog.showInfo("Generate Summaries",
+                                    f"Unable to fulfil your request at this time.\nBinary analysis status: {status}")
+                    return
+
+                func_ea -= inmain(get_imagebase)
+
+                try:
+                    res: Response = RE_analyze_functions(fpath, state.config.get("binary_id", 0))
+
+                    func_id = next((function["function_id"] for function in res.json()["functions"]
+                                    if function["function_vaddr"] == func_ea), 0)
+                except HTTPError as e:
+                    logger.error("Error getting function list: %s",
+                                 e.response.json().get("error",
+                                                       "An unexpected error occurred. Sorry for the inconvenience."))
+                except RequestException as e:
+                    logger.error("An unexpected error has occurred. %s", e)
+
+            if func_id:
+                logger.info("Generates block summaries for function ID %d | %s", func_id, func_name)
+
+                #inmain(show_wait_box, f"Generating block summaries for {func_name}…")
+                #TODO Need to implement the API
+
+
 
         inthread(bg_task, idc.get_func_attr(idc.here(), idc.FUNCATTR_START), function_id)
 
