@@ -8,6 +8,7 @@ IDA Pro Plugin for [RevEng.AI](https://reveng.ai/).
 - Downloading logs for analysis from RevEng.AI platform
 - Removing analysis from RevEng.AI platform
 - Renaming of function names given with similar binaries
+- Generate AI 
 - Synchronise all functions with differing names between the local analysis and the RevEng.AI platform.
 - Configuration and persistence of plugin configuration (API key, host, model selection and analysis)
 
@@ -27,6 +28,10 @@ Ensure the latest version of the [reait](https://github.com/RevEngAI/reait) pack
 Open IDA and if the plugin has loaded successfully it should be visible under `RevEng.AI Toolkit` menu.
 
 ![menu](assets/img/1.png)
+
+If `RevEng.AI Toolkit` menu does not appear in the menubar, select `Edit > Plugins` then `RevEng.AI Toolkit`.
+
+![](assets/img/13.png)
 
 Before using the plugin, it needs to be configured. Select `Run Setup Wizard` from the menu shown in the previous image.
 
