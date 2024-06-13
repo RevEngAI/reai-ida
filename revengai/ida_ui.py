@@ -4,8 +4,9 @@ from os.path import dirname, isfile, join
 
 from idc import get_input_file_path, here
 from idaapi import set_dock_pos, PluginForm, unregister_action, attach_action_to_menu, register_action, UI_Hooks, \
-    action_desc_t, action_handler_t, create_menu, delete_menu, attach_action_to_popup, add_hotkey, del_hotkey, \
-    get_widget_type, AST_ENABLE_ALWAYS, BWN_DISASM, BWN_PSEUDOCODE, DP_TAB, SETMENU_APP, SETMENU_INS, SETMENU_ENSURE_SEP
+    action_desc_t, action_handler_t, create_menu, delete_menu, attach_action_to_popup, attach_action_to_toolbar, \
+    add_hotkey, del_hotkey, get_widget_type, AST_ENABLE_ALWAYS, BWN_DISASM, BWN_PSEUDOCODE, DP_TAB, \
+    SETMENU_APP, SETMENU_INS, SETMENU_ENSURE_SEP
 
 from revengai import actions
 from revengai.actions import load_recent_analyses
@@ -29,15 +30,15 @@ class Handler(action_handler_t):
             if func[0] == callback:
                 self.callback = func[1]
 
-    def activate(self, ctx):
+    def activate(self, _):
         if self.callback:
             self.callback(self.state)
-        return 1
+        return True
 
-    def update(self, ctx):
+    def update(self, _):
         return AST_ENABLE_ALWAYS
 
-    def register(self, name, label, shortcut=None, tooltip=None, icon=-1) -> bool:
+    def register(self, name: str, label: str, shortcut: str = None, tooltip: str = None, icon: int = -1) -> bool:
         self.name = name
 
         action = action_desc_t(
@@ -51,8 +52,11 @@ class Handler(action_handler_t):
 
         return register_action(action)
 
-    def attach_to_menu(self, menu, flags: int = SETMENU_INS) -> bool:
+    def attach_to_menu(self, menu: str, flags: int = SETMENU_INS) -> bool:
         return attach_action_to_menu(menu, self.name, flags)
+
+    def attach_to_toolbar(self, toolbar: str) -> bool:
+        return attach_action_to_toolbar(toolbar, self.name)
 
 
 class Hooks(UI_Hooks):
