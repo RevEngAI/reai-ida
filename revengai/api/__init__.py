@@ -60,3 +60,10 @@ def RE_functions_dump(function_ids: list[int]) -> Response:
 
     res.raise_for_status()
     return res
+
+
+def RE_generate_summaries(function_id: int) -> Response:
+    res: Response = reveng_req(get, f"v1/functions/blocks_comments/{function_id}")
+
+    res.raise_for_status()
+    return res
