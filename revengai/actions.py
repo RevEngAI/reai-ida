@@ -3,8 +3,8 @@ import logging
 
 import idc
 from idautils import Functions
-from idaapi import ask_file, get_imagebase, get_inf_structure, retrieve_input_file_size, show_wait_box, hide_wait_box, \
-    open_url, retrieve_input_file_sha256, ask_buttons, ASKBTN_YES
+from idaapi import ask_file, ask_buttons, get_imagebase, get_inf_structure, open_url, \
+    retrieve_input_file_size, retrieve_input_file_sha256, show_wait_box, hide_wait_box, ASKBTN_YES
 
 from subprocess import run, SubprocessError
 from threading import Timer
@@ -16,7 +16,7 @@ from datetime import date, datetime, timedelta
 from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, RE_analyze_functions, file_type, RE_functions_rename
 
 from revengai import __version__
-from revengai.api import RE_explain, RE_functions_dump, RE_search, RE_recent_analysis
+from revengai.api import RE_explain, RE_functions_dump, RE_search, RE_recent_analysis, RE_generate_summaries
 from revengai.features.sync_functions import SyncFunctionsDialog
 from revengai.misc.qtutils import inthread, inmain
 from revengai.gui.dialog import Dialog, StatusForm, UploadBinaryForm, AboutForm, UpdateForm
@@ -512,10 +512,18 @@ def generate_summaries(state: RevEngState, function_id: int = 0) -> None:
             if func_id:
                 logger.info("Generates block summaries for function ID %d | %s", func_id, func_name)
 
-                #inmain(show_wait_box, f"Generating block summaries for {func_name}…")
-                #TODO Need to implement the API
+                try:
+                    inmain(show_wait_box, f"HIDECANCEL\nGenerating block summaries for {func_name}…")
 
+                    res: Response = RE_generate_summaries(func_id)
 
+                    #TODO Need to ends the response
+                except HTTPError as e:
+                    logger.error("Error getting function list: %s",
+                                 e.response.json().get("error",
+                                                       "An unexpected error occurred. Sorry for the inconvenience."))
+                finally:
+                    inmain(hide_wait_box)
 
         inthread(bg_task, idc.get_func_attr(idc.here(), idc.FUNCATTR_START), function_id)
 

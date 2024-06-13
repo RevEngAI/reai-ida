@@ -16,7 +16,9 @@ import itertools
 
 from queue import Queue
 from sys import exc_info
-from threading import current_thread, Thread
+from threading import Thread
+
+from idaapi import is_main_thread
 
 from PyQt5.QtCore import QEvent, QObject, QCoreApplication
 
@@ -87,7 +89,7 @@ def inmain(fn, *args, **kwargs) -> any:
     Returns:
         The result of executing :code:`fn(*args, **kwargs)`
     """
-    if current_thread().name == 'MainThread':
+    if is_main_thread():
         return fn(*args, **kwargs)
 
     return get_inmain_result(_in_main_later(fn, False, *args, **kwargs))

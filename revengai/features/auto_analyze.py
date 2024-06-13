@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 from os import cpu_count
-from concurrent.futures import as_completed, ThreadPoolExecutor, CancelledError
+from concurrent.futures import ThreadPoolExecutor, CancelledError
 from re import sub
 from enum import IntEnum
 
