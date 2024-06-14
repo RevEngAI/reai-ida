@@ -31,7 +31,7 @@ Open IDA and if the plugin has loaded successfully it should be visible under `R
 
 If `RevEng.AI Toolkit` menu does not appear in the menubar, you can:
 - either click on <img src="revengai/resources/favicon.png" width="16"/> displayed in the toolbar
-- or click on `Edit > Plugins` then `RevEng.AI Toolkit`.
+- or click on `Edit > Plugins` then `RevEng.AI Toolkit`
 
 ![](assets/img/13.png)
 

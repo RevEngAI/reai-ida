@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from os.path import join
-from sys import platform
 from distutils import log
+from platform import system
 from os import environ, makedirs
 
 from setuptools.dist import Distribution
@@ -64,12 +64,13 @@ class IdaPluginInstallCommand(install):
 
     @staticmethod
     def _get_install_dir() -> str:
-        if platform.startswith("win") or platform == "cygwin":              # Windows
+        OS_name = system()
+        if OS_name == "Windows":
             install_dir = join(environ["APPDATA"], "Hex-Rays", "IDA Pro", "plugins")
-        elif any(platform.startswith(p) for p in ("linux", "darwin",)):     # Linux or MacOS
+        elif OS_name in ("Linux", "Darwin",):
             install_dir = join(environ["HOME"], ".idapro", "plugins")
         else:
-            raise EnvironmentError(f"Unsupported platform {platform}")
+            raise EnvironmentError(f"Unsupported OS system {OS_name}")
 
         makedirs(install_dir, mode=0o755, exist_ok=True)
 
