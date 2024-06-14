@@ -27,7 +27,7 @@ class SyncFunctionsDialog(BaseDialog):
         self.data = []
         for function in data:
             self.data.append((f"0x{function['function_vaddr']:08X}",
-                              function["function_name"], CheckableItem(function),))
+                              function["function_display"], CheckableItem(function),))
 
         self.ui = Ui_SyncFunctionsPanel()
         self.ui.setupUi(self)
@@ -35,7 +35,8 @@ class SyncFunctionsDialog(BaseDialog):
         self.ui.functionsList.customContextMenuRequested.connect(self._table_menu)
         self.ui.functionsList.horizontalHeader().setDefaultAlignment(Qt.AlignLeft)
         self.ui.functionsList.setModel(RevEngCheckableTableModel(data=self.data, parent=self, columns=[2],
-                                                                 header=["Function Address", "Function Name", "Include",]))
+                                                                 header=["Function Address",
+                                                                         "Function Subject to Renaming", "Include",]))
 
         self.ui.syncButton.setFocus()
         self.ui.syncButton.clicked.connect(self._synchronise)
@@ -60,9 +61,15 @@ class SyncFunctionsDialog(BaseDialog):
                    for row in self.ui.functionsList.model().get_datas()):
             Dialog.showInfo("Synchronise Functions", "Select at least one function to be synchronised.")
         else:
+            functions = {}
+
             for row_item in self.ui.functionsList.model().get_datas():
                 if isinstance(row_item[2], CheckableItem) and row_item[2].checkState == Qt.Checked:
-                    self._rename_symbol(row_item[2].data)
+                    symbol = row_item[2].data
+
+                    functions[symbol["function_id"]] = symbol["function_name"]
+            if len(functions):
+                inthread(self._batch_function_rename, functions)
 
     def _select_all(self) -> None:
         checkState = Qt.Checked if self.ui.selectAll.isChecked() else Qt.Unchecked
@@ -95,5 +102,4 @@ class SyncFunctionsDialog(BaseDialog):
             menu.exec_(QCursor.pos())
 
     def _rename_symbol(self, function) -> None:
-        inthread(self._set_function_renamed,
-                 function["function_vaddr"], function["function_name"], function["function_id"])
+        inthread(self._function_rename, function["function_vaddr"], function["function_name"], function["function_id"])

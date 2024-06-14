@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 import abc
 import logging
+from platform import system
 from os.path import dirname, join
-from sys import platform
 
 import idaapi
 from PyQt5.QtCore import QRect
@@ -31,8 +31,8 @@ class RevEngSetupWizard(QWizard):
 
         self.setWindowTitle("RevEng.AI Toolkit: Setup Wizard")
         self.setOptions(QWizard.CancelButtonOnLeft | QWizard.NoBackButtonOnStartPage)
-        self.setWizardStyle(QWizard.MacStyle if platform == 'darwin' else QWizard.ModernStyle)
-        self.setPixmap(QWizard.BackgroundPixmap if platform == 'darwin' else QWizard.WatermarkPixmap,
+        self.setWizardStyle(QWizard.MacStyle if system() == 'Darwin' else QWizard.ModernStyle)
+        self.setPixmap(QWizard.BackgroundPixmap if system() == 'Darwin' else QWizard.WatermarkPixmap,
                        QPixmap(join(dirname(__file__), "..", "resources", "logo.png")))
 
         self.button(QWizard.FinishButton).clicked.connect(self._save)
