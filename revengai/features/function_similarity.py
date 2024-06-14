@@ -158,7 +158,7 @@ class FunctionSimilarityDialog(BaseDialog):
             if not IDAUtils.set_name(self.v_addr + self.base_addr, selected[0].text):
                 Dialog.showError("Rename Function Error", f"Function {selected[0].text} already exists.")
             else:
-                inthread(self._set_function_renamed, self.v_addr, selected[0].text)
+                inthread(self._function_rename, self.v_addr, selected[0].text)
 
                 logger.info("Renowned %s in %s with confidence of '%s",
                             IDAUtils.get_demangled_func_name(idc.here()),
