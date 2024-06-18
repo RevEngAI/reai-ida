@@ -156,12 +156,12 @@ class AutoAnalysisDialog(BaseDialog):
 
             max_workers = 1
             if self.state.project_cfg.get("parallelize_query") and not inmain(user_cancelled):
-                max_workers += min(cpu_count(), nb_func // self.state.project_cfg.get("ann_chunk_size"))
+                max_workers += min(cpu_count(), nb_func // self.state.project_cfg.get("chunk_size"))
                 # maximum of 4 simultaneous requests
                 max_workers = min(max_workers, 4)
 
             # Launch parallel tasks
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="reai-batch") as executor:
                 collections = inmain(self._selected_collections)
                 distance = 1.0 - (int(inmain(self.ui.confidenceSlider.property, "value")) /
                                   int(inmain(self.ui.confidenceSlider.property, "maximum")))
@@ -179,7 +179,7 @@ class AutoAnalysisDialog(BaseDialog):
                 # Start the ANN batch operations and mark each future with its chunk
                 futures = {executor.submit(worker, chunk): chunk
                            for chunk in AutoAnalysisDialog._divide_chunks(function_ids,
-                                                                          self.state.project_cfg.get("ann_chunk_size"))}
+                                                                          self.state.project_cfg.get("chunk_size"))}
 
                 if inmain(user_cancelled):
                     map(lambda f: f.cancel(), futures.keys())
@@ -217,21 +217,30 @@ class AutoAnalysisDialog(BaseDialog):
                                                   if symbol["origin_function_id"] == func_id), None)
 
                                 if func_addr:
-                                    self._analysis[Analysis.SUCCESSFUL.value] += 1
-
-                                    symbol["function_addr"] = func_addr
                                     symbol["org_func_name"] = next((function["name"] for function in self._functions
                                                                     if func_addr == function["start_addr"]), "Unknown")
 
-                                    logger.info("Found similar function '%s' with a confidence level of '%s",
-                                                symbol["nearest_neighbor_function_name"], str(symbol["confidence"]))
+                                    if symbol['nearest_neighbor_function_name'] == symbol["org_func_name"]:
+                                        self._analysis[Analysis.SKIPPED.value] += 1
 
-                                    resultsData.append((symbol["org_func_name"],
-                                                        f"{symbol['nearest_neighbor_function_name']} "
-                                                        f"({symbol['nearest_neighbor_binary_name']})",
-                                                        CheckableItem(symbol),
-                                                        "Can be renamed with a confidence level of "
-                                                        f"{float(str(symbol['confidence'])[:6]) * 100:#.02f}%",))
+                                        resultsData.append((symbol["org_func_name"],
+                                                            f"{symbol['nearest_neighbor_function_name']} "
+                                                            f"({symbol['nearest_neighbor_binary_name']})",
+                                                            None, "Same Function Name Found",))
+                                    else:
+                                        self._analysis[Analysis.SUCCESSFUL.value] += 1
+
+                                        logger.info("Found similar function '%s' with a confidence level of '%s",
+                                                    symbol["nearest_neighbor_function_name"], str(symbol["confidence"]))
+
+                                        symbol["function_addr"] = func_addr
+
+                                        resultsData.append((symbol["org_func_name"],
+                                                            f"{symbol['nearest_neighbor_function_name']} "
+                                                            f"({symbol['nearest_neighbor_binary_name']})",
+                                                            CheckableItem(symbol),
+                                                            "Can be renamed with a confidence level of "
+                                                            f"{float(str(symbol['confidence'])[:6]) * 100:#.02f}%",))
                     finally:
                         pos += len(chunk)
                         inmain(self.ui.progressBar.setProperty, "value", pos)
@@ -326,10 +335,25 @@ class AutoAnalysisDialog(BaseDialog):
 
     def _rename_functions(self):
         batches = []
+        functions = {}
 
         for row_item in self.ui.resultsTable.model().get_datas():
             if isinstance(row_item[2], CheckableItem) and row_item[2].checkState == Qt.Checked:
-                self._rename_function(row_item, batches)
+                symbol = row_item[2].data
+
+                if IDAUtils.set_name(symbol["function_addr"] + self.base_addr,
+                                     symbol["nearest_neighbor_function_name"]):
+                    func_id = self._get_function_id(symbol["function_addr"])
+                    if func_id:
+                        functions[func_id] = symbol["nearest_neighbor_function_name"]
+                        continue
+
+                batches.append("\n     • " +
+                               sub(r"^(.{10}).*\s+➡\s+(.{10}).*$", "\g<1>…  ➡  \g<2>…",
+                                   f"{symbol['org_func_name']}  ➡  {symbol['nearest_neighbor_function_name']}"))
+
+        if len(functions):
+            inthread(self._batch_function_rename, functions)
 
         if len(batches):
             cnt = len(batches)
@@ -341,14 +365,14 @@ class AutoAnalysisDialog(BaseDialog):
                 batches.append("\n     • …")
 
             idc.warning(f"Can't rename the following{'' if cnt == 1 else ' ' + str(cnt)} function{'s'[:cnt ^ 1]}, "
-                        f"name already exists for:{''.join(batches)}")
+                        f"name already exists for: {''.join(batches)}")
 
     def _rename_function(self, selected, batches: list = None) -> None:
         if selected and len(selected) > 3 and isinstance(selected[2], SimpleItem):
             symbol = selected[2].data
 
             if IDAUtils.set_name(symbol["function_addr"] + self.base_addr, symbol["nearest_neighbor_function_name"]):
-                inthread(self._set_function_renamed, symbol["function_addr"], symbol["nearest_neighbor_function_name"])
+                inthread(self._function_rename, symbol["function_addr"], symbol["nearest_neighbor_function_name"])
 
                 logger.info("Renowned %s in %s with confidence of '%s",
                             symbol["org_func_name"], symbol["nearest_neighbor_function_name"], symbol["confidence"])
@@ -356,8 +380,9 @@ class AutoAnalysisDialog(BaseDialog):
                 logger.warning("Symbol name %s already exists", symbol["nearest_neighbor_function_name"])
 
                 if batches is not None:
-                    batches.append(sub(r"^(.{10}).*\|(.{10}).*$", "\n     • \g<1>… ➡ \g<2>…",
-                                       f"{symbol['org_func_name']}|{symbol['nearest_neighbor_function_name']}"))
+                    batches.append("\n     • " +
+                                   sub(r"^(.{10}).*\s+➡\s+(.{10}).*$", "\g<1>…  ➡  \g<2>…",
+                                       f"{symbol['org_func_name']}  ➡  {symbol['nearest_neighbor_function_name']}"))
                 else:
                     idc.warning(f"Can't rename {symbol['org_func_name']}. Name {symbol['nearest_neighbor_function_name']} already exists.")
 
@@ -385,9 +410,9 @@ class AutoAnalysisDialog(BaseDialog):
         self.ui.collectionsTable.model().layoutChanged.emit()
 
     # Yield successive n-sized
-    # chunks from l.
+    # chunks from data.
     @staticmethod
-    def _divide_chunks(l: list, n: int = 50) -> list:
+    def _divide_chunks(data: list, n: int = 50) -> list:
         # looping till length l
-        for idx in range(0, len(l), n):
-            yield l[idx:idx + n]
+        for idx in range(0, len(data), n):
+            yield data[idx:idx + n]

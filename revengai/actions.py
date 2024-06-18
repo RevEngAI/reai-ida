@@ -13,7 +13,7 @@ from requests import get, HTTPError, Response, RequestException
 from os.path import basename, isfile
 from datetime import date, datetime, timedelta
 
-from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, RE_analyze_functions, file_type, RE_functions_rename
+from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, RE_analyze_functions, file_type
 
 from revengai import __version__
 from revengai.api import RE_explain, RE_functions_dump, RE_search, RE_recent_analysis, RE_generate_summaries
@@ -399,26 +399,19 @@ def sync_functions_name(state: RevEngState, fpath: str) -> None:
             try:
                 res: Response = RE_analyze_functions(fpath, state.config.get("binary_id", 0))
 
-                data = None if state.config.auto_sync else []
+                data = []
                 for function in res.json()["functions"]:
                     func_name = next((func["name"] for func in functions
                                       if function["function_vaddr"] == func["start_addr"]
                                       and not func["name"].startswith("sub_")), None)
 
                     if func_name and func_name != function["function_name"]:
-                        if data is not None:
-                            function["function_name"] = func_name
-                            function["function_vaddr"] += base_addr
+                        function["function_vaddr"] += base_addr
+                        function["function_display"] = f"{func_name}  ➡  {function['function_name']}"
 
-                            data.append(function)
-                        else:
-                            try:
-                                RE_functions_rename(function["function_id"], func_name)
-                            except HTTPError as e:
-                                logger.warning("Failed to sync functionId %d. %s",
-                                               function["function_id"], e.response.reason)
+                        data.append(function)
 
-                if data and len(data):
+                if len(data):
                     dialog = inmain(SyncFunctionsDialog, state, fpath, data)
                     inmain(dialog.exec_)
             except RequestException as e:
@@ -517,11 +510,10 @@ def generate_summaries(state: RevEngState, function_id: int = 0) -> None:
 
                     res: Response = RE_generate_summaries(func_id)
 
-                    #TODO Need to ends the response
+                    #TODO Need to process the response
                 except HTTPError as e:
-                    logger.error("Error getting function list: %s",
-                                 e.response.json().get("error",
-                                                       "An unexpected error occurred. Sorry for the inconvenience."))
+                    logger.error("Error generating block summaries: %s",
+                                 e.response.json().get("error", "An unexpected error occurred."))
                 finally:
                     inmain(hide_wait_box)
 
@@ -611,9 +603,20 @@ def periodic_check(fpath: str, binary_id: int) -> None:
         try:
             status = RE_status(fpath, bid).json()["status"]
 
-            if status == "Processing":
+            if status in ("Queued", "Processing",):
                 Timer(delay, _worker, args=(bid, delay,)).start()
         except RequestException as ex:
             logger.error("Error getting binary analysis status. Reason: %s", ex)
 
-    Timer(60, _worker, args=(binary_id,)).start()
+    Timer(30, _worker, args=(binary_id,)).start()
+
+
+def toolbar(state: RevEngState) -> None:
+    """
+    Workaround to show RevEng.AI logo in toolbar to create menu bar when clicked
+    """
+    from revengai.ida_ui import RevEngConfigForm_t
+
+    form = RevEngConfigForm_t(state)
+    form.register_actions(False)
+    del form

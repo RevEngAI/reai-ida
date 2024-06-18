@@ -1,17 +1,20 @@
 # -*- coding: utf-8 -*-
 import abc
 import logging
+from itertools import islice
 from os.path import dirname, join
+from concurrent.futures import as_completed, ThreadPoolExecutor
+
 
 import idaapi
 from PyQt5.QtCore import QRect, QTimer
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QDialog, QDesktopWidget
-from reait.api import RE_functions_rename, RE_analyze_functions
+from reait.api import RE_analyze_functions, RE_functions_rename, RE_functions_rename_batch
 
 from idaapi import get_imagebase
 
-from requests import HTTPError, Response
+from requests import HTTPError, Response, RequestException
 
 from revengai.manager import RevEngState
 from revengai.misc.qtutils import inthread, inmain
@@ -69,7 +72,7 @@ class BaseDialog(QDialog):
             logger.error("Error getting analysed functions: %s",
                          e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience."))
 
-    def _set_function_renamed(self, func_addr: int, new_func_name: str, func_id: int = 0) -> None:
+    def _function_rename(self, func_addr: int, new_func_name: str, func_id: int = 0) -> None:
         if not func_id:
             func_id = self._get_function_id(func_addr)
 
@@ -85,6 +88,30 @@ class BaseDialog(QDialog):
                 inmain(idaapi.warning, error)
         else:
             logger.error('Not found functionId at address: 0x%X.', func_addr)
+
+    def _batch_function_rename(self, functions: dict[int, str]) -> None:
+        with ThreadPoolExecutor(thread_name_prefix="reai-batch") as executor:
+            def worker(chunk: dict[int, str]) -> any:
+                try:
+                    return RE_functions_rename_batch(chunk)
+                except RequestException as ex:
+                    return ex
+
+            # Start the functions renaming batch operations and mark each future with its chunk
+            futures = [executor.submit(worker, chunk)
+                       for chunk in BaseDialog._divide_chunks(functions,
+                                                              self.state.project_cfg.get("chunk_size"))]
+
+            for future in as_completed(futures):
+                try:
+                    data = future.result()
+
+                    if isinstance(data, Response):
+                        logger.info(data.json())
+                    else:
+                        logger.error("Failed to rename function in batch mode. %s", data)
+                except Exception as e:
+                    logger.error("Exception raised: %s", e)
 
     def _function_breakdown(self, func_id: int) -> None:
         # Prevent circular import
@@ -103,3 +130,9 @@ class BaseDialog(QDialog):
 
     def _filter_collections(self):
         pass
+
+    @staticmethod
+    def _divide_chunks(data: dict, n: int = 50) -> dict:
+        it = iter(data.items())
+        for _ in range(0, len(data), n):
+            yield dict(islice(it, n))

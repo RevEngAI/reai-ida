@@ -21,7 +21,6 @@ class RevEngConfiguration(object):
     _dir = join(get_user_idadir(), "plugins")
 
     auto_start = True   # Enable RevEng.AI plugin automatically
-    auto_sync = False   # Sync between the current binary and the RevEng.AI platform for each function name that differs
 
     LIMIT = 10 * 1024**2  # File size limit to upload 10MB
     PORTAL = "https://portal.reveng.ai"   # RevEng.AI Web portal
