@@ -90,7 +90,12 @@ class BaseDialog(QDialog):
             logger.error('Not found functionId at address: 0x%X.', func_addr)
 
     def _batch_function_rename(self, functions: dict[int, str]) -> None:
-        with ThreadPoolExecutor(thread_name_prefix="reai-batch") as executor:
+        max_workers = 1
+
+        if self.state.project_cfg.get("parallelize_query"):
+            max_workers += self.state.project_cfg.get("max_workers")
+        
+        with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="reai-batch") as executor:
             def worker(chunk: dict[int, str]) -> any:
                 try:
                     return RE_functions_rename_batch(chunk)
