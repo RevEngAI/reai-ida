@@ -156,9 +156,7 @@ class AutoAnalysisDialog(BaseDialog):
 
             max_workers = 1
             if self.state.project_cfg.get("parallelize_query") and not inmain(user_cancelled):
-                max_workers += min(cpu_count(), nb_func // self.state.project_cfg.get("chunk_size"))
-                # maximum of 4 simultaneous requests
-                max_workers = min(max_workers, 4)
+                max_workers += self.state.project_cfg.get("max_workers")
 
             # Launch parallel tasks
             with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="reai-batch") as executor:
