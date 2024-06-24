@@ -2,17 +2,19 @@
 
 IDA Pro Plugin for [RevEng.AI](https://reveng.ai/).
 
-### Supported Functionality:
+### Features Supported
 
+Below a non-exhaustive list of the features supported by the plugin:
 - Uploading of binaries for analysis to RevEng.AI platform
 - Downloading logs for analysis from RevEng.AI platform
 - Removing analysis from RevEng.AI platform
 - Renaming of function names given with similar binaries
 - Generates AI summaries for the analysed function
 - Synchronise all functions with differing names between the local analysis and the RevEng.AI platform
-- Configuration and persistence of plugin configuration (API key, host, model selection and analysis)
+- Configuration and persistence of plugin configuration (personal API key, host and analysis)
+- …
 
-# Install
+# Installation & Running 🚀
 
 Install the required Python libraries: `pip install -r requirements.txt`. Copy `revengai` dir and `reveng.py` to the `plugins` dir inside IDA Pro installation dir (or `~/.idapro/plugins` on MacOS and Linux).
 
@@ -24,7 +26,8 @@ Check the version of Python your IDA Pro installation is using by opening IDA an
 
 Ensure the latest version of the [reait](https://github.com/RevEngAI/reait) package is installed with the version of Python IDA is using.
 
-## Setup & Configuration
+## Setup & Usage 📦
+
 Open IDA and if the plugin has loaded successfully it should be visible under `RevEng.AI Toolkit` menu.
 
 ![menu](assets/img/1.png)
@@ -33,7 +36,7 @@ If `RevEng.AI Toolkit` menu does not appear in the menubar, you can:
 - either click on <img src="revengai/resources/favicon.png" width="16"/> displayed in the toolbar
 - or click on `Edit > Plugins` then `RevEng.AI Toolkit`
 
-![](assets/img/13.png)
+![plugin](assets/img/13.png)
 
 Before using the plugin, it needs to be configured. Select `Run Setup Wizard` from the menu shown in the previous image.
 
@@ -75,7 +78,7 @@ When a previously analysed binary is selected, a popup-window is displayed, prom
 
 ## Function Renaming
 
-#### Rename from Similar
+#### Rename a Function
 
 Right-clicking on any function name in an IDA View and selecting `Rename From Similar Functions` will bring up the following window that lets you rename a function.
 
@@ -90,7 +93,8 @@ Selecting an entry from the list and then pressing `Rename` will cause the funct
 **A right click allows you to rename or breakdown the selected function**
 
 #### Auto Analysis
-You can also batch analyse the binary to rename functions using the `Auto Analyze Binary Symbol`.
+
+You can also batch analyse the binary to rename functions using the `Auto Analyze Binary`.
 
 ![auto_analyze_menu](assets/img/7.png)
 
@@ -110,10 +114,11 @@ Right-clicking on any function name in an IDA View and selecting `Generate AI Su
 
 ![generate_summaries](assets/img/14.png)
 
-Once clicked a dialog box appears 
 Once clicked, a dialog box appears inviting to confirm the generation of block summaries.
 
 ![confirm_summaries](assets/img/15.png)
+
+⚠️ This action is irrevocable and no refunds can be issued on the credits used.
 
 ## Function Explanation
 
@@ -124,6 +129,7 @@ Select the function you are interested in, and from the decompiler view select `
 ![explain_function](assets/img/10.png)
 
 # Troubleshooting
+
 - Only IDA v8.0 or later is supported with Python 3.9 and higher.
 
 # Software Requirements
