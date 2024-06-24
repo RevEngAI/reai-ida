@@ -476,7 +476,7 @@ def generate_summaries(state: RevEngState, function_id: int = 0) -> None:
             ASKBTN_YES == ask_buttons("Generate", "Cancel", "", ASKBTN_YES,
                                       "HIDECANCEL\nWould you like to generate summaries?\n\n"
                                       "The cost of this operation is estimated to be 0.045 credits,\n"
-                                      "and will generate summaries for each node in the flow.\n"
+                                      "and will generate summaries for each node in the flow.\n\n"
                                       "This action is irreversible and cannot be undone."):
         def bg_task(func_ea: int, func_id: int = 0) -> None:
             func_name = inmain(IDAUtils.get_demangled_func_name, func_ea)
@@ -599,16 +599,19 @@ def update(_) -> None:
 
 
 def periodic_check(fpath: str, binary_id: int) -> None:
-    def _worker(bid: int, delay: float = 60):
+    def _worker(bid: int, interval: float = 60):
         try:
             status = RE_status(fpath, bid).json()["status"]
 
             if status in ("Queued", "Processing",):
-                Timer(delay, _worker, args=(bid, delay,)).start()
+                if inmain(idc.get_input_file_path) == fpath:
+                    Timer(interval, _worker, args=(bid, interval,)).start()
+                    logger.info("Scheduling binary analysis status for: %s [%d]", basename(fpath), bid)
         except RequestException as ex:
             logger.error("Error getting binary analysis status. Reason: %s", ex)
 
     Timer(30, _worker, args=(binary_id,)).start()
+    logger.info("Scheduling binary analysis status for: %s [%d]", basename(fpath), binary_id)
 
 
 def toolbar(state: RevEngState) -> None:
