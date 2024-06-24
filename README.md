@@ -1,6 +1,6 @@
-# RevEng.AI IDA PRO Plugin
+# <img src="./revengai/resources/logo.png" width=20> RevEng.AI IDA Pro Plugin
 
-IDA Pro Plugin for [RevEng.AI](https://reveng.ai/).
+IDA Pro Plugin for [RevEng.AI Toolkit](https://reveng.ai/).
 
 ### Features Supported
 
@@ -24,25 +24,25 @@ Check the version of Python your IDA Pro installation is using by opening IDA an
 
 ### Development
 
-Ensure the latest version of the [reait](https://github.com/RevEngAI/reait) package is installed with the version of Python IDA is using.
+Ensure the latest version of the [reait](https://github.com/RevEngAI/reait/releases) package is installed with the version of Python IDA is using.
 
 ## Setup & Usage 📦
 
 Open IDA and if the plugin has loaded successfully it should be visible under `RevEng.AI Toolkit` menu.
 
-![menu](assets/img/1.png)
+![menu](./assets/img/1.png)
 
 If `RevEng.AI Toolkit` menu does not appear in the menubar, you can:
 - either click on <img src="revengai/resources/favicon.png" width="16"/> displayed in the toolbar
 - or click on `Edit > Plugins` then `RevEng.AI Toolkit`
 
-![plugin](assets/img/13.png)
+![plugin](./assets/img/13.png)
 
 Before using the plugin, it needs to be configured. Select `Run Setup Wizard` from the menu shown in the previous image.
 
 A popup should appear that contains the main configuration window for the plugin like below:
 
-![configuration](assets/img/2.png)
+![configuration](./assets/img/2.png)
 
 Fill in the API key and host information - the model drop-down will automatically populate when clicked on `Continue`. This only works if the entered configuration information is valid.
 
@@ -52,11 +52,11 @@ Once this is done you are now ready to use the plugin.
 
 Before we do any analysis we need to upload a file. Uploading a file is available via the IDA Views of the code or from the pseudocode window by right-clicking.
 
-![upload_file](assets/img/3.png)
+![upload_file](./assets/img/3.png)
 
 Select `Upload Binary`, it will automatically ask whether you want analysis to be done on the file. Currently the analysis does not support customisation but will in the future.
 
-![analyse_file](assets/img/11.png)
+![analyse_file](./assets/img/11.png)
 
 Once the file has been sent for analysis, an analysis ID is automatically set internally so any future actions that are specific to an analysis will use this ID.
 
@@ -64,7 +64,7 @@ You can check the status of your request by selecting `Check Analysis Status` fr
 
 The status of any previous analysis done can be viewed by selecting `Binary Analysis History` from the popup menu, an example of this menu is in the next screenshot.
 
-![select_file](assets/img/4.png)
+![select_file](./assets/img/4.png)
 
 **A right click allows you to delete, view analysis report or set as current analysis for the selected analysis**
 
@@ -72,7 +72,7 @@ The status of any previous analysis done can be viewed by selecting `Binary Anal
 
 When a previously analysed binary is selected, a popup-window is displayed, prompting you to synchronise all local functions whose name differs from that present on the RevEng.AI platform. 
 
-![auto_sync](assets/img/12.png)
+![auto_sync](./assets/img/12.png)
 
 **A right click allows you to sync, jump to or breakdown the selected function**
 
@@ -82,11 +82,11 @@ When a previously analysed binary is selected, a popup-window is displayed, prom
 
 Right-clicking on any function name in an IDA View and selecting `Rename From Similar Functions` will bring up the following window that lets you rename a function.
 
-![rename_function_menu](assets/img/5.png)
+![rename_function_menu](./assets/img/5.png)
 
 Currently, all available functions from all binaries are displayed in order of similarity confidence. The user is able to filter on both binary and confidence levels
 
-![rename_function_dialog](assets/img/6.png)
+![rename_function_dialog](./assets/img/6.png)
 
 Selecting an entry from the list and then pressing `Rename` will cause the function to be renamed within IDA.
 
@@ -96,27 +96,27 @@ Selecting an entry from the list and then pressing `Rename` will cause the funct
 
 You can also batch analyse the binary to rename functions using the `Auto Analyze Binary`.
 
-![auto_analyze_menu](assets/img/7.png)
+![auto_analyze_menu](./assets/img/7.png)
 
 This tool pull the list of collections you have access to on your account, and allows you to specify which collections you want to be included in your auto analysis by clicking on the checkbox. Selecting no collections will enable all the available collections in your search.
 
 Move the slider to determine the confidence level you want to use for batch renaming. Any function returned that is higher than this value will automatically be renamed in the listing view. Clicking the `Fetch Results` button will kick-off the analysis, which you can track in the progress bar.
 
-![auto_analyze_dialog](assets/img/8.png)
+![auto_analyze_dialog](./assets/img/8.png)
 
 Once the analysis is complete, the results panel is enabled. This provides information on what symbols can be renamed, and to what, along with a message explaining why the change occurred.
 
-![auto_analyze_results](assets/img/9.png)
+![auto_analyze_results](./assets/img/9.png)
 
 ## Generate Block Summaries
 
 Right-clicking on any function name in an IDA View and selecting `Generate AI Summaries` will bring up the following window which allows you to generate block summaries.
 
-![generate_summaries](assets/img/14.png)
+![generate_summaries](./assets/img/14.png)
 
 Once clicked, a dialog box appears inviting to confirm the generation of block summaries.
 
-![confirm_summaries](assets/img/15.png)
+![confirm_summaries](./assets/img/15.png)
 
 ⚠️ This action is irrevocable and no refunds can be issued on the credits used.
 
@@ -126,7 +126,7 @@ You can also use the plugin to generate a function comment that can be useful fo
 
 Select the function you are interested in, and from the decompiler view select `Explain This Function` from the right-click menu.
 
-![explain_function](assets/img/10.png)
+![explain_function](./assets/img/10.png)
 
 # Troubleshooting
 
