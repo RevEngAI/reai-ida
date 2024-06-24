@@ -93,8 +93,8 @@ class BaseDialog(QDialog):
         max_workers = 1
 
         if self.state.project_cfg.get("parallelize_query"):
-            max_workers += self.state.project_cfg.get("max_workers")
-        
+            max_workers = self.state.project_cfg.get("max_workers")
+
         with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="reai-batch") as executor:
             def worker(chunk: dict[int, str]) -> any:
                 try:

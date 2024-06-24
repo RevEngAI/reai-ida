@@ -13,7 +13,6 @@ from itertools import filterfalse
 from reait.api import RE_delete
 
 from revengai import __version__
-from revengai.conf import RevEngConfiguration
 from revengai.gui import Requests
 from revengai.manager import RevEngState
 from revengai.misc.qtutils import inthread
@@ -223,5 +222,5 @@ Your RevEng.AI Toolkit IDA plugin is v%s.
 
     def OnFormChange(self, fid):
         if fid == -2:  # Goto homepage
-            open_url(f"{RevEngConfiguration.PORTAL}/integrations")
+            open_url("https://reveng.ai/#plugins")
         return super().OnFormChange(fid)
