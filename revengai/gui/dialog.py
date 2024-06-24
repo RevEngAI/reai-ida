@@ -187,7 +187,7 @@ class AboutForm(BaseForm):
         self.invert = False
 
         Form.__init__(self,
-                      r"""BUTTON YES* Open Reveng.AI Website
+                      r"""BUTTON YES* Open RevEng.AI Website
 RevEng.AI Toolkit: About
 
 {FormChangeCb}
@@ -210,13 +210,13 @@ class UpdateForm(BaseForm):
         self.invert = False
 
         Form.__init__(self,
-                      r"""BUTTON YES* Open Reveng.AI Website
+                      r"""BUTTON YES* Open RevEng.AI Website
 RevEng.AI Toolkit: Check for Update
 
 {FormChangeCb}
 Your RevEng.AI Toolkit IDA plugin is v%s.
 %s
-""" % (__version__, message), {
+""" % (__version__, message,), {
                           "FormChangeCb": Form.FormChangeCb(self.OnFormChange),
                       })
 
