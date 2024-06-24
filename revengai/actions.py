@@ -476,7 +476,7 @@ def generate_summaries(state: RevEngState, function_id: int = 0) -> None:
             ASKBTN_YES == ask_buttons("Generate", "Cancel", "", ASKBTN_YES,
                                       "HIDECANCEL\nWould you like to generate summaries?\n\n"
                                       "The cost of this operation is estimated to be 0.045 credits,\n"
-                                      "and will generate summaries for each node in the flow.\n"
+                                      "and will generate summaries for each node in the flow.\n\n"
                                       "This action is irreversible and cannot be undone."):
         def bg_task(func_ea: int, func_id: int = 0) -> None:
             func_name = inmain(IDAUtils.get_demangled_func_name, func_ea)
@@ -604,7 +604,8 @@ def periodic_check(fpath: str, binary_id: int) -> None:
             status = RE_status(fpath, bid).json()["status"]
 
             if status in ("Queued", "Processing",):
-                Timer(delay, _worker, args=(bid, delay,)).start()
+                if inmain(idc.get_input_file_path) == fpath:
+                    Timer(delay, _worker, args=(bid, delay,)).start()
         except RequestException as ex:
             logger.error("Error getting binary analysis status. Reason: %s", ex)
 
