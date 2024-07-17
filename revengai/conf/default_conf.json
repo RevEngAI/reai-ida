@@ -1,5 +1,5 @@
 {
-  "chunk_size": 6,
+  "chunk_size": 500,
   "max_workers": 4,
   "auto_sync": false,
   "func_type": false,
