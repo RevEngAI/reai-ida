@@ -36,8 +36,9 @@ class RevEngConfiguration(object):
 
         configure_loggers(join(self._dir, self._logdir))
 
-        if get_input_file_path():
-            self.restore()
+        if RevEngConfiguration.auto_start:
+            if get_input_file_path():
+                self.restore()
 
     def get(self, name: str, default_val: any = None) -> any:
         return self.config.get(name, default_val)
