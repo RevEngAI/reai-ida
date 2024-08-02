@@ -264,10 +264,10 @@ class AutoAnalysisDialog(BaseDialog):
 
             width: int = inmain(self.ui.resultsTable.width)
 
-            inmain(self.ui.resultsTable.setColumnWidth, 0, width * .2)
-            inmain(self.ui.resultsTable.setColumnWidth, 1, width * .4)
-            inmain(self.ui.resultsTable.setColumnWidth, 2, width * .1)
-            inmain(self.ui.resultsTable.setColumnWidth, 3, width * .3)
+            inmain(self.ui.resultsTable.setColumnWidth, 0, round(width * .2))
+            inmain(self.ui.resultsTable.setColumnWidth, 1, round(width * .4))
+            inmain(self.ui.resultsTable.setColumnWidth, 2, round(width * .1))
+            inmain(self.ui.resultsTable.setColumnWidth, 3, round(width * .3))
 
     def _filter(self, filter_text) -> None:
         if self.ui.tabWidget.currentIndex() == 0:
@@ -317,7 +317,7 @@ class AutoAnalysisDialog(BaseDialog):
                                         CheckableItem(checked=self.ui.layoutFilter.is_present(collection["name"])),))
 
             inmain(inmain(self.ui.collectionsTable.model).fill_table, collections)
-            inmain(self.ui.collectionsTable.setColumnWidth, 0, inmain(self.ui.collectionsTable.width) * .9)
+            inmain(self.ui.collectionsTable.setColumnWidth, 0, round(inmain(self.ui.collectionsTable.width) * .9))
         except HTTPError as e:
             logger.error("Getting collections failed. Reason: %s", e)
 
