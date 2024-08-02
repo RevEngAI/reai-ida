@@ -142,9 +142,9 @@ class FunctionSimilarityDialog(BaseDialog):
 
             width: int = inmain(self.ui.resultsTable.width)
 
-            inmain(self.ui.resultsTable.setColumnWidth, 0, width * .38)
-            inmain(self.ui.resultsTable.setColumnWidth, 1, width * .12)
-            inmain(self.ui.resultsTable.setColumnWidth, 2, width * .5)
+            inmain(self.ui.resultsTable.setColumnWidth, 0, round(width * .38))
+            inmain(self.ui.resultsTable.setColumnWidth, 1, round(width * .12))
+            inmain(self.ui.resultsTable.setColumnWidth, 2, round(width * .5))
 
     def _rename_symbol(self):
         if not self.ui.resultsTable.selectedIndexes():
@@ -193,7 +193,7 @@ class FunctionSimilarityDialog(BaseDialog):
                                         CheckableItem(checked=self.ui.layoutFilter.is_present(collection["name"])),))
 
             inmain(inmain(self.ui.collectionsTable.model).fill_table, collections)
-            inmain(self.ui.collectionsTable.setColumnWidth, 0, inmain(self.ui.collectionsTable.width) * .8)
+            inmain(self.ui.collectionsTable.setColumnWidth, 0, round(inmain(self.ui.collectionsTable.width) * .8))
         except HTTPError as e:
             logger.error("Getting collections failed. Reason: %s", e)
 
