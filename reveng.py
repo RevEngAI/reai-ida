@@ -62,9 +62,9 @@ class RevEngPlugin(plugin_t):
             return PLUGIN_SKIP
 
         logger.info("%s plugin starts", self.wanted_name)
-        
+
         self.run()
-        return PLUGIN_OK
+        return PLUGIN_KEEP
 
     def reload_plugin(self) -> bool:
         if self.initialized:
