@@ -199,10 +199,7 @@ class RevEngGUI(object):
         set_dock_pos(MENU[:-1], "IDA View-A", DP_TAB)
 
     def show_windows(self):
-        if self.state.config.auto_start:
-            self.config_form.register_actions()
-        else:
-            self.config_form.Show(MENU[:-1])
+        self.config_form.register_actions()
 
     def term(self):
         self.config_form.Close(PluginForm.WCLS_SAVE)

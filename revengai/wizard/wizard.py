@@ -50,7 +50,10 @@ class RevEngSetupWizard(QWizard):
         self.state.config.save()
 
         # Refresh menu item actions
-        self.state.gui.config_form.register_actions()
+        try:
+            self.state.gui.config_form.register_actions()
+        except Exception as e:
+            print ("Please choose one of the available models")
 
 
 class BasePage(QWizardPage):

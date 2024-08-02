@@ -63,12 +63,8 @@ class RevEngPlugin(plugin_t):
 
         logger.info("%s plugin starts", self.wanted_name)
 
-        if self.state.config.auto_start:
-            self.run()
-
-            # Return KEEP instead of OK to keep the plugin loaded since it registers callback actions and hotkeys
-            return PLUGIN_KEEP
-        return PLUGIN_OK
+        self.run()
+        return PLUGIN_KEEP
 
     def reload_plugin(self) -> bool:
         if self.initialized:
