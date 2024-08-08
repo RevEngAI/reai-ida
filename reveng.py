@@ -1,95 +1,105 @@
-from idaapi import plugin_t, PLUGIN_FIX, PLUGIN_KEEP
-from revengai.configuration import Configuration
-from revengai.gui.mainform import MainForm
-from revengai.gui.menubar import ConfigBar
-from revengai.gui.about_view import AboutView
-from revengai.gui.configuration_view import ConfigurationView
-from revengai.gui.upload_view import UploadView
-from revengai.gui.context_hook import ContextHook
-from revengai.handler import RenameFunctionHandler
-from revengai.handler import ConfigurationHandler
-from revengai.logger import plugin_logger
-from revengai.api import Endpoint
+# -*- coding: utf-8 -*-
+import logging
 
-#
-# 1. Be able to log in with API key - Done
-# 2. Be able to get list of AI models from endpoints - Done
-# 3. a. right click select and upload binary
-#    b. go from tool bar at the top
-# 4. right click on function decompiler RevEng.ai -> rename to similar function that brings up another windows
-#    shows:
-#       refresh button
-#       rename function button
-#       <function name> <confidence> <from - like library name or other binary>
-# 5. batch analysis of functions -> select confidence level and it will automatically rename functions that meet this confidence level.
-# 6. right click, explain function.
-#
+from idc import get_inf_attr, APPT_LIBRARY, APPT_PROGRAM, INF_APPTYPE, INF_FILETYPE, \
+    FT_ELF, FT_PE, FT_MACHO, FT_EXE, FT_BIN
+from idaapi import execute_ui_requests, plugin_t, IDA_SDK_VERSION, PLUGIN_SKIP, PLUGIN_OK, PLUGIN_KEEP, PLUGIN_HIDE
 
-API_KEY = "bdee5ee1-17c9-4949-ae94-5a431597-e085"
+from revengai.gui import Requests
+
+# Third-Party Python Modules
+required_modules_loaded = True
+try:
+    import reait.api
+
+    from revengai.manager import RevEngState
+
+    from requests.packages.urllib3 import disable_warnings
+    from requests.packages.urllib3.exceptions import InsecureRequestWarning
+
+    # Workaround to suppress warnings about SSL certificates
+    disable_warnings(InsecureRequestWarning)
+except ImportError:
+    required_modules_loaded &= False
+
+    from idc import msg
+
+    msg("[!] RevEng.AI Toolkit requires the Python module called 'reait'.\n")
 
 
-class Plugin(plugin_t):
-    flags = PLUGIN_FIX
-    comment = "AI-assisted reverse engineering from RevEng.ai"
-    help = "Configure IDA plugin for RevEng.ai"
-    wanted_name = "RevEng.AI"
+logger = logging.getLogger("REAI")
 
-    def init(self):
-        # stop plugin from being unloaded once we have run.
-        plugin_logger.debug("plugin init")
 
-        # configuration of plugin
-        self.configuration: Configuration = Configuration()
+class RevEngPlugin(plugin_t):
+    """
+    Define the plugin class itself which is returned by the PLUGIN_ENTRY method
+    that scriptable plugins use to be recognized within IDA
+    """
+    # Variables required by IDA
+    # Use the HIDE to avoid the entry in Edit/Plugins since this plugin's run() method has no functionality.
+    flags = 0 if IDA_SDK_VERSION > 810 else PLUGIN_HIDE
+    wanted_hotkey = ""
+    wanted_name = "RevEng.AI Toolkit"
+    help = f"Configure IDA plugin for {wanted_name}"
+    comment = f"AI-assisted reverse engineering from {wanted_name}"
 
-        # threaded requests
-        self.endpoint: Endpoint = Endpoint(self.configuration)
+    def __init__(self):
+        super(RevEngPlugin, self).__init__()
 
-        # setup the UI hooks for the menu buttons
-        self.handlers = {
-            "menu_open_configuration": ConfigurationHandler,
-            "rename_function": RenameFunctionHandler,
-        }
+        self.initialized = False
+        self.state = RevEngState()
 
-        # setup the views within the main configuration form
-        self.views = {
-            "About": AboutView(),
-            "Configuration": ConfigurationView(self.configuration, self.endpoint),
-            "Upload": UploadView(self.configuration, self.endpoint),
-        }
+    def init(self) -> int:
+        """
+        Called when the plugin is initialised.
+        """
+        if IDA_SDK_VERSION < 800:
+            logger.warning("%s support 8.X IDA => skipping...", self.wanted_name)
+            return PLUGIN_SKIP
+        elif get_inf_attr(INF_APPTYPE) not in (APPT_LIBRARY, APPT_PROGRAM,) and \
+                get_inf_attr(INF_FILETYPE) not in (FT_BIN, FT_PE, FT_ELF, FT_EXE, FT_MACHO,):
+            logger.warning("%s supports PE, ELF, RAW, EXE, DLL and Mach-O file types => skipping...", self.wanted_name)
+            return PLUGIN_SKIP
 
-        # create the main configuration form
-        self.form = MainForm(self.views, self.configuration)
+        logger.info("%s plugin starts", self.wanted_name)
 
-        # add the menu-bar buttons
-        self.configbar = ConfigBar(
-            self.form,
-            self.endpoint,
-            self.handlers["menu_open_configuration"],
-        )
-
-        # setup the Context (aka right-click menu) UI hooks
-        self.hooks = ContextHook(
-            self.form,
-            self.endpoint,
-            self.configuration,
-            self.views["Upload"],
-        )
-
-        self.hooks.hook()
+        self.run()
         return PLUGIN_KEEP
 
-    def run(self, arg):
-        # called when clicked via edit -> plugin
-        plugin_logger.debug("plugin run")
-        pass
+    def reload_plugin(self) -> bool:
+        if self.initialized:
+            self.term()
 
-    def term(self):
-        # called when plugin is unloaded
-        plugin_logger.debug("plugin term")
-        self.configuration.persistConfig()
-        pass
+        logger.info("Reloading %s...", self.wanted_name)
+
+        self.state.start_plugin()
+        self.initialized = True
+        return True
+
+    def run(self, _=None) -> bool:
+        """
+        Called when the plugin is invoked.
+        """
+        return self.reload_plugin()
+
+    def term(self) -> None:
+        """
+        Called when the plugin is unloaded.
+        """
+        logger.info("Terminating %s...", self.wanted_name)
+        if self.state is not None:
+            self.state.stop_plugin()
+
+        self.initialized = False
 
 
+# The PLUGIN_ENTRY method is what IDA calls when scriptable plugins are loaded.
+# It needs to return a plugin of type idaapi.plugin_t.
 def PLUGIN_ENTRY():
-    plugin_logger.debug("global plugin entry called")
-    return Plugin()
+    global required_modules_loaded
+
+    if required_modules_loaded:
+        return RevEngPlugin()
+
+    execute_ui_requests((Requests.MsgBox(RevEngPlugin.wanted_name, "Unable to load all the required modules.", -1),))
+    return None

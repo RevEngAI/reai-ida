@@ -1,0 +1,67 @@
+[
+  {
+    "id": "reai:wizard",
+    "name": "Run Setup Wizard",
+    "callback": "setup_wizard",
+    "shortcut": "Ctrl+Shift+W"
+  },
+  {
+    "id": "reai:upload",
+    "name": "Upload Binary",
+    "callback": "upload_binary",
+    "shortcut": "Ctrl+Shift+U"
+  },
+  {
+    "id": "reai:check_analyze",
+    "name": "Check Analysis Status",
+    "callback": "check_analyze",
+    "shortcut": "Ctrl+Shift+S"
+  },
+  {
+    "id": "reai:auto_analyze",
+    "name": "Auto Analyse Binary",
+    "callback": "auto_analyze",
+    "shortcut": "Ctrl+Shift+A"
+  },
+  {
+    "id": "reai:rename",
+    "name": "Rename From Similar Functions",
+    "callback": "rename_function"
+  },
+  {
+    "id": "reai:signature",
+    "enabled": false,
+    "name": "Update Function Signature",
+    "callback": "function_signature"
+  },
+  {
+    "id": "reai:explain",
+    "enabled": false,
+    "name": "Explain this Function",
+    "callback": "explain_function"
+  },
+  {
+    "id": "reai:logs",
+    "name": "Download Binary Analysis Logs",
+    "callback": "download_logs",
+    "shortcut": "Ctrl+Shift+L"
+  },
+  {
+    "id": "reai:history",
+    "name": "Binary Analyses History",
+    "callback": "analysis_history",
+    "shortcut": "Ctrl+Shift+H"
+  },
+  {
+    "id": "reai:breakdown",
+    "name": "View Function Breakdown",
+    "callback": "function_breakdown",
+    "shortcut": "Ctrl+Shift+B"
+  },
+  {
+    "id": "reai:summary",
+    "enabled": false,
+    "name": "Generate AI Summaries",
+    "callback": "generate_summaries"
+  }
+]
