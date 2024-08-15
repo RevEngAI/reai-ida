@@ -29,6 +29,11 @@
     "callback": "rename_function"
   },
   {
+    "id": "reai:push_function_names",
+    "name": "Push Function Names",
+    "callback": "push_function_names"
+  },
+  {
     "id": "reai:signature",
     "enabled": false,
     "name": "Update Function Signature",
