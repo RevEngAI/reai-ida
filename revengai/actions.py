@@ -13,7 +13,7 @@ from requests import get, HTTPError, Response, RequestException
 from os.path import basename, isfile
 from datetime import date, datetime, timedelta
 
-from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, RE_analyze_functions, file_type
+from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, RE_analyze_functions, file_type, RE_functions_rename_batch
 
 from revengai import __version__
 from revengai.api import RE_explain, RE_functions_dump, RE_search, RE_recent_analysis, RE_generate_summaries
@@ -171,6 +171,49 @@ def rename_function(state: RevEngState) -> None:
 
         inthread(bg_task)
 
+def push_function_names(state: RevEngState, func_addr: int = 0, func_id: int = 0) -> None:
+    fpath = idc.get_input_file_path()
+    if is_condition_met(state, fpath):
+        
+        ida_functions = []
+        base_addr = get_imagebase()
+
+        for func_ea in Functions():
+            ida_functions.append({"name": IDAUtils.get_demangled_func_name(func_ea),
+                              "start_addr": idc.get_func_attr(func_ea, idc.FUNCATTR_START) - base_addr})
+
+        def bg_task() -> None:  
+            try:
+                function_ids = []
+                res: Response = RE_analyze_functions(fpath, state.config.get("binary_id", 0))
+              
+                for function in res.json()["functions"]:
+                    function_ids.append({"function_id":function["function_id"],"function_vaddr":int(function["function_vaddr"]),"function_name":function["function_name"]})
+                    
+            except HTTPError as e:
+                logger.error("Unable to obtain function argument details. %s", e)
+
+                error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
+                Dialog.showError("Function Signature", f"Failed to obtain function argument details: {error}")
+            try:
+                function_remap = {}
+                for ida_func in ida_functions:
+                    for func in function_ids:
+                        if func['function_vaddr'] == ida_func['start_addr'] and not ida_func['name'].startswith("sub_"):
+                            function_remap[func['function_id']] = ida_func['name']
+                
+                res: Response = RE_functions_rename_batch(function_remap)
+                if res.json()["success"]:
+                    logger.info("Function names pushed successfully")
+                else:
+                    logger.error("Error pushing function names")
+            except HTTPError as e:
+                logger.error("Unable to obtain function argument details. %s", e)
+
+                error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
+                Dialog.showError("Function Signature", f"Failed to obtain function argument details: {error}")
+            
+        inthread(bg_task)
 
 def explain_function(state: RevEngState) -> None:
     fpath = idc.get_input_file_path()
