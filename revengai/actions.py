@@ -17,7 +17,7 @@ from datetime import date, datetime, timedelta
 from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, RE_analyze_functions, file_type, RE_functions_rename_batch
 
 from revengai import __version__
-from revengai.api import RE_explain, RE_functions_dump, RE_search, RE_recent_analysis, RE_generate_summaries
+from revengai.api import RE_explain, RE_functions_dump, RE_search, RE_recent_analysis, RE_generate_summaries, RE_process_function
 from revengai.features.sync_functions import SyncFunctionsDialog
 from revengai.misc.qtutils import inthread, inmain
 from revengai.gui.dialog import Dialog, StatusForm, UploadBinaryForm, AboutForm, UpdateForm
@@ -33,7 +33,6 @@ logger = logging.getLogger("REAI")
 
 def setup_wizard(state: RevEngState) -> None:
     RevEngSetupWizard(state).exec_()
-
 
 def upload_binary(state: RevEngState) -> None:
     fpath = idc.get_input_file_path()
@@ -174,6 +173,8 @@ def decompile_function_notes(state: RevEngState) -> None:
     ]
 
     print("Processing Functions")
+    print("There are %s functions to process" % len(ida_functions))
+    print("Submiting functions to the server for processing")
 
     # Analyze functions in background
     def bg_task():
@@ -198,6 +199,12 @@ def decompile_function_notes(state: RevEngState) -> None:
         int(func["function_vaddr"]): func["function_id"]
         for func in analyzed_functions
     }
+
+    """
+    Removed until function submission has been upgraded to batch.
+    # Submit functions for code generation
+    RE_process_function(function_ids)
+    """
 
     # Get function dumps
     res: Response = RE_functions_dump(function_ids)
