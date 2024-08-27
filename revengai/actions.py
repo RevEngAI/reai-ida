@@ -7,7 +7,8 @@ from idaapi import ask_file, ask_buttons, get_imagebase, get_inf_structure, open
     retrieve_input_file_size, retrieve_input_file_sha256, show_wait_box, hide_wait_box, ASKBTN_YES
 
 from subprocess import run, SubprocessError
-from threading import Timer, Event
+from threading import Timer
+from concurrent.futures import ThreadPoolExecutor
 
 from requests import get, HTTPError, Response, RequestException
 from os.path import basename, isfile
@@ -157,49 +158,63 @@ def auto_analyze(state: RevEngState) -> None:
 
 def decompile_function_notes(state: RevEngState) -> None:
     fpath = idc.get_input_file_path()
-    if is_condition_met(state, fpath):
-        ida_functions = []
-        function_ids = []
-        function_details = []
-        base_addr = get_imagebase()
-        bg_task_done = Event()
-        print ("Processing Functions")
-        for func_ea in Functions():
-            print (func_ea) 
-            ida_functions.append({"name": IDAUtils.get_demangled_func_name(func_ea),
-                              "start_addr": idc.get_func_attr(func_ea, idc.FUNCATTR_START) - base_addr,
-                              'loc':idc.get_func_attr(func_ea, idc.FUNCATTR_START)})
-        def bg_task() -> None:
-            try:
+    if not is_condition_met(state, fpath):
+        return
 
-                res: Response = RE_analyze_functions(fpath, state.config.get("binary_id", 0))
-                for function in res.json()["functions"]:
-                    function_ids.append(function["function_id"])
-                    function_details.append({"function_id":function["function_id"],"function_vaddr":int(function["function_vaddr"])})                   
+    base_addr = get_imagebase()
+    
+    # Prepare IDA functions
+    ida_functions = [
+        {
+            "name": IDAUtils.get_demangled_func_name(func_ea),
+            "start_addr": idc.get_func_attr(func_ea, idc.FUNCATTR_START) - base_addr,
+            'loc': idc.get_func_attr(func_ea, idc.FUNCATTR_START)
+        }
+        for func_ea in Functions()
+    ]
 
-            except HTTPError as e:
-                logger.error("Unable to obtain function argument details. %s", e)
-                error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
-                Dialog.showError("Function Signature", f"Failed to obtain function argument details: {error}")
-            
-            finally:
-                bg_task_done.set()
+    print("Processing Functions")
 
-        inthread(bg_task)
-        print ("Please Wait...")
-        bg_task_done.wait()
-        res: Response = RE_functions_dump(function_ids)
-        for ida_func in ida_functions:
-            for func in function_details:
-                if func['function_vaddr'] == ida_func['start_addr']:
-                    for func_dump in res.json()["functions"]:
-                        if func_dump['psuedo_c'] is not None:
-                            if func['function_id'] == func_dump['function_id']:
-                                idc.set_func_cmt(ida_func['loc'],func_dump['psuedo_c'],1)
-        print ("Done")
+    # Analyze functions in background
+    def bg_task():
+        try:
+            res: Response = RE_analyze_functions(fpath, state.config.get("binary_id", 0))
+            return res.json()["functions"]
+        except HTTPError as e:
+            logger.error("Unable to obtain function argument details. %s", e)
+            error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
+            Dialog.showError("Function Signature", f"Failed to obtain function argument details: {error}")
+            return []
 
+    with ThreadPoolExecutor() as executor:
+        future = executor.submit(bg_task)
 
+    print("Please Wait...")
+    analyzed_functions = future.result()
 
+    # Prepare function details
+    function_ids = [func["function_id"] for func in analyzed_functions]
+    function_details = {
+        int(func["function_vaddr"]): func["function_id"]
+        for func in analyzed_functions
+    }
+
+    # Get function dumps
+    res: Response = RE_functions_dump(function_ids)
+    function_dumps = {
+        func_dump['function_id']: func_dump['psuedo_c']
+        for func_dump in res.json()["functions"]
+    }
+
+    # Set function comments
+    for ida_func in ida_functions:
+        function_id = function_details.get(ida_func['start_addr'])
+        if function_id:
+            psuedo_c = function_dumps.get(function_id)
+            if psuedo_c:
+                idc.set_func_cmt(ida_func['loc'], psuedo_c, 1)
+
+    print("Done")
 def rename_function(state: RevEngState) -> None:
     fpath = idc.get_input_file_path()
 
