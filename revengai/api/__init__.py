@@ -5,10 +5,6 @@ from requests import get, post, Response
 
 from reait.api import reveng_req, re_binary_id
 
-import asyncio
-import websockets
-import json
-
 
 def RE_models() -> Response:
     res: Response = reveng_req(get, "v1/models")
@@ -72,12 +68,3 @@ def RE_generate_summaries(function_id: int) -> Response:
     res.raise_for_status()
     return res
 
-def RE_process_function(function_ids: list[int]) -> Response:
-    server_address = 'ws://api.reveng.ai/function/breakdown'
-    async def send(function_id):
-        async with websockets.connect(server_address) as websocket:
-            await websocket.send(json.dumps({"function_id": function_id}))
-            response = await websocket.recv()
-    for function_id in function_ids:
-        asyncio.get_event_loop().run_until_complete(send(function_id))
-    return "Processed"

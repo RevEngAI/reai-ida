@@ -17,7 +17,7 @@ from datetime import date, datetime, timedelta
 from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, RE_analyze_functions, file_type, RE_functions_rename_batch
 
 from revengai import __version__
-from revengai.api import RE_explain, RE_functions_dump, RE_search, RE_recent_analysis, RE_generate_summaries, RE_process_function
+from revengai.api import RE_explain, RE_functions_dump, RE_search, RE_recent_analysis, RE_generate_summaries
 from revengai.features.sync_functions import SyncFunctionsDialog
 from revengai.misc.qtutils import inthread, inmain
 from revengai.gui.dialog import Dialog, StatusForm, UploadBinaryForm, AboutForm, UpdateForm
