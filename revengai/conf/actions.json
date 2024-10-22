@@ -24,26 +24,45 @@
     "shortcut": "Ctrl+Shift+A"
   },
   {
-    "id": "reai:rename",
-    "name": "Rename From Similar Functions",
-    "callback": "rename_function"
-  },
-  {
-    "id": "reai:push_function_names",
-    "name": "Push Function Names",
-    "callback": "push_function_names"
+    "id": "reai:functions",
+    "name": "Functions",
+    "callback": "list_reaiplugin_function",
+    "shortcut": "Ctrl+Shift+F",
+    "children": [
+      {
+        "id": "reai:rename",
+        "name": "Rename From Similar Functions",
+        "callback": "rename_function"
+      },
+      {
+        "id": "reai:push_function_names",
+        "name": "Upload Function Names",
+        "callback": "push_function_names"
+      },
+      {
+        "id": "reai:function_decompile_notes",
+        "name": "Function Decompilation Notes",
+        "callback": "decompile_function_notes"
+      },
+      {
+        "id": "reai:explain",
+        "enabled": false,
+        "name": "Explain this Function",
+        "callback": "explain_function"
+      },
+      {
+        "id": "reai:breakdown",
+        "name": "View Function Breakdown",
+        "callback": "function_breakdown",
+        "shortcut": "Ctrl+Shift+B"
+      }
+    ]
   },
   {
     "id": "reai:signature",
     "enabled": false,
     "name": "Update Function Signature",
     "callback": "function_signature"
-  },
-  {
-    "id": "reai:explain",
-    "enabled": false,
-    "name": "Explain this Function",
-    "callback": "explain_function"
   },
   {
     "id": "reai:logs",
@@ -56,12 +75,6 @@
     "name": "Binary Analyses History",
     "callback": "analysis_history",
     "shortcut": "Ctrl+Shift+H"
-  },
-  {
-    "id": "reai:breakdown",
-    "name": "View Function Breakdown",
-    "callback": "function_breakdown",
-    "shortcut": "Ctrl+Shift+B"
   },
   {
     "id": "reai:summary",
