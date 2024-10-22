@@ -67,3 +67,4 @@ def RE_generate_summaries(function_id: int) -> Response:
 
     res.raise_for_status()
     return res
+

@@ -149,19 +149,29 @@ class RevEngConfigForm_t(PluginForm):
         with open(join(dirname(__file__), "conf", "actions.json")) as fd:
             for action in load(fd):
                 if action.get("enabled", True) and (self.state.config.is_valid() or action["id"] == "reai:wizard"):
-                    # Register menu actions
-                    handler = Handler(action["callback"], self.state)
-                    handler.register(action["id"], action["name"],
-                                     shortcut=action.get("shortcut"),
-                                     tooltip=action.get("tooltip"),
-                                     icon=action.get("icon", -1))
-                    if handler.attach_to_menu(MENU):
-                        self._menus_names.append(handler.name)
-
-                    # Register hotkey actions
+                    if "children" in action:
+                        for child in action["children"]:
+                            handler = Handler(child["callback"], self.state)
+                            handler.register(child["id"], child["name"],
+                                                    shortcut=child.get("shortcut"),
+                                                    tooltip=child.get("tooltip"),
+                                                    icon=child.get("icon", -1))
+                            if handler.attach_to_menu(MENU + action["name"] + "/"):
+                                self._menus_names.append(handler.name)
+                    else:
+                        # Register menu actions
+                        handler = Handler(action["callback"], self.state)
+                        handler.register(action["id"], action["name"],
+                                        shortcut=action.get("shortcut"),
+                                        tooltip=action.get("tooltip"),
+                                        icon=action.get("icon", -1))
+                        if handler.attach_to_menu(MENU):
+                            self._menus_names.append(handler.name)
+                        # Register hotkey actions
                     if hasattr(action, "shortcut") and handler.callback:
                         self._hotkeys.append(add_hotkey(action.get("shortcut"), handler.callback))
-
+                    
+                            
             # context menu for About
             handler = Handler("about", self.state)
             handler.register("reai:about", "About", icon=self.state.icon_id)
