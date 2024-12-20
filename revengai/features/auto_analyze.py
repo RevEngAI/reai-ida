@@ -213,32 +213,36 @@ class AutoAnalysisDialog(BaseDialog):
                             for symbol in res:
                                 func_addr = next((func_addr for func_addr, func_id in self.analyzed_functions.items()
                                                   if symbol["origin_function_id"] == func_id), None)
-
-                                if func_addr:
-                                    symbol["org_func_name"] = next((function["name"] for function in self._functions
+                                
+                                func_name = next((function["name"] for function in self._functions
                                                                     if func_addr == function["start_addr"]), "Unknown")
+                                if "FUN_" not in func_name:
+                                    print (func_name)
+                                    if func_addr:
+                                        symbol["org_func_name"] = next((function["name"] for function in self._functions
+                                                                        if func_addr == function["start_addr"]), "Unknown")
 
-                                    if symbol['nearest_neighbor_function_name'] == symbol["org_func_name"]:
-                                        self._analysis[Analysis.SKIPPED.value] += 1
+                                        if symbol['nearest_neighbor_function_name'] == symbol["org_func_name"]:
+                                            self._analysis[Analysis.SKIPPED.value] += 1
 
-                                        resultsData.append((symbol["org_func_name"],
-                                                            f"{symbol['nearest_neighbor_function_name']} "
-                                                            f"({symbol['nearest_neighbor_binary_name']})",
-                                                            None, "Same Function Name Found",))
-                                    else:
-                                        self._analysis[Analysis.SUCCESSFUL.value] += 1
+                                            resultsData.append((symbol["org_func_name"],
+                                                                f"{symbol['nearest_neighbor_function_name']} "
+                                                                f"({symbol['nearest_neighbor_binary_name']})",
+                                                                None, "Same Function Name Found",))
+                                        else:
+                                            self._analysis[Analysis.SUCCESSFUL.value] += 1
 
-                                        logger.info("Found similar function '%s' with a confidence level of '%s",
-                                                    symbol["nearest_neighbor_function_name"], str(symbol["confidence"]))
+                                            logger.info("Found similar function '%s' with a confidence level of '%s",
+                                                        symbol["nearest_neighbor_function_name"], str(symbol["confidence"]))
 
-                                        symbol["function_addr"] = func_addr
+                                            symbol["function_addr"] = func_addr
 
-                                        resultsData.append((symbol["org_func_name"],
-                                                            f"{symbol['nearest_neighbor_function_name']} "
-                                                            f"({symbol['nearest_neighbor_binary_name']})",
-                                                            CheckableItem(symbol),
-                                                            "Can be renamed with a confidence level of "
-                                                            f"{float(str(symbol['confidence'])[:6]) * 100:#.02f}%",))
+                                            resultsData.append((symbol["org_func_name"],
+                                                                f"{symbol['nearest_neighbor_function_name']} "
+                                                                f"({symbol['nearest_neighbor_binary_name']})",
+                                                                CheckableItem(symbol),
+                                                                "Can be renamed with a confidence level of "
+                                                                f"{float(str(symbol['confidence'])[:6]) * 100:#.02f}%",))
                     finally:
                         pos += len(chunk)
                         inmain(self.ui.progressBar.setProperty, "value", pos)
