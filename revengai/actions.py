@@ -3,7 +3,7 @@ import logging
 
 import idc
 from idautils import Functions
-from idaapi import ask_file, ask_buttons, get_imagebase, get_inf_structure, open_url, \
+from idaapi import IDA_SDK_VERSION, ask_file, ask_buttons, get_imagebase, open_url, \
     retrieve_input_file_size, retrieve_input_file_sha256, show_wait_box, hide_wait_box, ASKBTN_YES
 
 from subprocess import run, SubprocessError
@@ -26,6 +26,11 @@ from revengai.features.auto_analyze import AutoAnalysisDialog
 from revengai.features.function_similarity import FunctionSimilarityDialog
 from revengai.misc.utils import IDAUtils
 from revengai.wizard.wizard import RevEngSetupWizard
+
+if IDA_SDK_VERSION < 900:
+    from idaapi import get_inf_structure
+else:
+    from idaapi import inf_get_procname, inf_is_32bit_exactly, inf_is_64bit
 
 
 logger = logging.getLogger("REAI")
@@ -315,10 +320,13 @@ def explain_function(state: RevEngState) -> None:
                     error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
                     Dialog.showError("Function Explanation", f"Error getting function explanation: {error}")
             else:
-                info = inmain(get_inf_structure)
-
-                procname = info.procname.lower()
-                bits = 64 if inmain(info.is_64bit) else 32 if inmain(info.is_32bit) else 16
+                if IDA_SDK_VERSION < 900:
+                    info = inmain(get_inf_structure)
+                    procname = info.procname.lower()
+                    bits = 64 if inmain(info.is_64bit) else 32 if inmain(info.is_32bit) else 16
+                else:
+                    procname = inmain(inf_get_procname).lower()
+                    bits = 64 if inmain(inf_is_64bit) else 32 if inmain(inf_is_32bit_exactly) else 16
 
                 # https://github.com/williballenthin/python-idb/blob/master/idb/idapython.py#L955-L1046
                 if any(procname.startswith(arch) for arch in ("metapc", "athlon", "k62", "p2", "p3", "p4", "80",)):
