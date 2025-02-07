@@ -626,8 +626,6 @@ def list_function_data_types(state: RevEngState) -> None:
         try:
             res: Response = RE_list_data_types(analysis_id,function_ids)
             res = res.json()
-            print (res)
-            
             if not (res.get("status") and res.get("data") and "items" in res["data"]):
                 print("No function data found in response")
                 return
@@ -701,14 +699,15 @@ def list_function_data_types(state: RevEngState) -> None:
                         # Create final type information
                         final_tinfo = ida_typeinf.tinfo_t()
                         final_tinfo.create_func(func_type_data)
-                        
+                        ida_typeinf.apply_tinfo(func_addr, final_tinfo, ida_typeinf.TINFO_DEFINITE)
                         # Apply type information
+                        """
                         if ida_typeinf.apply_tinfo(func_addr, final_tinfo, ida_typeinf.TINFO_DEFINITE):
                             idc.set_name(func_addr, func_name, idc.SN_NOWARN)
                             logger.info(f"Successfully mapped {func_name} at {hex(func_addr)}")
                         else:
                             logger.error(f"Failed to apply type for {func_name}")
-
+                        """
                     except Exception as e:
                         logger.error(f"Error creating type info for {func_name}: {str(e)}")
                         continue
@@ -876,31 +875,3 @@ def toolbar(state: RevEngState) -> None:
     form = RevEngConfigForm_t(state)
     form.register_actions(False)
     del form
-
-
-def parse_argument_type(arg_type):
-    """
-    Convert argument types to IDA-compatible type representations
-    
-    :param arg_type: Raw argument type 
-    :return: Standardized C-style type string
-    """
-    # Mapping of common type representations
-    type_mapping = {
-        'void': 'void',
-        'char1': 'char',
-        'char': 'char',
-        'int1': 'int8_t',
-        'int2': 'int16_t', 
-        'int4': 'int32_t',
-        'int8': 'int64_t',
-        'uint1': 'uint8_t',
-        'uint2': 'uint16_t',
-        'uint4': 'uint32_t',
-        'uint8': 'uint64_t',
-        'float4': 'float',
-        'float8': 'double',
-        'ptr': 'void*',
-        'void*': 'void*'
-    }
-    return type_mapping.get(arg_type, 'void*')
