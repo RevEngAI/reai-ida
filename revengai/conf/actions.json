@@ -40,14 +40,14 @@
         "callback": "push_function_names"
       },
       {
-        "id": "reai:generate_function_types",
-        "name": "Generate Function Types",
-        "callback": "generate_function_types"
+        "id": "reai:generate_function_data_types",
+        "name": "Generate Function Data Types",
+        "callback": "generate_function_data_types"
       },
       {
-        "id": "reai:ai_decompile",
-        "name": "AI Decompile",
-        "callback": "ai_decompile"
+        "id": "reai:list_function_data_types",
+        "name": "List Function Data Types",
+        "callback": "list_function_data_types"
       },
       {
         "id": "reai:explain",
