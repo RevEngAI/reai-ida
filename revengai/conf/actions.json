@@ -50,11 +50,6 @@
         "callback": "list_function_data_types"
       },
       {
-        "id": "reai:ai_decompile",
-        "name": "AI Decompile",
-        "callback": "ai_decompile"
-      },
-      {
         "id": "reai:explain",
         "enabled": false,
         "name": "Explain this Function",
