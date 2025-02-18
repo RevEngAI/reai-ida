@@ -720,27 +720,28 @@ def list_function_data_types(state: RevEngState) -> None:
         except Exception as e:
             print(f"Error processing function types: {e}")
             
-def ai_decompile_function(state: RevEngState) -> None:
+def ai_decompile(state: RevEngState) -> None:
     fpath = idc.get_input_file_path()
     if is_condition_met(state, fpath):
     
         ea = get_screen_ea()
-        func = idc.get_func(ea)
-        func_name = IDAUtils.get_demangled_func_name(func)
+        func_ea = ida_funcs.get_func(ea)
+        print (func_ea)
 
         def bg_task() -> None:  
             try:
                 # Create a custom viewer subview for the decompiled code
                 sv = simplecustviewer_t()
-                if sv.Create(f"Decompilation of {idc.get_func_name(func_name)}"):
+                if sv.Create(f"Decompilation of {func_ea}"):
                     sv.ClearLines()
                     sv.AddLine("Please wait while the function is decompiled...")
-                    sv.AddLine(func_name)
-                    sv.AddLine(func.start_ea)
+                    sv.AddLine(func_ea)
+                    sv.AddLine(func_ea.start_ea)
                     sv.Show()
             except Exception as e:
                 print(f"Error: {e}")
         inthread(bg_task)
+        
 def generate_summaries(state: RevEngState, function_id: int = 0) -> None:
     fpath = idc.get_input_file_path()
 
