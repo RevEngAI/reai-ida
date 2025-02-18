@@ -7,7 +7,8 @@ import ida_typeinf
 import ida_bytes
 from idautils import Functions
 from idaapi import ask_file, ask_buttons, get_imagebase, get_inf_structure, open_url, \
-    retrieve_input_file_size, retrieve_input_file_sha256, show_wait_box, hide_wait_box, ASKBTN_YES
+    retrieve_input_file_size, retrieve_input_file_sha256, show_wait_box, hide_wait_box, ASKBTN_YES, \
+    simplecustviewer_t, get_screen_ea
 
 from libbs.artifacts import Function
 from subprocess import run, SubprocessError
@@ -241,7 +242,7 @@ def rename_function(state: RevEngState) -> None:
 
         inthread(bg_task)
 
-def push_function_names(state: RevEngState, func_addr: int = 0, func_id: int = 0) -> None:
+def push_function_names(state: RevEngState) -> None:
     fpath = idc.get_input_file_path()
     if is_condition_met(state, fpath):
         
@@ -719,8 +720,28 @@ def list_function_data_types(state: RevEngState) -> None:
         except Exception as e:
             print(f"Error processing function types: {e}")
             
-            
+def ai_decompile_function(state: RevEngState) -> None:
+    fpath = idc.get_input_file_path()
+    if is_condition_met(state, fpath):
+    
+        ea = get_screen_ea()
+        func = idc.get_func(ea)
+        func_name = IDAUtils.get_demangled_func_name(func)
 
+        def bg_task() -> None:  
+            try:
+                function_ids = []
+                # Create a custom viewer subview for the decompiled code
+                sv = simplecustviewer_t()
+                if sv.Create(f"Decompilation of {idc.get_func_name(func_name)}"):
+                    sv.ClearLines()
+                    sv.AddLine("Please wait while the function is decompiled...")
+                    sv.AddLine(func_name)
+                    sv.AddLine(func.start_ea)
+                    sv.Show()
+            except Exception as e:
+                print(f"Error: {e}")
+        inthread(bg_task)
 def generate_summaries(state: RevEngState, function_id: int = 0) -> None:
     fpath = idc.get_input_file_path()
 
