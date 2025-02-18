@@ -50,12 +50,6 @@
         "callback": "list_function_data_types"
       },
       {
-        "id": "reai:explain",
-        "enabled": false,
-        "name": "Explain this Function",
-        "callback": "explain_function"
-      },
-      {
         "id": "reai:breakdown",
         "name": "View Function Breakdown",
         "callback": "function_breakdown",
