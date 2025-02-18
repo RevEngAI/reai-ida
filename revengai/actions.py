@@ -730,7 +730,6 @@ def ai_decompile_function(state: RevEngState) -> None:
 
         def bg_task() -> None:  
             try:
-                function_ids = []
                 # Create a custom viewer subview for the decompiled code
                 sv = simplecustviewer_t()
                 if sv.Create(f"Decompilation of {idc.get_func_name(func_name)}"):
