@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 from time import sleep
+import re
 
 import idc
 import ida_funcs
@@ -755,6 +756,16 @@ def ai_decompile(state: RevEngState) -> None:
                             res: Response = RE_begin_ai_decompilation(function['function_id'])
                         decomp_data = req['data']['decompilation']
                         sleep(5)
+                        string_map = req['data']['function_mapping_full']['inverse_string_map']
+                        function_map = req['data']['function_mapping_full']['inverse_function_map']
+                        def replacement(match):
+                            key = match.group(1)
+                            if key.startswith("DISASM_STRING_"):
+                                return string_map.get(f"<{key}>", {}).get("string", key)
+                            elif key.startswith("DISASM_FUNCTION_"):
+                                return function_map.get(f"<{key}>", {}).get("name", key)
+                            return key
+                        decomp_data = re.sub(r'<(DISASM_STRING_[0-9]+|DISASM_FUNCTION_[0-9]+)>', replacement, decomp_data)
                     idaapi.execute_sync(lambda: callback(decomp_data), idaapi.MFF_FAST)
         
         except HTTPError as e:
