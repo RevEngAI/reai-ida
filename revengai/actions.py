@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+from time import sleep
 
 import idc
 import ida_funcs
@@ -7,7 +8,8 @@ import ida_typeinf
 import ida_bytes
 from idautils import Functions
 from idaapi import ask_file, ask_buttons, get_imagebase, get_inf_structure, open_url, \
-    retrieve_input_file_size, retrieve_input_file_sha256, show_wait_box, hide_wait_box, ASKBTN_YES
+    retrieve_input_file_size, retrieve_input_file_sha256, show_wait_box, hide_wait_box, ASKBTN_YES, \
+    simplecustviewer_t, get_screen_ea, execute_sync, MFF_FAST
 
 from libbs.artifacts import Function
 from subprocess import run, SubprocessError
@@ -18,7 +20,7 @@ from requests import get, HTTPError, Response, RequestException
 from os.path import basename, isfile
 from datetime import date, datetime, timedelta
 
-from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, RE_analyze_functions, file_type, RE_functions_rename_batch, RE_analysis_id, RE_generate_data_types, RE_list_data_types
+from reait.api import RE_upload, RE_analyse, RE_status, RE_logs, RE_analyze_functions, file_type, RE_functions_rename_batch, RE_analysis_id, RE_generate_data_types, RE_list_data_types, RE_poll_ai_decompilation, RE_begin_ai_decompilation
 
 from revengai import __version__
 from revengai.api import RE_explain, RE_functions_dump, RE_search, RE_recent_analysis, RE_generate_summaries
@@ -226,6 +228,7 @@ def decompile_function_notes(state: RevEngState) -> None:
                 idc.set_func_cmt(ida_func['loc'], psuedo_c, 1)
 
     print("Done")
+
 def rename_function(state: RevEngState) -> None:
     fpath = idc.get_input_file_path()
 
@@ -241,7 +244,7 @@ def rename_function(state: RevEngState) -> None:
 
         inthread(bg_task)
 
-def push_function_names(state: RevEngState, func_addr: int = 0, func_id: int = 0) -> None:
+def push_function_names(state: RevEngState) -> None:
     fpath = idc.get_input_file_path()
     if is_condition_met(state, fpath):
         
@@ -719,8 +722,60 @@ def list_function_data_types(state: RevEngState) -> None:
         except Exception as e:
             print(f"Error processing function types: {e}")
             
-            
+def ai_decompile(state: RevEngState) -> None:
+    def bg_task(start_addr: int, callback) -> None:  
+        try:
 
+            res: Response = RE_analyze_functions(fpath, state.config.get("binary_id", 0))
+            for function in res.json()["functions"]:
+                if function['function_vaddr'] == start_addr:
+                    data_status = ""
+                    while 'success' not in data_status:
+                        res: Response = RE_poll_ai_decompilation(function['function_id'])
+                        req = res.json()
+                        data_status = req['data']['status']
+                        if 'uninitialised' in data_status:
+                            res: Response = RE_begin_ai_decompilation(function['function_id'])
+                        decomp_data = req['data']['decompilation']
+                        sleep(5)
+                    print (decomp_data)
+                    execute_sync(lambda: callback(decomp_data), MFF_FAST)
+        
+        except HTTPError as e:
+            logger.error("Unable to obtain function argument details. %s", e)
+            error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
+            Dialog.showError("Function Signature", f"Failed to obtain function argument details: {error}")
+            return None
+        
+    def handle_ai_decomp(decomp_data):
+        if decomp_data:
+            try:
+                sv.ClearLines()
+                lines = str(decomp_data).split("\n")
+                for line in lines:
+                    sv.AddLine(line)
+                sv.Refresh()
+            except Exception as e:
+                print(f"Error: {e}")
+
+    fpath = idc.get_input_file_path()
+    if is_condition_met(state, fpath):
+        ea = get_screen_ea()
+        func_ea = ida_funcs.get_func(ea)
+        if func_ea:
+            func_name = IDAUtils.get_demangled_func_name(func_ea.start_ea)
+            start_addr = func_ea.start_ea
+            try:
+                # Create a custom viewer subview for the decompiled code4
+                sv = simplecustviewer_t()
+                if sv.Create(f"AI Decompilation of {func_name}"):
+                    sv.ClearLines()
+                    sv.AddLine("Please wait while the function is decompiled...")
+                    sv.Show()
+            except Exception as e:
+                print(f"Error: {e}")
+            inthread(bg_task, start_addr, handle_ai_decomp)
+        
 def generate_summaries(state: RevEngState, function_id: int = 0) -> None:
     fpath = idc.get_input_file_path()
 
