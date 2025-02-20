@@ -79,11 +79,5 @@
     "name": "Binary Analyses History",
     "callback": "analysis_history",
     "shortcut": "Ctrl+Shift+H"
-  },
-  {
-    "id": "reai:summary",
-    "enabled": false,
-    "name": "Generate AI Summaries",
-    "callback": "generate_summaries"
   }
 ]

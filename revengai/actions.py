@@ -7,9 +7,7 @@ import ida_funcs
 import ida_typeinf
 import ida_bytes
 from idautils import Functions
-from idaapi import ask_file, ask_buttons, get_imagebase, get_inf_structure, open_url, \
-    retrieve_input_file_size, retrieve_input_file_sha256, show_wait_box, hide_wait_box, ASKBTN_YES, \
-    simplecustviewer_t, get_screen_ea, execute_sync, MFF_FAST
+import idaapi
 
 from libbs.artifacts import Function
 from subprocess import run, SubprocessError
@@ -36,6 +34,25 @@ from revengai.wizard.wizard import RevEngSetupWizard
 
 logger = logging.getLogger("REAI")
 
+version = float(idaapi.get_kernel_version())
+if version < 9.0:
+
+    def is_32bit() -> bool:
+        info: idaapi.idainfo = idaapi.get_inf_structure()
+        return info.is_32bit()
+
+    def is_64bit() -> bool:
+        info: idaapi.idainfo = idaapi.get_inf_structure()
+        return info.is_64bit()
+
+else:
+
+    def is_32bit() -> bool:
+        return idaapi.inf_is_32bit_exactly()
+
+    def is_64bit() -> bool:
+        return idaapi.inf_is_64bit()
+
 
 def setup_wizard(state: RevEngState) -> None:
     RevEngSetupWizard(state).exec_()
@@ -45,11 +62,11 @@ def upload_binary(state: RevEngState) -> None:
 
     if is_condition_met(state, fpath) and is_file_supported(state, fpath):
         def bg_task(model: str, tags: list = None, scope: str = "PRIVATE", debug_fpath: str = None) -> None:
-            file_size = inmain(retrieve_input_file_size)
+            file_size = inmain(idaapi.retrieve_input_file_size)
 
             if state.config.LIMIT > file_size:
                 try:
-                    inmain(show_wait_box, "HIDECANCEL\nUploading binary for analysis…")
+                    inmain(idaapi.show_wait_box, "HIDECANCEL\nUploading binary for analysis…")
 
                     res: Response = RE_upload(fpath)
 
@@ -88,7 +105,7 @@ def upload_binary(state: RevEngState) -> None:
 
                     inmain(idc.warning, f"Error analysing {basename(fpath)}.{err_msg}")
                 finally:
-                    inmain(hide_wait_box)
+                    inmain(idaapi.hide_wait_box)
             else:
                 inmain(idc.warning,
                        f"Please be advised that the largest size for processing a binary file is"
@@ -97,7 +114,7 @@ def upload_binary(state: RevEngState) -> None:
         f = UploadBinaryForm(state)
 
         if f.Show():
-            symbols: dict = {"base_addr": get_imagebase()}
+            symbols: dict = {"base_addr": idaapi.get_imagebase()}
 
             functions = []
             for func_ea in Functions():
@@ -166,7 +183,7 @@ def decompile_function_notes(state: RevEngState) -> None:
     if not is_condition_met(state, fpath):
         return
 
-    base_addr = get_imagebase()
+    base_addr = idaapi.get_imagebase()
     
     # Prepare IDA functions
     ida_functions = [
@@ -249,7 +266,7 @@ def push_function_names(state: RevEngState) -> None:
     if is_condition_met(state, fpath):
         
         ida_functions = []
-        base_addr = get_imagebase()
+        base_addr = idaapi.get_imagebase()
 
         for func_ea in Functions():
             ida_functions.append({"name": IDAUtils.get_demangled_func_name(func_ea),
@@ -322,7 +339,7 @@ def explain_function(state: RevEngState) -> None:
                     error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
                     Dialog.showError("Function Explanation", f"Error getting function explanation: {error}")
             else:
-                info = inmain(get_inf_structure)
+                info = inmain(idaapi.get_inf_structure)
 
                 procname = info.procname.lower()
                 bits = 64 if inmain(info.is_64bit) else 32 if inmain(info.is_32bit) else 16
@@ -356,7 +373,7 @@ def download_logs(state: RevEngState) -> None:
                 res: Response = RE_logs(fpath, console=False, binary_id=state.config.get("binary_id", 0))
 
                 if res.json()["success"]:
-                    filename = inmain(ask_file, 1, "*.log", "Output Filename:")
+                    filename = inmain(idaapi.ask_file, 1, "*.log", "Output Filename:")
 
                     if filename:
                         with open(filename, "w") as fd:
@@ -389,7 +406,7 @@ def function_signature(state: RevEngState, func_addr: int = 0, func_id: int = 0)
                 else:
                     res: Response = RE_analyze_functions(fpath, state.config.get("binary_id", 0))
 
-                    start_addr = func_ea - inmain(get_imagebase)
+                    start_addr = func_ea - inmain(idaapi.get_imagebase)
                     for function in res.json()["functions"]:
                         if function["function_vaddr"] == start_addr:
                             function_ids.append(function["function_id"])
@@ -464,7 +481,7 @@ def analysis_history(state: RevEngState) -> None:
                 error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
                 Dialog.showError("Binary Analysis History", f"Failed to obtain binary analysis history: {error}")
 
-        sha_256_hash = retrieve_input_file_sha256().hex()
+        sha_256_hash = idaapi.get_imagebase().hex()
 
         inthread(bg_task)
 
@@ -504,7 +521,7 @@ def load_recent_analyses(state: RevEngState) -> None:
                 logger.error("Error getting recent analyses: %s", e)
 
         fpath = idc.get_input_file_path()
-        sha_256_hash = retrieve_input_file_sha256().hex()
+        sha_256_hash = idaapi.retrieve_input_file_sha256().hex()
 
         inthread(bg_task)
 
@@ -534,7 +551,7 @@ def sync_functions_name(state: RevEngState, fpath: str) -> None:
                 logger.error("Error syncing functions: %s", e)
 
         functions = []
-        base_addr = get_imagebase()
+        base_addr = idaapi.get_imagebase()
 
         for func_ea in Functions():
             functions.append({"name": IDAUtils.get_demangled_func_name(func_ea),
@@ -557,10 +574,10 @@ def function_breakdown(state: RevEngState, function_id: int = 0) -> None:
                                     f"Unable to fulfil your request at this time.\nBinary analysis status: {status}")
                     return
 
-                func_ea -= inmain(get_imagebase)
+                func_ea -= inmain(idaapi.get_imagebase)
 
                 try:
-                    inmain(show_wait_box,
+                    inmain(idaapi.show_wait_box,
                            f"HIDECANCEL\nGetting information on the function breakdown of {func_name}…")
 
                     res: Response = RE_analyze_functions(fpath, state.config.get("binary_id", 0))
@@ -574,13 +591,13 @@ def function_breakdown(state: RevEngState, function_id: int = 0) -> None:
                 except RequestException as e:
                     logger.error("An unexpected error has occurred. %s", e)
                 finally:
-                    inmain(hide_wait_box)
+                    inmain(idaapi.hide_wait_box)
 
             if func_id:
                 logger.info("Redirection to the WEB browser to display the function breakdown ID %d | %s",
                             func_id, func_name)
 
-                inmain(open_url, f"{state.config.PORTAL}/function/{func_id}")
+                inmain(idaapi.open_url, f"{state.config.PORTAL}/function/{func_id}")
 
         inthread(bg_task, idc.get_func_attr(idc.here(), idc.FUNCATTR_START), function_id)
 
@@ -610,7 +627,7 @@ def list_function_data_types(state: RevEngState) -> None:
     
     if is_condition_met(state, fpath):
         
-        base_addr = get_imagebase()
+        base_addr = idaapi.get_imagebase()
 
         try:
             res: Response = RE_analysis_id(fpath, state.config.get("binary_id", 0))
@@ -738,8 +755,7 @@ def ai_decompile(state: RevEngState) -> None:
                             res: Response = RE_begin_ai_decompilation(function['function_id'])
                         decomp_data = req['data']['decompilation']
                         sleep(5)
-                    print (decomp_data)
-                    execute_sync(lambda: callback(decomp_data), MFF_FAST)
+                    idaapi.execute_sync(lambda: callback(decomp_data), idaapi.MFF_FAST)
         
         except HTTPError as e:
             logger.error("Unable to obtain function argument details. %s", e)
@@ -760,14 +776,14 @@ def ai_decompile(state: RevEngState) -> None:
 
     fpath = idc.get_input_file_path()
     if is_condition_met(state, fpath):
-        ea = get_screen_ea()
+        ea = idaapi.get_screen_ea()
         func_ea = ida_funcs.get_func(ea)
         if func_ea:
             func_name = IDAUtils.get_demangled_func_name(func_ea.start_ea)
             start_addr = func_ea.start_ea
             try:
                 # Create a custom viewer subview for the decompiled code4
-                sv = simplecustviewer_t()
+                sv = idaapi.simplecustviewer_t()
                 if sv.Create(f"AI Decompilation of {func_name}"):
                     sv.ClearLines()
                     sv.AddLine("Please wait while the function is decompiled...")
@@ -780,7 +796,7 @@ def generate_summaries(state: RevEngState, function_id: int = 0) -> None:
     fpath = idc.get_input_file_path()
 
     if is_condition_met(state, fpath) and \
-            ASKBTN_YES == ask_buttons("Generate", "Cancel", "", ASKBTN_YES,
+            idaapi.ASKBTN_YES == idaapi.ask_buttons("Generate", "Cancel", "", idaapi.ASKBTN_YES,
                                       "HIDECANCEL\nWould you like to generate summaries?\n\n"
                                       "The cost of this operation is estimated to be 0.045 credits,\n"
                                       "and will generate summaries for each node in the flow.\n\n"
@@ -795,7 +811,7 @@ def generate_summaries(state: RevEngState, function_id: int = 0) -> None:
                                     f"Unable to fulfil your request at this time.\nBinary analysis status: {status}")
                     return
 
-                func_ea -= inmain(get_imagebase)
+                func_ea -= inmain(idaapi.get_imagebase)
 
                 try:
                     res: Response = RE_analyze_functions(fpath, state.config.get("binary_id", 0))
@@ -813,7 +829,7 @@ def generate_summaries(state: RevEngState, function_id: int = 0) -> None:
                 logger.info("Generates block summaries for function ID %d | %s", func_id, func_name)
 
                 try:
-                    inmain(show_wait_box, f"HIDECANCEL\nGenerating block summaries for {func_name}…")
+                    inmain(idaapi.show_wait_box, f"HIDECANCEL\nGenerating block summaries for {func_name}…")
 
                     res: Response = RE_generate_summaries(func_id)
 
@@ -822,7 +838,7 @@ def generate_summaries(state: RevEngState, function_id: int = 0) -> None:
                     logger.error("Error generating block summaries: %s",
                                  e.response.json().get("error", "An unexpected error occurred."))
                 finally:
-                    inmain(hide_wait_box)
+                    inmain(idaapi.hide_wait_box)
 
         inthread(bg_task, idc.get_func_attr(idc.here(), idc.FUNCATTR_START), function_id)
 
