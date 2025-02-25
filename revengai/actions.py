@@ -482,8 +482,7 @@ def analysis_history(state: RevEngState) -> None:
                 error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
                 Dialog.showError("Binary Analysis History", f"Failed to obtain binary analysis history: {error}")
 
-        sha_256_hash = idaapi.get_imagebase().hex()
-
+        sha_256_hash = idaapi.retrieve_input_file_sha256().hex()
         inthread(bg_task)
 
 

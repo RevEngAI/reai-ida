@@ -32,27 +32,32 @@
       {
         "id": "reai:rename",
         "name": "Rename From Similar Functions",
-        "callback": "rename_function"
+        "callback": "rename_function",
+        "shortcut": "Ctrl+Shift+R"
       },
       {
         "id": "reai:push_function_names",
         "name": "Upload Function Names",
-        "callback": "push_function_names"
+        "callback": "push_function_names",
+        "shortcut": "Ctrl+Shift+P"
       },
       {
         "id": "reai:generate_function_data_types",
         "name": "Generate Function Data Types",
-        "callback": "generate_function_data_types"
+        "callback": "generate_function_data_types",
+        "shortcut": "Ctrl+Shift+G"
       },
       {
         "id": "reai:list_function_data_types",
-        "name": "List Function Data Types",
-        "callback": "list_function_data_types"
+        "name": "Apply Function Data Types",
+        "callback": "list_function_data_types",
+        "shortcut": "Ctrl+Shift+T"
       },
       {
         "id": "reai:ai_decompile",
         "name": "AI Decompiler",
-        "callback": "ai_decompile"
+        "callback": "ai_decompile",
+        "shortcut": "Ctrl+Shift+D"
       },
       {
         "id": "reai:breakdown",

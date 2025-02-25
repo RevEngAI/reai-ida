@@ -31,6 +31,14 @@ class FunctionSignature(object):
 
 func_sig_pattern: Pattern = compile(r"(\w+) (__\w+)(?:\()(\w.*)(?:\))")
 
+version = float(idaapi.get_kernel_version())
+if version < 9.0:
+    def IWID_DISASMS() -> int:
+        return idaapi.IWID_DISASMS
+else:
+    def IWID_DISASMS() -> int:
+        return idaapi.IWID_DISASM
+
 
 class IDAUtils(object):
     @staticmethod
@@ -45,7 +53,7 @@ class IDAUtils(object):
                     (idaapi.set_name(func_ea, func_name, idaapi.SN_NOWARN | idaapi.SN_NOCHECK) or
                      anyway and idaapi.force_name(func_ea, func_name)))
         finally:
-            idaapi.request_refresh(idaapi.IWID_DISASMS)
+            idaapi.request_refresh(IWID_DISASMS())
 
     @staticmethod
     def set_comment(func_ea: int, comment: str) -> None:
@@ -57,7 +65,7 @@ class IDAUtils(object):
                 else:
                     idc.set_func_cmt(func.start_ea, comment, False)
             finally:
-                idaapi.request_refresh(idaapi.IWID_DISASMS)
+                idaapi.request_refresh(IWID_DISASMS())
 
     @staticmethod
     def decompile_func(func_ea: int) -> Optional[str]:
