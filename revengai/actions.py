@@ -755,8 +755,8 @@ def ai_decompile(state: RevEngState) -> None:
                             res: Response = RE_begin_ai_decompilation(function['function_id'])
                         decomp_data = req['data']['decompilation']
                         sleep(5)
-                        string_map = req['data']['function_mapping_full']['inverse_string_map']
-                        function_map = req['data']['function_mapping_full']['inverse_function_map']
+                        string_map = req.get('data', {}).get('function_mapping_full', {}).get('inverse_string_map', {})
+                        function_map = req.get('data', {}).get('function_mapping_full', {}).get('inverse_function_map', {})
                         def replacement(match):
                             key = match.group(1)
                             if key.startswith("DISASM_STRING_"):
