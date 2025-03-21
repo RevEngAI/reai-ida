@@ -2,11 +2,32 @@
 from json import load
 from os.path import dirname, isfile, join
 
-from idc import get_input_file_path, here
-from idaapi import set_dock_pos, PluginForm, unregister_action, attach_action_to_menu, register_action, UI_Hooks, \
-    action_desc_t, action_handler_t, create_menu, delete_menu, create_toolbar, delete_toolbar, \
-    attach_action_to_popup, attach_action_to_toolbar, add_hotkey, del_hotkey, get_widget_type, \
-    AST_ENABLE_ALWAYS, BWN_DISASM, BWN_PSEUDOCODE, DP_TAB, SETMENU_APP, SETMENU_INS, SETMENU_ENSURE_SEP, IDA_SDK_VERSION
+from idc import get_input_file_path
+from idc import here
+from idaapi import set_dock_pos
+from idaapi import PluginForm
+from idaapi import unregister_action
+from idaapi import attach_action_to_menu
+from idaapi import register_action
+from idaapi import UI_Hooks
+from idaapi import action_desc_t
+from idaapi import action_handler_t
+from idaapi import create_menu
+from idaapi import delete_menu
+from idaapi import create_toolbar
+from idaapi import delete_toolbar
+from idaapi import attach_action_to_popup
+from idaapi import attach_action_to_toolbar
+from idaapi import add_hotkey
+from idaapi import del_hotkey
+from idaapi import get_widget_type
+from idaapi import AST_ENABLE_ALWAYS
+from idaapi import BWN_DISASM
+from idaapi import BWN_PSEUDOCODE
+from idaapi import DP_TAB, SETMENU_APP
+from idaapi import SETMENU_INS
+from idaapi import SETMENU_ENSURE_SEP
+from idaapi import IDA_SDK_VERSION
 
 from revengai import actions
 from revengai.actions import load_recent_analyses
@@ -26,6 +47,7 @@ class Handler(action_handler_t):
         self.state = state
 
         from inspect import getmembers, isfunction
+
         for func in getmembers(actions, isfunction):
             if func[0] == callback:
                 self.callback = func[1]
@@ -38,16 +60,25 @@ class Handler(action_handler_t):
     def update(self, _):
         return AST_ENABLE_ALWAYS
 
-    def register(self, name: str, label: str, shortcut: str = None, tooltip: str = None, icon: int = -1) -> bool:
+    def register(
+        self,
+        name: str,
+        label: str,
+        shortcut: str = None,
+        tooltip: str = None,
+        icon: int = -1,
+    ) -> bool:
         self.name = name
 
         action = action_desc_t(
-            name,   # The action name. This acts like an ID and must be unique
-            label,     # The action text
-            self,      # The action handler
+            name,  # The action name. This acts like an ID and must be unique
+            label,  # The action text
+            self,  # The action handler
             shortcut,  # Optional: the action shortcut
-            tooltip,   # Optional: the action tooltip (available in menus/toolbar)
-            icon,      # Optional: the action icon (shows when in menus/toolbars)
+            # Optional: the action tooltip (available in menus/toolbar)
+            tooltip,
+            # Optional: the action icon (shows when in menus/toolbars)
+            icon,
         )
 
         return register_action(action)
@@ -71,7 +102,11 @@ class Hooks(UI_Hooks):
     def populating_widget_popup(self, form, popup):
         fpath = get_input_file_path()
 
-        if fpath and isfile(fpath) and get_widget_type(form) in [BWN_DISASM, BWN_PSEUDOCODE]:
+        if (
+            fpath
+            and isfile(fpath)
+            and get_widget_type(form) in [BWN_DISASM, BWN_PSEUDOCODE]
+        ):
             # Add separator
             attach_action_to_popup(form, popup, None, None)
 
@@ -81,15 +116,32 @@ class Hooks(UI_Hooks):
                 for action in load(fd):
                     if action.get("enabled", True):
                         if self.state.config.is_valid():
-                            if action["id"] == "reai:wizard" or \
-                                    (action["id"] in ("reai:rename", "reai:breakdown", "reai:summary",) and
-                                     not IDAUtils.is_function(func_ea)) or \
-                                    (get_widget_type(form) != BWN_PSEUDOCODE and
-                                     action["id"] in ("reai:explain", "reai:signature",)):
+                            if (
+                                action["id"] == "reai:wizard"
+                                or (
+                                    action["id"]
+                                    in (
+                                        "reai:rename",
+                                        "reai:breakdown",
+                                        "reai:summary",
+                                    )
+                                    and not IDAUtils.is_function(func_ea)
+                                )
+                                or (
+                                    get_widget_type(form) != BWN_PSEUDOCODE
+                                    and action["id"]
+                                    in (
+                                        "reai:explain",
+                                        "reai:signature",
+                                    )
+                                )
+                            ):
                                 continue
                         elif action["id"] != "reai:wizard":
                             continue
-                        attach_action_to_popup(form, popup, action["id"], MENU, SETMENU_APP)
+                        attach_action_to_popup(
+                            form, popup, action["id"], MENU, SETMENU_APP
+                        )
 
 
 class RevEngConfigForm_t(PluginForm):
@@ -114,13 +166,18 @@ class RevEngConfigForm_t(PluginForm):
         if not self.shown:
             self.shown = True
 
-            return PluginForm.Show(self, caption,
-                                   options=(options |
-                                            PluginForm.WOPN_TAB |
-                                            PluginForm.WCLS_SAVE |
-                                            PluginForm.WOPN_MENU |
-                                            PluginForm.WOPN_PERSIST |
-                                            PluginForm.WOPN_RESTORE))
+            return PluginForm.Show(
+                self,
+                caption,
+                options=(
+                    options
+                    | PluginForm.WOPN_TAB
+                    | PluginForm.WCLS_SAVE
+                    | PluginForm.WOPN_MENU
+                    | PluginForm.WOPN_PERSIST
+                    | PluginForm.WOPN_RESTORE
+                ),
+            )
 
     def OnCreate(self, form):
         self.created = True
@@ -141,37 +198,51 @@ class RevEngConfigForm_t(PluginForm):
             # Add toolbar item
             if create_toolbar("reai:toolbar", MENU[:-1]):
                 handler = Handler("toolbar", self.state)
-                handler.register("reai:toolbar", MENU[:-1], icon=self.state.icon_id)
+                handler.register(
+                    "reai:toolbar", MENU[:-1], icon=self.state.icon_id)
                 handler.attach_to_toolbar("reai:toolbar")
             else:
                 self.register_actions(False)
 
         with open(join(dirname(__file__), "conf", "actions.json")) as fd:
             for action in load(fd):
-                if action.get("enabled", True) and (self.state.config.is_valid() or action["id"] == "reai:wizard"):
+                if action.get("enabled", True) and (
+                    self.state.config.is_valid(
+                    ) or action["id"] == "reai:wizard"
+                ):
                     if "children" in action:
                         for child in action["children"]:
                             handler = Handler(child["callback"], self.state)
-                            handler.register(child["id"], child["name"],
-                                                    shortcut=child.get("shortcut"),
-                                                    tooltip=child.get("tooltip"),
-                                                    icon=child.get("icon", -1))
-                            if handler.attach_to_menu(MENU + action["name"] + "/"):
+                            handler.register(
+                                child["id"],
+                                child["name"],
+                                shortcut=child.get("shortcut"),
+                                tooltip=child.get("tooltip"),
+                                icon=child.get("icon", -1),
+                            )
+                            if handler.attach_to_menu(
+                                f"{MENU}{action['name']}/"
+                            ):
                                 self._menus_names.append(handler.name)
                     else:
                         # Register menu actions
                         handler = Handler(action["callback"], self.state)
-                        handler.register(action["id"], action["name"],
-                                        shortcut=action.get("shortcut"),
-                                        tooltip=action.get("tooltip"),
-                                        icon=action.get("icon", -1))
+                        handler.register(
+                            action["id"],
+                            action["name"],
+                            shortcut=action.get("shortcut"),
+                            tooltip=action.get("tooltip"),
+                            icon=action.get("icon", -1),
+                        )
                         if handler.attach_to_menu(MENU):
                             self._menus_names.append(handler.name)
                         # Register hotkey actions
                     if hasattr(action, "shortcut") and handler.callback:
-                        self._hotkeys.append(add_hotkey(action.get("shortcut"), handler.callback))
-                    
-                            
+                        self._hotkeys.append(
+                            add_hotkey(action.get("shortcut"),
+                                       handler.callback)
+                        )
+
             # context menu for About
             handler = Handler("about", self.state)
             handler.register("reai:about", "About", icon=self.state.icon_id)
