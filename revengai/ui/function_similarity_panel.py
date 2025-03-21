@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'function_similarity_panel.ui'
+# Form implementation generated from reading ui file
+# 'function_similarity_panel.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.10
 #
@@ -20,11 +21,17 @@ class Ui_FunctionSimilarityPanel(object):
         FunctionSimilarityPanel.resize(800, 600)
         FunctionSimilarityPanel.setContextMenuPolicy(QtCore.Qt.NoContextMenu)
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap("../resources/favicon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(
+            QtGui.QPixmap("../resources/favicon.png"),
+            QtGui.QIcon.Normal,
+            QtGui.QIcon.Off
+        )
         FunctionSimilarityPanel.setWindowIcon(icon)
         FunctionSimilarityPanel.setLayoutDirection(QtCore.Qt.LeftToRight)
         self.verticalLayout = QtWidgets.QVBoxLayout(FunctionSimilarityPanel)
-        self.verticalLayout.setSizeConstraint(QtWidgets.QLayout.SetDefaultConstraint)
+        self.verticalLayout.setSizeConstraint(
+            QtWidgets.QLayout.SetDefaultConstraint
+        )
         self.verticalLayout.setContentsMargins(8, 10, 8, 8)
         self.verticalLayout.setObjectName("verticalLayout")
         self.tabWidget = QtWidgets.QTabWidget(FunctionSimilarityPanel)
@@ -33,7 +40,9 @@ class Ui_FunctionSimilarityPanel(object):
         self.tab = QtWidgets.QWidget()
         self.tab.setObjectName("tab")
         self.vboxlayout = QtWidgets.QVBoxLayout(self.tab)
-        self.vboxlayout.setSizeConstraint(QtWidgets.QLayout.SetDefaultConstraint)
+        self.vboxlayout.setSizeConstraint(
+            QtWidgets.QLayout.SetDefaultConstraint
+        )
         self.vboxlayout.setContentsMargins(2, 2, 2, 2)
         self.vboxlayout.setSpacing(4)
         self.vboxlayout.setObjectName("vboxlayout")
@@ -49,9 +58,15 @@ class Ui_FunctionSimilarityPanel(object):
         self.collectionsTable = QtWidgets.QTableView(self.tab)
         self.collectionsTable.setMaximumSize(QtCore.QSize(16777215, 16777215))
         self.collectionsTable.setContextMenuPolicy(QtCore.Qt.NoContextMenu)
-        self.collectionsTable.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
-        self.collectionsTable.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
-        self.collectionsTable.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.collectionsTable.setEditTriggers(
+            QtWidgets.QAbstractItemView.NoEditTriggers
+        )
+        self.collectionsTable.setSelectionMode(
+            QtWidgets.QAbstractItemView.SingleSelection
+        )
+        self.collectionsTable.setSelectionBehavior(
+            QtWidgets.QAbstractItemView.SelectRows
+        )
         self.collectionsTable.setShowGrid(True)
         self.collectionsTable.setGridStyle(QtCore.Qt.SolidLine)
         self.collectionsTable.setSortingEnabled(False)
@@ -70,7 +85,12 @@ class Ui_FunctionSimilarityPanel(object):
         self.checkBox = QtWidgets.QCheckBox(self.tab)
         self.checkBox.setObjectName("checkBox")
         self.hboxlayout.addWidget(self.checkBox)
-        spacerItem = QtWidgets.QSpacerItem(400, 10, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
+        spacerItem = QtWidgets.QSpacerItem(
+            400,
+            10,
+            QtWidgets.QSizePolicy.Expanding,
+            QtWidgets.QSizePolicy.Minimum
+        )
         self.hboxlayout.addItem(spacerItem)
         self.label_2 = QtWidgets.QLabel(self.tab)
         self.label_2.setTextFormat(QtCore.Qt.PlainText)
@@ -79,7 +99,11 @@ class Ui_FunctionSimilarityPanel(object):
         self.label_2.setObjectName("label_2")
         self.hboxlayout.addWidget(self.label_2)
         self.lineEdit = QtWidgets.QLineEdit(self.tab)
-        self.lineEdit.setAlignment(QtCore.Qt.AlignCenter|QtCore.Qt.AlignHCenter|QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
+        self.lineEdit.setAlignment(
+            QtCore.Qt.AlignCenter | QtCore.Qt.AlignHCenter |
+            QtCore.Qt.AlignLeading | QtCore.Qt.AlignLeft |
+            QtCore.Qt.AlignVCenter
+        )
         self.lineEdit.setClearButtonEnabled(True)
         self.lineEdit.setObjectName("lineEdit")
         self.hboxlayout.addWidget(self.lineEdit)
@@ -88,15 +112,19 @@ class Ui_FunctionSimilarityPanel(object):
         self.tab_2 = QtWidgets.QWidget()
         self.tab_2.setObjectName("tab_2")
         self.vboxlayout1 = QtWidgets.QVBoxLayout(self.tab_2)
-        self.vboxlayout1.setSizeConstraint(QtWidgets.QLayout.SetDefaultConstraint)
+        self.vboxlayout1.setSizeConstraint(
+            QtWidgets.QLayout.SetDefaultConstraint)
         self.vboxlayout1.setContentsMargins(2, 2, 2, 2)
         self.vboxlayout1.setSpacing(4)
         self.vboxlayout1.setObjectName("vboxlayout1")
         self.resultsTable = QtWidgets.QTableView(self.tab_2)
         self.resultsTable.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
-        self.resultsTable.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
-        self.resultsTable.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
-        self.resultsTable.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.resultsTable.setEditTriggers(
+            QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.resultsTable.setSelectionMode(
+            QtWidgets.QAbstractItemView.SingleSelection)
+        self.resultsTable.setSelectionBehavior(
+            QtWidgets.QAbstractItemView.SelectRows)
         self.resultsTable.setShowGrid(True)
         self.resultsTable.setGridStyle(QtCore.Qt.SolidLine)
         self.resultsTable.setSortingEnabled(False)
@@ -137,7 +165,12 @@ class Ui_FunctionSimilarityPanel(object):
         self.verticalLayout.addWidget(self.progressBar)
         self.horizontalLayout = QtWidgets.QHBoxLayout()
         self.horizontalLayout.setObjectName("horizontalLayout")
-        spacerItem1 = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
+        spacerItem1 = QtWidgets.QSpacerItem(
+            40,
+            20,
+            QtWidgets.QSizePolicy.Expanding,
+            QtWidgets.QSizePolicy.Minimum
+        )
         self.horizontalLayout.addItem(spacerItem1)
         self.fetchButton = QtWidgets.QPushButton(FunctionSimilarityPanel)
         self.fetchButton.setObjectName("fetchButton")
@@ -154,12 +187,19 @@ class Ui_FunctionSimilarityPanel(object):
 
     def retranslateUi(self, FunctionSimilarityPanel):
         _translate = QtCore.QCoreApplication.translate
-        FunctionSimilarityPanel.setWindowTitle(_translate("FunctionSimilarityPanel", "RevEng.AI Toolkit: Function Rename"))
-        self.collectionsFilter.setPlaceholderText(_translate("FunctionSimilarityPanel", "Search collections…"))
-        self.checkBox.setText(_translate("FunctionSimilarityPanel", "Use Debug Symbols"))
+        FunctionSimilarityPanel.setWindowTitle(_translate(
+            "FunctionSimilarityPanel", "RevEng.AI Toolkit: Function Rename"))
+        self.collectionsFilter.setPlaceholderText(_translate(
+            "FunctionSimilarityPanel", "Search collections…"))
+        self.checkBox.setText(_translate(
+            "FunctionSimilarityPanel", "Use Debug Symbols"))
         self.label_2.setText(_translate("FunctionSimilarityPanel", "Results:"))
         self.lineEdit.setText(_translate("FunctionSimilarityPanel", "5"))
-        self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab), _translate("FunctionSimilarityPanel", "Collections"))
-        self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_2), _translate("FunctionSimilarityPanel", "Results"))
-        self.fetchButton.setText(_translate("FunctionSimilarityPanel", "Fetch Results"))
-        self.renameButton.setText(_translate("FunctionSimilarityPanel", "Rename"))
+        self.tabWidget.setTabText(self.tabWidget.indexOf(
+            self.tab), _translate("FunctionSimilarityPanel", "Collections"))
+        self.tabWidget.setTabText(self.tabWidget.indexOf(
+            self.tab_2), _translate("FunctionSimilarityPanel", "Results"))
+        self.fetchButton.setText(_translate(
+            "FunctionSimilarityPanel", "Fetch Results"))
+        self.renameButton.setText(_translate(
+            "FunctionSimilarityPanel", "Rename"))

@@ -17,11 +17,16 @@ class Ui_SyncFunctionsPanel(object):
         SyncFunctionsPanel.resize(800, 600)
         SyncFunctionsPanel.setContextMenuPolicy(QtCore.Qt.NoContextMenu)
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap("../resources/favicon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(
+            QtGui.QPixmap("../resources/favicon.png"),
+            QtGui.QIcon.Normal,
+            QtGui.QIcon.Off
+        )
         SyncFunctionsPanel.setWindowIcon(icon)
         SyncFunctionsPanel.setLayoutDirection(QtCore.Qt.LeftToRight)
         self.verticalLayout = QtWidgets.QVBoxLayout(SyncFunctionsPanel)
-        self.verticalLayout.setSizeConstraint(QtWidgets.QLayout.SetDefaultConstraint)
+        self.verticalLayout.setSizeConstraint(
+            QtWidgets.QLayout.SetDefaultConstraint)
         self.verticalLayout.setContentsMargins(8, 10, 8, 8)
         self.verticalLayout.setObjectName("verticalLayout")
         self.horizontalLayout = QtWidgets.QHBoxLayout()
@@ -41,15 +46,19 @@ class Ui_SyncFunctionsPanel(object):
         self.groupBox = QtWidgets.QGroupBox(SyncFunctionsPanel)
         self.groupBox.setObjectName("groupBox")
         self.vboxlayout = QtWidgets.QVBoxLayout(self.groupBox)
-        self.vboxlayout.setSizeConstraint(QtWidgets.QLayout.SetDefaultConstraint)
+        self.vboxlayout.setSizeConstraint(
+            QtWidgets.QLayout.SetDefaultConstraint)
         self.vboxlayout.setContentsMargins(2, 2, 2, 2)
         self.vboxlayout.setSpacing(4)
         self.vboxlayout.setObjectName("vboxlayout")
         self.functionsList = QtWidgets.QTableView(self.groupBox)
         self.functionsList.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
-        self.functionsList.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
-        self.functionsList.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
-        self.functionsList.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.functionsList.setEditTriggers(
+            QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.functionsList.setSelectionMode(
+            QtWidgets.QAbstractItemView.SingleSelection)
+        self.functionsList.setSelectionBehavior(
+            QtWidgets.QAbstractItemView.SelectRows)
         self.functionsList.setShowGrid(True)
         self.functionsList.setGridStyle(QtCore.Qt.SolidLine)
         self.functionsList.setSortingEnabled(False)
@@ -66,7 +75,12 @@ class Ui_SyncFunctionsPanel(object):
         self.verticalLayout.addWidget(self.groupBox)
         self.horizontalLayout1 = QtWidgets.QHBoxLayout()
         self.horizontalLayout1.setObjectName("horizontalLayout1")
-        spacerItem = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
+        spacerItem = QtWidgets.QSpacerItem(
+            40,
+            20,
+            QtWidgets.QSizePolicy.Expanding,
+            QtWidgets.QSizePolicy.Minimum
+        )
         self.horizontalLayout1.addItem(spacerItem)
         self.cancelButton = QtWidgets.QPushButton(SyncFunctionsPanel)
         self.cancelButton.setMinimumSize(QtCore.QSize(100, 0))
@@ -83,7 +97,9 @@ class Ui_SyncFunctionsPanel(object):
 
     def retranslateUi(self, SyncFunctionsPanel):
         _translate = QtCore.QCoreApplication.translate
-        SyncFunctionsPanel.setWindowTitle(_translate("SyncFunctionsPanel", "RevEng.AI Toolkit: Synchronise Functions"))
+        SyncFunctionsPanel.setWindowTitle(_translate(
+            "SyncFunctionsPanel", "RevEng.AI Toolkit: Synchronise Functions"))
         self.selectAll.setText(_translate("SyncFunctionsPanel", " Select All"))
         self.cancelButton.setText(_translate("SyncFunctionsPanel", "Cancel"))
-        self.syncButton.setText(_translate("SyncFunctionsPanel", "Synchronise"))
+        self.syncButton.setText(_translate(
+            "SyncFunctionsPanel", "Synchronise"))
