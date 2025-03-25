@@ -1167,26 +1167,73 @@ def ai_decompile(state: RevEngState) -> None:
             res: Response = RE_analyze_functions(
                 fpath, state.config.get("binary_id", 0)
             )
+            logger.info("Analyzing functions for AI decompilation")
             for function in res.json()["functions"]:
                 if function["function_vaddr"] == start_addr:
+                    logger.info(
+                        f"Decompiling function {hex(function['function_vaddr'])} with id {function['function_id']}")
+                    count = 0
                     data_status = ""
                     while "success" not in data_status:
+                        logger.info("Polling AI decompilation")
                         res: Response = RE_poll_ai_decompilation(
                             function["function_id"]
                         )
-                        req = res.json()
+                        req: dict = res.json()
                         data_status = req["data"]["status"]
+
+                        logger.info("AI Decompilation status: %s", data_status)
+
                         if "uninitialised" in data_status:
-                            res: Response = RE_begin_ai_decompilation(
-                                function["function_id"]
-                            )
+                            if count == 0:
+                                res: Response = RE_begin_ai_decompilation(
+                                    function["function_id"]
+                                )
+                                if res.json().get("status", False):
+                                    logger.info("AI Decompilation started")
+                                else:
+                                    idaapi.execute_sync(
+                                        lambda: callback(None),
+                                        idaapi.MFF_FAST,
+                                    )
+                                    logger.error(
+                                        "Failed to start AI Decompilation")
+                                    Dialog.showInfo(
+                                        "AI Decompilation",
+                                        "Failed to start AI Decompilation",
+                                    )
+                                    return None
+                                # continue to poll for changes
+                                count += 1
+                                continue
+                            else:
+                                if count >= 2:
+                                    # destroy the view
+                                    idaapi.execute_sync(
+                                        lambda: callback(None),
+                                        idaapi.MFF_FAST,
+                                    )
+                                    Dialog.showInfo(
+                                        "AI Decompilation",
+                                        "AI Decompilation is taking longer"
+                                        " than expected, this could be due to"
+                                        " an error (windows functions) please"
+                                        " try again later.",
+                                    )
+                                    return None
+
+                                sleep(3)
+                                count += 1
+                                continue
+
                         decomp_data = req["data"]["decompilation"]
-                        sleep(5)
+
                         string_map = (
                             req.get("data", {})
                             .get("function_mapping_full", {})
                             .get("inverse_string_map", {})
                         )
+
                         function_map = (
                             req.get("data", {})
                             .get("function_mapping_full", {})
@@ -1228,7 +1275,7 @@ def ai_decompile(state: RevEngState) -> None:
             return None
 
     def handle_ai_decomp(decomp_data):
-        if decomp_data:
+        if decomp_data is not None:
             try:
                 sv.ClearLines()
                 lines = str(decomp_data).split("\n")
@@ -1237,6 +1284,10 @@ def ai_decompile(state: RevEngState) -> None:
                 sv.Refresh()
             except Exception as e:
                 print(f"Error: {e}")
+        else:
+            logger.error("An error occurred during AI Decompilation")
+            # an error happened destroy the view
+            sv.Close()
 
     fpath = idc.get_input_file_path()
     if is_condition_met(state, fpath):
@@ -1244,7 +1295,12 @@ def ai_decompile(state: RevEngState) -> None:
         func_ea = ida_funcs.get_func(ea)
         if func_ea:
             func_name = IDAUtils.get_demangled_func_name(func_ea.start_ea)
-            start_addr = func_ea.start_ea
+            image_base = idaapi.get_imagebase()  # Get the image base address
+            # subtract the image base address from the start address
+            start_addr = func_ea.start_ea - image_base
+            logger.info(
+                "Starting AI Decompilation of function "
+                f"{hex(start_addr)}")
             try:
                 # Create a custom viewer subview for the decompiled code4
                 sv = idaapi.simplecustviewer_t()
