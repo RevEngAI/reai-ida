@@ -345,16 +345,15 @@ class AutoAnalysisDialog(BaseDialog):
                                             "Unknown",
                                         )
 
-                                        if (
-                                            symbol["nearest_neighbor_function_name"]
-                                            == symbol["org_func_name"]
-                                        ):
+                                        nnfn = symbol["nearest_neighbor_function_name"]
+
+                                        if (nnfn == symbol["org_func_name"]):
                                             self._analysis[Analysis.SKIPPED.value] += 1
 
                                             resultsData.append((
                                                 symbol["org_func_name"],
-                                                f"{symbol['nearest_neighbor_function_name']} "
-                                                f"({symbol['nearest_neighbor_binary_name']})",
+                                                f"{nnfn} "
+                                                f"({nnfn})",
                                                 None,
                                                 "Same Function Name Found",
                                             ))
@@ -365,9 +364,7 @@ class AutoAnalysisDialog(BaseDialog):
 
                                             logger.info(
                                                 "Found similar function '%s' with a confidence level of '%s",
-                                                symbol[
-                                                    "nearest_neighbor_function_name"
-                                                ],
+                                                nnfn,
                                                 str(symbol["confidence"]),
                                             )
 
@@ -376,8 +373,8 @@ class AutoAnalysisDialog(BaseDialog):
                                             resultsData.append(
                                                 (
                                                     symbol["org_func_name"],
-                                                    f"{symbol['nearest_neighbor_function_name']} "
-                                                    f"({symbol['nearest_neighbor_binary_name']})",
+                                                    f"{nnfn} "
+                                                    f"({nnfn})",
                                                     CheckableItem(symbol),
                                                     "Can be renamed with a confidence level of "
                                                     f"{float(str(symbol['confidence'])[:6]) * 100:#.02f}%",
@@ -537,21 +534,23 @@ class AutoAnalysisDialog(BaseDialog):
             ):
                 symbol = row_item[2].data
 
+                nnfn = symbol['nearest_neighbor_function_name']
+
                 if IDAUtils.set_name(
                     symbol["function_addr"] + self.base_addr,
                     symbol["nearest_neighbor_function_name"],
                 ):
                     func_id = self._get_function_id(symbol["function_addr"])
                     if func_id:
-                        functions[func_id] = symbol["nearest_neighbor_function_name"]
+                        functions[func_id] = nnfn
                         continue
 
                 batches.append(
                     "\n     • "
                     + sub(
                         r"^(.{10}).*\s+➡\s+(.{10}).*$",
-                        "\g<1>…  ➡  \g<2>…",
-                        f"{symbol['org_func_name']}  ➡  {symbol['nearest_neighbor_function_name']}",
+                        r"\g<1>…  ➡  \g<2>…",
+                        f"{symbol['org_func_name']}  ➡  {nnfn}",
                     )
                 )
 
@@ -568,8 +567,9 @@ class AutoAnalysisDialog(BaseDialog):
                 batches.append("\n     • …")
 
             idc.warning(
-                f"Can't rename the following{'' if cnt == 1 else ' ' + str(cnt)} function{'s'[:cnt ^ 1]}, "
-                f"name already exists for: {''.join(batches)}"
+                "Can't rename the following"
+                f"{'' if cnt == 1 else ' ' + str(cnt)} function{'s'[:cnt ^ 1]}"
+                f", name already exists for: {''.join(batches)}"
             )
 
     def _rename_function(self, selected, batches: list = None) -> None:
@@ -602,12 +602,13 @@ class AutoAnalysisDialog(BaseDialog):
                 )
 
                 if batches is not None:
+                    nnfn = symbol['nearest_neighbor_function_name']
                     batches.append(
                         "\n     • "
                         + sub(
                             r"^(.{10}).*\s+➡\s+(.{10}).*$",
-                            "\g<1>…  ➡  \g<2>…",
-                            f"{symbol['org_func_name']}  ➡  {symbol['nearest_neighbor_function_name']}",
+                            r"\g<1>…  ➡  \g<2>…",
+                            f"{symbol['org_func_name']}  ➡  {nnfn}",
                         )
                     )
                 else:
