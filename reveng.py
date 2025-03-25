@@ -114,7 +114,7 @@ class RevEngPlugin(plugin_t):
 # The PLUGIN_ENTRY method is what IDA calls when scriptable plugins are loaded.
 # It needs to return a plugin of type idaapi.plugin_t.
 def PLUGIN_ENTRY():
-    requested_libraries = ["reait.api", "libbs", "libbs.api"]
+    requested_libraries = ["reait", "libbs"]
 
     have_all_libraries = all(
         importlib.find_loader(lib) is not None for lib in
