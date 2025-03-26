@@ -29,6 +29,7 @@ from reait.api import (
     RE_analysis_id,
     RE_generate_data_types,
     RE_list_data_types,
+    RE_analysis_lookup,
     RE_poll_ai_decompilation,
     RE_begin_ai_decompilation,
 )
@@ -135,7 +136,18 @@ def upload_binary(state: RevEngState) -> None:
 
                         analysis = res.json()
 
-                        state.config.set("binary_id", analysis["binary_id"])
+                        res = RE_analysis_lookup(analysis["binary_id"])
+
+                        analysis_info = res.json()
+
+                        state.config.set(
+                            "binary_id",
+                            analysis["binary_id"]
+                        )
+                        state.config.set(
+                            "analysis_id",
+                            analysis_info["analysis_id"]
+                        )
 
                         inmain(
                             state.config.database.add_analysis,
@@ -1161,118 +1173,148 @@ def list_function_data_types(state: RevEngState) -> None:
 
 
 def ai_decompile(state: RevEngState) -> None:
+    def error_and_close_view(cb: callable, error: str) -> None:
+        Dialog.showError(
+            "Error during AI decompilation",
+            f"Unable to continue with AI decompilation: {error}",
+        )
+        logger.error(f"Error during AI decompilation: {error}")
+        idaapi.execute_sync(lambda: cb(None), idaapi.MFF_FAST)
+        return None
+
+    def get_api_error(res: dict) -> str:
+        errors = res.get("errors", [])
+        if len(errors) == 0:
+            return "An unexpected error occurred. Sorry for the inconvenience."
+        return errors[0].get("message", "An unexpected error occurred.")
+
     def bg_task(start_addr: int, callback) -> None:
         try:
-
-            res: Response = RE_analyze_functions(
-                fpath, state.config.get("binary_id", 0)
-            )
             logger.info("Analyzing functions for AI decompilation")
-            for function in res.json()["functions"]:
-                if function["function_vaddr"] == start_addr:
-                    logger.info(
-                        f"Decompiling function {hex(function['function_vaddr'])} with id {function['function_id']}")
-                    count = 0
-                    data_status = ""
-                    while "success" not in data_status:
-                        logger.info("Polling AI decompilation")
-                        res: Response = RE_poll_ai_decompilation(
-                            function["function_id"]
-                        )
-                        req: dict = res.json()
-                        data_status = req["data"]["status"]
+            res: dict = RE_analyze_functions(
+                fpath, state.config.get("binary_id", 0)
+            ).json()
 
-                        logger.info("AI Decompilation status: %s", data_status)
+            if not res.get("success", False):
+                return error_and_close_view(
+                    callback,
+                    "Unable to analyze functions for AI"
+                    " decompilation"
+                )
 
-                        if "uninitialised" in data_status:
-                            if count == 0:
-                                res: Response = RE_begin_ai_decompilation(
-                                    function["function_id"]
-                                )
-                                if res.json().get("status", False):
-                                    logger.info("AI Decompilation started")
-                                else:
-                                    idaapi.execute_sync(
-                                        lambda: callback(None),
-                                        idaapi.MFF_FAST,
-                                    )
-                                    logger.error(
-                                        "Failed to start AI Decompilation")
-                                    Dialog.showInfo(
-                                        "AI Decompilation",
-                                        "Failed to start AI Decompilation",
-                                    )
-                                    return None
-                                # continue to poll for changes
-                                count += 1
-                                continue
-                            else:
-                                if count >= 2:
-                                    # destroy the view
-                                    idaapi.execute_sync(
-                                        lambda: callback(None),
-                                        idaapi.MFF_FAST,
-                                    )
-                                    Dialog.showInfo(
-                                        "AI Decompilation",
-                                        "AI Decompilation is taking longer"
-                                        " than expected, this could be due to"
-                                        " an error (windows functions) please"
-                                        " try again later.",
-                                    )
-                                    return None
+            functions: list[dict] = res.get("functions", [])
 
-                                sleep(3)
-                                count += 1
-                                continue
+            target_function = next(
+                (
+                    function
+                    for function in functions
+                    if function["function_vaddr"] == start_addr
+                ),
+                None,
+            )
 
-                        decomp_data = req["data"]["decompilation"]
+            if target_function is None:
+                return error_and_close_view(
+                    callback, "Function not found in the analysis results"
+                )
 
-                        string_map = (
-                            req.get("data", {})
-                            .get("function_mapping_full", {})
-                            .get("inverse_string_map", {})
-                        )
+            logger.info(
+                "Decompiling function "
+                f"{hex(target_function['function_vaddr'])}"
+                f" with id {target_function['function_id']}"
+            )
 
-                        function_map = (
-                            req.get("data", {})
-                            .get("function_mapping_full", {})
-                            .get("inverse_function_map", {})
-                        )
+            res = RE_poll_ai_decompilation(
+                target_function["function_id"]
+            ).json()
 
-                        def replacement(match):
-                            key = match.group(1)
-                            if key.startswith("DISASM_STRING_"):
-                                return string_map.get(f"<{key}>", {}).get(
-                                    "string",
-                                    key
-                                )
-                            elif key.startswith("DISASM_FUNCTION_"):
-                                return function_map.get(f"<{key}>", {}).get(
-                                    "name",
-                                    key
-                                )
-                            return key
+            if not res.get("status", False):
+                return error_and_close_view(callback, get_api_error(res))
 
-                        decomp_data = re.sub(
-                            r"<(DISASM_STRING_[0-9]+|DISASM_FUNCTION_[0-9]+)>",
-                            replacement,
-                            decomp_data,
-                        )
-                    idaapi.execute_sync(lambda: callback(
-                        decomp_data), idaapi.MFF_FAST)
+            poll_status = res.get("data").get("status", "uninitialised")
+            logger.info(f"Polling AI decompilation: {poll_status}")
 
+            if poll_status == "uninitialised":
+                logger.info("Starting AI Decompilation")
+                res = RE_begin_ai_decompilation(
+                    target_function["function_id"]
+                ).json()
+
+                if not res.get("status", False):
+                    return error_and_close_view(callback, get_api_error(res))
+
+                logger.info("AI Decompilation started")
+
+            uninitialised_count = 0
+
+            for _ in range(5):
+                # wait for the decompilation to complete
+                logger.info("Waiting for AI decompliation to start/complete")
+                sleep(3)
+
+                # poll again the status
+                res = RE_poll_ai_decompilation(
+                    target_function["function_id"]
+                ).json()
+
+                if not res.get("status", False):
+                    return error_and_close_view(callback, get_api_error(res))
+
+                poll_status = res.get("data").get("status", "uninitialised")
+
+                if poll_status == "uninitialised":
+                    uninitialised_count += 1
+                else:
+                    logger.info(f"Polling AI decompilation: {poll_status}")
+
+                if uninitialised_count == 2:
+                    return error_and_close_view(
+                        callback,
+                        "AI Decompilation is taking longer than expected."
+                        " This could be due to an error in the decompilation"
+                        " process or the function not being supported.",
+                    )
+
+                if poll_status == "success":
+                    break
+
+            logger.info("AI Decompilation completed")
+            decompilation_data = res.get("data")
+
+            c_code = decompilation_data.get("decompilation", "")
+
+            function_mapping_full = decompilation_data.get(
+                "function_mapping_full", {}
+            )
+
+            inverse_string_map = function_mapping_full.get(
+                "inverse_string_map",
+                []
+            )
+
+            inverse_function_map = function_mapping_full.get(
+                "inverse_function_map",
+                []
+            )
+
+            for key, value in inverse_string_map.items():
+                c_code = c_code.replace(
+                    key, value.get("string", key)
+                )
+
+            for key, value in inverse_function_map.items():
+                c_code = c_code.replace(
+                    key, value.get("name", key)
+                )
+
+            logger.info("Update UI with decompiled code")
+            idaapi.execute_sync(lambda: callback(c_code), idaapi.MFF_FAST)
         except HTTPError as e:
-            logger.error("Unable to obtain function argument details. %s", e)
             error = e.response.json().get(
                 "error",
                 "An unexpected error occurred. Sorry for the inconvenience.",
             )
-            Dialog.showError(
-                "Function Signature",
-                f"Failed to obtain function argument details: {error}",
-            )
-            return None
+            return error_and_close_view(callback, error)
 
     def handle_ai_decomp(decomp_data):
         if decomp_data is not None:
@@ -1285,7 +1327,6 @@ def ai_decompile(state: RevEngState) -> None:
             except Exception as e:
                 print(f"Error: {e}")
         else:
-            logger.error("An error occurred during AI Decompilation")
             # an error happened destroy the view
             sv.Close()
 
@@ -1300,7 +1341,7 @@ def ai_decompile(state: RevEngState) -> None:
             start_addr = func_ea.start_ea - image_base
             logger.info(
                 "Starting AI Decompilation of function "
-                f"{hex(start_addr)}")
+                f"{hex(func_ea.start_ea)}")
             try:
                 # Create a custom viewer subview for the decompiled code4
                 sv = idaapi.simplecustviewer_t()
@@ -1319,9 +1360,9 @@ def generate_summaries(state: RevEngState, function_id: int = 0) -> None:
 
     if is_condition_met(state, fpath) and \
         idaapi.ASKBTN_YES == idaapi.ask_buttons(
-        "Generate",
-        "Cancel",
-        "",
+            "Generate",
+            "Cancel",
+            "",
         idaapi.ASKBTN_YES,
         "HIDECANCEL\nWould you like to generate summaries?\n\n"
         "The cost of this operation is estimated to be 0.045 credits,\n"
@@ -1457,13 +1498,14 @@ def is_condition_met(state: RevEngState, fpath: str) -> bool:
 
 def is_file_supported(state: RevEngState, fpath: str) -> bool:
     try:
+
+        logger.info(f"Checking file support: {fpath}")
+
         file_format, isa_format = file_type(fpath)
 
         logger.info(
-            "Underlying binary: %s -> format: %s, target: %s",
-            fpath,
-            file_format,
-            isa_format,
+            f"Underlying binary: {fpath} -> format: {file_format},"
+            f" target: {isa_format}"
         )
 
         if any(
@@ -1477,7 +1519,8 @@ def is_file_supported(state: RevEngState, fpath: str) -> bool:
             )
         ):
             return True
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error checking file support: {e}")
         pass
 
     idc.warning(
