@@ -211,20 +211,10 @@ Choose your options for binary analysis
 <#Debugging information for uploaded binary#~D~ebug Info or PDB\::{iDebugFile}>
 <#Add custom tags to your file#~C~ustom Tags (format: <tag>,<tag>,..)\:      :{iTags}>
 <#Model that you want the file to be analysed by#AI ~M~odel\:         :{iModel}>
-<#Visibility a public or private visibility#Visibility\:         :{iVisibility}>
-
-Privacy:
-    <#You are the only one able to access this file#Private to you:{rOptPrivate}>
-    <#Everyone will be able to search against this file#Public access:{rOptPublic}>{iScope}>
+<#Visibility can either be public or private to yourself#Visibility\:         :{iVisibility}>
 """,
             {
                 "FormChangeCb": Form.FormChangeCb(self.OnFormChange),
-                "iScope": Form.RadGroupControl(
-                    (
-                        "rOptPrivate",
-                        "rOptPublic",
-                    )
-                ),
                 "iDebugFile": Form.FileInput(swidth=40, open=True),
                 "iTags": Form.StringInput(swidth=40, tp=Form.FT_ASCII),
                 "iModel": Form.DropdownListControl(
