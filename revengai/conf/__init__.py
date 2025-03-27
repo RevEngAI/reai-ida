@@ -1,15 +1,13 @@
-# -*- coding: utf-8 -*-
 from json import loads, dumps
 from os import access, makedirs, R_OK
 from os.path import dirname, join, isfile
 
-from requests import RequestException
-from idaapi import get_user_idadir
-from idaapi import retrieve_input_file_sha256
 from idaapi import get_input_file_path
+from idaapi import get_user_idadir
 from idaapi import msg
-
+from idaapi import retrieve_input_file_sha256
 from reait.api import re_conf, RE_health, RE_settings
+from requests import RequestException
 
 from revengai.api import RE_models
 from revengai.conf.database import RevEngDatabase
@@ -25,7 +23,7 @@ class RevEngConfiguration(object):
 
     auto_start = True  # Enable RevEng.AI plugin automatically
 
-    LIMIT = 10 * 1024**2  # File size limit to upload 10MB
+    LIMIT = 10 * 1024 ** 2  # File size limit to upload 10MB
     PORTAL = "https://portal.reveng.ai"  # RevEng.AI Web portal
     OPTIONS = {}  # File options currently supported by RevEng.AI for analysis
     MODELS = []  # List of models that are currently being used for analysis
@@ -53,8 +51,8 @@ class RevEngConfiguration(object):
             self.config[name] = value
 
             if name in (
-                "host",
-                "apikey",
+                    "host",
+                    "apikey",
             ):
                 re_conf[name] = value
 
@@ -92,9 +90,9 @@ class RevEngConfiguration(object):
 
                             if response["success"]:
                                 for option in (
-                                    "isa_options",
-                                    "file_options",
-                                    "platform_options",
+                                        "isa_options",
+                                        "file_options",
+                                        "platform_options",
                                 ):
                                     opt = response.get(option, None)
                                     RevEngConfiguration.OPTIONS[option] = opt

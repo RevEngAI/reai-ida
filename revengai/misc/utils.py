@@ -1,13 +1,10 @@
-# -*- coding: utf-8 -*-
 import logging
+from re import compile, match, Pattern
 from typing import Optional
 
+import idaapi
 import idautils
 import idc
-import idaapi
-
-from re import compile, match, Pattern
-
 
 logger = logging.getLogger("REAI")
 
@@ -21,11 +18,11 @@ class FunctionSignature(object):
     """
 
     def __init__(
-        self,
-        return_type: str,
-        call_convention: str,
-        func_name: str,
-        func_args: list
+            self,
+            return_type: str,
+            call_convention: str,
+            func_name: str,
+            func_args: list
     ):
         self.ret = return_type
         self.conv = call_convention
@@ -34,7 +31,7 @@ class FunctionSignature(object):
 
     def make_sig(self) -> str:
         return f"{self.ret} {self.conv} {self.func_name}" \
-            f"({', '.join(self.args)})"
+               f"({', '.join(self.args)})"
 
 
 func_sig_pattern: Pattern = compile(r"(\w+) (__\w+)(?:\()(\w.*)(?:\))")
@@ -61,11 +58,11 @@ class IDAUtils(object):
         """
         try:
             return IDAUtils.is_in_valid_segment(func_ea) and (
-                idaapi.set_name(
-                    func_ea, func_name, idaapi.SN_NOWARN | idaapi.SN_NOCHECK
-                )
-                or anyway
-                and idaapi.force_name(func_ea, func_name)
+                    idaapi.set_name(
+                        func_ea, func_name, idaapi.SN_NOWARN | idaapi.SN_NOCHECK
+                    )
+                    or anyway
+                    and idaapi.force_name(func_ea, func_name)
             )
         finally:
             idaapi.request_refresh(IWID_DISASMS())

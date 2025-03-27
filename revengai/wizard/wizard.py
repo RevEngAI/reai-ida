@@ -1,15 +1,11 @@
-# -*- coding: utf-8 -*-
 import abc
 import logging
-from platform import system
 from os.path import dirname, join
+from platform import system
 
 import idaapi
 from PyQt5.QtCore import QRect
 from PyQt5.QtGui import QPixmap
-from reait.api import RE_authentication
-from requests import HTTPError, RequestException
-
 from PyQt5.QtWidgets import (
     QWizardPage,
     QFormLayout,
@@ -20,11 +16,12 @@ from PyQt5.QtWidgets import (
     QLayout,
     QDesktopWidget,
 )
+from reait.api import RE_authentication
+from requests import HTTPError, RequestException
 
 from revengai.api import RE_models
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
-
 
 logger = logging.getLogger("REAI")
 

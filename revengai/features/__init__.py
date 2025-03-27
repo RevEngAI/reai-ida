@@ -1,30 +1,24 @@
-# -*- coding: utf-8 -*-
 import abc
 import logging
+from concurrent.futures import as_completed, ThreadPoolExecutor
 from itertools import islice
 from os.path import dirname, join
-from concurrent.futures import as_completed, ThreadPoolExecutor
-
+from typing import Generator
 
 import idaapi
 from PyQt5.QtCore import QRect, QTimer
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QDialog, QDesktopWidget
+from idaapi import get_imagebase
 from reait.api import (
     RE_analyze_functions,
     RE_functions_rename,
     RE_functions_rename_batch,
 )
-
-from idaapi import get_imagebase
-
 from requests import HTTPError, Response, RequestException
 
 from revengai.manager import RevEngState
 from revengai.misc.qtutils import inthread, inmain
-
-from typing import Generator
-
 
 logger = logging.getLogger("REAI")
 
@@ -97,7 +91,7 @@ class BaseDialog(QDialog):
             )
 
     def _function_rename(
-        self, func_addr: int, new_func_name: str, func_id: int = 0
+            self, func_addr: int, new_func_name: str, func_id: int = 0
     ) -> None:
         if not func_id:
             func_id = self._get_function_id(func_addr)
@@ -131,7 +125,7 @@ class BaseDialog(QDialog):
             max_workers = self.state.project_cfg.get("max_workers")
 
         with ThreadPoolExecutor(
-            max_workers=max_workers, thread_name_prefix="reai-batch"
+                max_workers=max_workers, thread_name_prefix="reai-batch"
         ) as executor:
 
             def worker(chunk: dict[int, str]) -> any:

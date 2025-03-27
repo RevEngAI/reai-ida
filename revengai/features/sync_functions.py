@@ -1,6 +1,4 @@
-# -*- coding: utf-8 -*-
 import logging
-
 from os.path import basename
 
 import idc
@@ -15,7 +13,6 @@ from revengai.misc.qtutils import inthread
 from revengai.models import CheckableItem
 from revengai.models.checkable_model import RevEngCheckableTableModel
 from revengai.ui.auto_sync_panel import Ui_SyncFunctionsPanel
-
 
 logger = logging.getLogger("REAI")
 
@@ -78,9 +75,9 @@ class SyncFunctionsDialog(BaseDialog):
 
     def _synchronise(self) -> None:
         if not any(
-            isinstance(
-                row[2], CheckableItem) and row[2].checkState == Qt.Checked
-            for row in self.ui.functionsList.model().get_datas()
+                isinstance(
+                    row[2], CheckableItem) and row[2].checkState == Qt.Checked
+                for row in self.ui.functionsList.model().get_datas()
         ):
             Dialog.showInfo(
                 "Synchronise Functions",
@@ -91,8 +88,8 @@ class SyncFunctionsDialog(BaseDialog):
 
             for row_item in self.ui.functionsList.model().get_datas():
                 if (
-                    isinstance(row_item[2], CheckableItem)
-                    and row_item[2].checkState == Qt.Checked
+                        isinstance(row_item[2], CheckableItem)
+                        and row_item[2].checkState == Qt.Checked
                 ):
                     symbol = row_item[2].data
 

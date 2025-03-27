@@ -1,22 +1,17 @@
-# -*- coding: utf-8 -*-
 import logging
-from time import sleep
-
-import idc
-import ida_funcs
-import ida_typeinf
-import ida_bytes
-from idautils import Functions
-import idaapi
-
+from concurrent.futures import ThreadPoolExecutor
+from datetime import date, datetime, timedelta
+from os.path import basename, isfile
 from subprocess import run, SubprocessError
 from threading import Timer
-from concurrent.futures import ThreadPoolExecutor
+from time import sleep
 
-from requests import get, HTTPError, Response, RequestException
-from os.path import basename, isfile
-from datetime import date, datetime, timedelta
-
+import ida_bytes
+import ida_funcs
+import ida_typeinf
+import idaapi
+import idc
+from idautils import Functions
 from reait.api import (
     RE_upload,
     RE_analyse,
@@ -32,6 +27,7 @@ from reait.api import (
     RE_poll_ai_decompilation,
     RE_begin_ai_decompilation,
 )
+from requests import get, HTTPError, Response, RequestException
 
 from revengai import __version__
 from revengai.api import (
@@ -41,8 +37,9 @@ from revengai.api import (
     RE_recent_analysis,
     RE_generate_summaries,
 )
+from revengai.features.auto_analyze import AutoAnalysisDialog
+from revengai.features.function_similarity import FunctionSimilarityDialog
 from revengai.features.sync_functions import SyncFunctionsDialog
-from revengai.misc.qtutils import inthread, inmain
 from revengai.gui.dialog import (
     Dialog,
     StatusForm,
@@ -51,11 +48,9 @@ from revengai.gui.dialog import (
     UpdateForm,
 )
 from revengai.manager import RevEngState
-from revengai.features.auto_analyze import AutoAnalysisDialog
-from revengai.features.function_similarity import FunctionSimilarityDialog
+from revengai.misc.qtutils import inthread, inmain
 from revengai.misc.utils import IDAUtils
 from revengai.wizard.wizard import RevEngSetupWizard
-
 
 logger = logging.getLogger("REAI")
 
@@ -66,6 +61,7 @@ if version < 9.0:
         info: idaapi.idainfo = idaapi.get_inf_structure()
         return info.is_32bit()
 
+
     def is_64bit() -> bool:
         info: idaapi.idainfo = idaapi.get_inf_structure()
         return info.is_64bit()
@@ -74,6 +70,7 @@ else:
 
     def is_32bit() -> bool:
         return idaapi.inf_is_32bit_exactly()
+
 
     def is_64bit() -> bool:
         return idaapi.inf_is_64bit()
@@ -89,10 +86,10 @@ def upload_binary(state: RevEngState) -> None:
     if is_condition_met(state, fpath) and is_file_supported(state, fpath):
 
         def bg_task(
-            model: str,
-            tags: list = None,
-            scope: str = "PRIVATE",
-            debug_fpath: str = None,
+                model: str,
+                tags: list = None,
+                scope: str = "PRIVATE",
+                debug_fpath: str = None,
         ) -> None:
             file_size = inmain(idaapi.retrieve_input_file_size)
 
@@ -234,8 +231,8 @@ def check_analyze(state: RevEngState) -> None:
 
                 if bid:
                     if status in (
-                        "Queued",
-                        "Processing",
+                            "Queued",
+                            "Processing",
                     ):
                         periodic_check(fpath, bid)
 
@@ -400,7 +397,7 @@ def push_function_names(state: RevEngState) -> None:
                         func_ea,
                         idc.FUNCATTR_START
                     )
-                    - base_addr,
+                                  - base_addr,
                 }
             )
 
@@ -441,7 +438,7 @@ def push_function_names(state: RevEngState) -> None:
                             "start_addr"
                         ] and not ida_func["name"].startswith("sub_"):
                             function_remap[func["function_id"]
-                                           ] = ida_func["name"]
+                            ] = ida_func["name"]
 
                 res: Response = RE_functions_rename_batch(function_remap)
                 if res.json()["success"]:
@@ -504,7 +501,7 @@ def explain_function(state: RevEngState) -> None:
                         )
                     else:
                         comment = "RevEng.AI Auto-generated Explanation:\n\n" \
-                            f"{res.json()['explanation']}"
+                                  f"{res.json()['explanation']}"
 
                         logger.info(comment)
                         inmain(IDAUtils.set_comment, inmain(idc.here), comment)
@@ -531,16 +528,16 @@ def explain_function(state: RevEngState) -> None:
 
                 # https://github.com/williballenthin/python-idb/blob/master/idb/idapython.py#L955-L1046
                 if any(
-                    procname.startswith(arch)
-                    for arch in (
-                        "metapc",
-                        "athlon",
-                        "k62",
-                        "p2",
-                        "p3",
-                        "p4",
-                        "80",
-                    )
+                        procname.startswith(arch)
+                        for arch in (
+                                "metapc",
+                                "athlon",
+                                "k62",
+                                "p2",
+                                "p3",
+                                "p4",
+                                "80",
+                        )
                 ):
                     arch = "x86_64" if bits == 64 else "x86"
                 elif procname.startswith("arm"):
@@ -623,7 +620,7 @@ def download_logs(state: RevEngState) -> None:
 
 
 def function_signature(
-    state: RevEngState, func_addr: int = 0, func_id: int = 0
+        state: RevEngState, func_addr: int = 0, func_id: int = 0
 ) -> None:
     fpath = idc.get_input_file_path()
 
@@ -648,8 +645,8 @@ def function_signature(
 
                 for function in res.json()["functions"]:
                     if any(
-                        function["function_id"] == function_id
-                        for function_id in function_ids
+                            function["function_id"] == function_id
+                            for function_id in function_ids
                     ):
                         r_type = (
                             "void"
@@ -891,7 +888,7 @@ def sync_functions_name(state: RevEngState, fpath: str) -> None:
                             func["name"]
                             for func in functions
                             if function["function_vaddr"] == func["start_addr"]
-                            and not func["name"].startswith("sub_")
+                               and not func["name"].startswith("sub_")
                         ),
                         None,
                     )
@@ -921,7 +918,7 @@ def sync_functions_name(state: RevEngState, fpath: str) -> None:
                         func_ea,
                         idc.FUNCATTR_START
                     )
-                    - base_addr,
+                                  - base_addr,
                 }
             )
 
@@ -1419,10 +1416,10 @@ def generate_summaries(state: RevEngState, function_id: int = 0) -> None:
     fpath = idc.get_input_file_path()
 
     if is_condition_met(state, fpath) and \
-        idaapi.ASKBTN_YES == idaapi.ask_buttons(
-            "Generate",
-            "Cancel",
-            "",
+            idaapi.ASKBTN_YES == idaapi.ask_buttons(
+        "Generate",
+        "Cancel",
+        "",
         idaapi.ASKBTN_YES,
         "HIDECANCEL\nWould you like to generate summaries?\n\n"
         "The cost of this operation is estimated to be 0.045 credits,\n"
@@ -1515,8 +1512,8 @@ def is_analysis_complete(state: RevEngState, fpath: str) -> tuple[bool, str]:
 
         if bid:
             if status in (
-                "Queued",
-                "Processing",
+                    "Queued",
+                    "Processing",
             ):
                 periodic_check(fpath, bid)
 
@@ -1569,9 +1566,9 @@ def is_file_supported(state: RevEngState, fpath: str) -> bool:
         )
 
         if any(
-            file_format == fmt for fmt in state.config.OPTIONS.get(
-                "file_options", []
-            )
+                file_format == fmt for fmt in state.config.OPTIONS.get(
+                    "file_options", []
+                )
         ) and any(
             isa_format == fmt for fmt in state.config.OPTIONS.get(
                 "isa_options",
@@ -1634,8 +1631,8 @@ def periodic_check(fpath: str, binary_id: int) -> None:
             status = RE_status(fpath, bid).json()["status"]
 
             if status in (
-                "Queued",
-                "Processing",
+                    "Queued",
+                    "Processing",
             ):
                 if inmain(idc.get_input_file_path) == fpath:
                     Timer(

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 
 #################################################################
 #                                                               #
@@ -13,14 +12,12 @@
 
 import functools
 import itertools
-
 from queue import Queue
 from sys import exc_info
 from threading import Thread
 
-from idaapi import is_main_thread
-
 from PyQt5.QtCore import QEvent, QObject, QCoreApplication
+from idaapi import is_main_thread
 
 
 class CallEvent(QEvent):

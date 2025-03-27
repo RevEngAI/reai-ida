@@ -1,8 +1,8 @@
-# -*- coding: utf-8 -*-
 import abc
 import logging
+from itertools import filterfalse
 
-from idc import get_input_file_path
+from PyQt5.QtWidgets import QMessageBox
 from idaapi import (
     CH_CAN_DEL,
     CH_CAN_EDIT,
@@ -18,18 +18,13 @@ from idaapi import (
     execute_sync,
     open_url,
 )
-
-from PyQt5.QtWidgets import QMessageBox
-
-from itertools import filterfalse
-
+from idc import get_input_file_path
 from reait.api import RE_delete
 
 from revengai import __version__
 from revengai.gui import Requests
 from revengai.manager import RevEngState
 from revengai.misc.qtutils import inthread
-
 
 logger = logging.getLogger("REAI")
 
@@ -42,7 +37,7 @@ class Dialog(object):
     @staticmethod
     def showError(title: str, message: str) -> None:
         execute_sync(Requests.MsgBox(title, message,
-                     QMessageBox.Warning), MFF_FAST)
+                                     QMessageBox.Warning), MFF_FAST)
 
 
 class BaseForm(Form):
@@ -66,16 +61,16 @@ class BaseForm(Form):
 class StatusForm(BaseForm):
     class StatusFormChooser(Choose):
         def __init__(
-            self,
-            title: str,
-            state: RevEngState,
-            items: list,
-            flags: int = CH_CAN_DEL
-            | CH_CAN_EDIT
-            | CH_CAN_REFRESH
-            | CH_MODAL
-            | CH_NO_STATUS_BAR
-            | CH_NO_FILTER,
+                self,
+                title: str,
+                state: RevEngState,
+                items: list,
+                flags: int = CH_CAN_DEL
+                             | CH_CAN_EDIT
+                             | CH_CAN_REFRESH
+                             | CH_MODAL
+                             | CH_NO_STATUS_BAR
+                             | CH_NO_FILTER,
         ):
             Choose.__init__(
                 self,
@@ -121,7 +116,7 @@ class StatusForm(BaseForm):
             pos = sel if isinstance(sel, int) else sel[0]
 
             if int(self.OnGetLine(pos)[1]) == self.state.config.get(
-                "binary_id"
+                    "binary_id"
             ):
                 return self.icon
             if self.OnGetLine(pos)[2] == "Error":

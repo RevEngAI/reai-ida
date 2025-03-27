@@ -1,8 +1,7 @@
-# -*- coding: utf-8 -*-
 import logging
 from concurrent.futures import ThreadPoolExecutor, CancelledError
-from re import sub
 from enum import IntEnum
+from re import sub
 
 import idc
 from PyQt5.QtCore import Qt, QModelIndex
@@ -10,21 +9,18 @@ from PyQt5.QtGui import QCursor
 from PyQt5.QtWidgets import QMenu
 from idaapi import hide_wait_box, show_wait_box, user_cancelled
 from idautils import Functions
-
-from requests import Response, HTTPError, RequestException
-
 from reait.api import RE_nearest_symbols_batch
+from requests import Response, HTTPError, RequestException
 
 from revengai.api import RE_collection_search
 from revengai.features import BaseDialog
-from revengai.misc.utils import IDAUtils
-from revengai.misc.qtutils import inthread, inmain
-from revengai.models import CheckableItem, IconItem, SimpleItem
-from revengai.models.checkable_model import RevEngCheckableTableModel
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
+from revengai.misc.qtutils import inthread, inmain
+from revengai.misc.utils import IDAUtils
+from revengai.models import CheckableItem, IconItem, SimpleItem
+from revengai.models.checkable_model import RevEngCheckableTableModel
 from revengai.ui.auto_analysis_panel import Ui_AutoAnalysisPanel
-
 
 logger = logging.getLogger("REAI")
 
@@ -104,8 +100,8 @@ class AutoAnalysisDialog(BaseDialog):
                         "name": IDAUtils.get_demangled_func_name(func_ea),
                         "start_addr": (start_addr - self.base_addr),
                         "end_addr": (
-                            idc.get_func_attr(func_ea, idc.FUNCATTR_END)
-                            - self.base_addr
+                                idc.get_func_attr(func_ea, idc.FUNCATTR_END)
+                                - self.base_addr
                         ),
                     }
                 )
@@ -132,9 +128,9 @@ class AutoAnalysisDialog(BaseDialog):
         selected = self.ui.resultsTable.model().get_data(rows[0])
 
         if (
-            selected
-            and self.ui.renameButton.isEnabled()
-            and isinstance(selected[2], CheckableItem)
+                selected
+                and self.ui.renameButton.isEnabled()
+                and isinstance(selected[2], CheckableItem)
         ):
             menu = QMenu()
             renameAction = menu.addAction(self.ui.renameButton.text())
@@ -160,8 +156,8 @@ class AutoAnalysisDialog(BaseDialog):
             inmain(show_wait_box, "Getting results…")
 
             self._analysis = [
-                0,
-            ] * len(Analysis)
+                                 0,
+                             ] * len(Analysis)
 
             inmain(self.ui.fetchButton.setEnabled, False)
             inmain(self.ui.renameButton.setEnabled, False)
@@ -209,18 +205,18 @@ class AutoAnalysisDialog(BaseDialog):
 
             max_workers = 1
             if self.state.project_cfg.get("parallelize_query") and not inmain(
-                user_cancelled
+                    user_cancelled
             ):
                 max_workers = self.state.project_cfg.get("max_workers")
 
             # Launch parallel tasks
             with ThreadPoolExecutor(
-                max_workers=max_workers, thread_name_prefix="reai-batch"
+                    max_workers=max_workers, thread_name_prefix="reai-batch"
             ) as executor:
                 collections = inmain(self._selected_collections)
                 distance = 1.0 - (
-                    int(inmain(self.ui.confidenceSlider.property, "value"))
-                    / int(inmain(self.ui.confidenceSlider.property, "maximum"))
+                        int(inmain(self.ui.confidenceSlider.property, "value"))
+                        / int(inmain(self.ui.confidenceSlider.property, "maximum"))
                 )
 
                 def worker(chunk: list[int]) -> any:
@@ -302,7 +298,7 @@ class AutoAnalysisDialog(BaseDialog):
                                                     for function in
                                                     self._functions
                                                     if func_addr
-                                                    == function["start_addr"]
+                                                       == function["start_addr"]
                                                 ),
                                                 "Unknown",
                                             ),
@@ -319,7 +315,7 @@ class AutoAnalysisDialog(BaseDialog):
                                         for func_addr, func_id in
                                         self.analyzed_functions.items()
                                         if symbol["origin_function_id"] ==
-                                        func_id
+                                           func_id
                                     ),
                                     None,
                                 )
@@ -340,7 +336,7 @@ class AutoAnalysisDialog(BaseDialog):
                                                 function["name"]
                                                 for function in self._functions
                                                 if func_addr ==
-                                                function["start_addr"]
+                                                   function["start_addr"]
                                             ),
                                             "Unknown",
                                         )
@@ -529,16 +525,16 @@ class AutoAnalysisDialog(BaseDialog):
 
         for row_item in self.ui.resultsTable.model().get_datas():
             if (
-                isinstance(row_item[2], CheckableItem)
-                and row_item[2].checkState == Qt.Checked
+                    isinstance(row_item[2], CheckableItem)
+                    and row_item[2].checkState == Qt.Checked
             ):
                 symbol = row_item[2].data
 
                 nnfn = symbol['nearest_neighbor_function_name']
 
                 if IDAUtils.set_name(
-                    symbol["function_addr"] + self.base_addr,
-                    symbol["nearest_neighbor_function_name"],
+                        symbol["function_addr"] + self.base_addr,
+                        symbol["nearest_neighbor_function_name"],
                 ):
                     func_id = self._get_function_id(symbol["function_addr"])
                     if func_id:
@@ -574,14 +570,14 @@ class AutoAnalysisDialog(BaseDialog):
 
     def _rename_function(self, selected, batches: list = None) -> None:
         if selected and len(selected) > 3 and isinstance(
-            selected[2],
-            SimpleItem
+                selected[2],
+                SimpleItem
         ):
             symbol = selected[2].data
 
             if IDAUtils.set_name(
-                symbol["function_addr"] + self.base_addr,
-                symbol["nearest_neighbor_function_name"],
+                    symbol["function_addr"] + self.base_addr,
+                    symbol["nearest_neighbor_function_name"],
             ):
                 inthread(
                     self._function_rename,
@@ -642,10 +638,10 @@ class AutoAnalysisDialog(BaseDialog):
     def _callback(self, text: str) -> None:
         for row_item in self.ui.collectionsTable.model().get_datas():
             if isinstance(row_item[1], CheckableItem) and (
-                isinstance(row_item[0], str)
-                and row_item[0] == text
-                or isinstance(row_item[0], SimpleItem)
-                and row_item[0].text == text
+                    isinstance(row_item[0], str)
+                    and row_item[0] == text
+                    or isinstance(row_item[0], SimpleItem)
+                    and row_item[0].text == text
             ):
                 row_item[1].checkState = Qt.Unchecked
 

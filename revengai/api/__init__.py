@@ -1,9 +1,7 @@
-# -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from requests import get, post, Response
-
 from reait.api import reveng_req, re_binary_id
+from requests import get, post, Response
 
 
 def RE_models() -> Response:
@@ -56,7 +54,7 @@ def RE_collection_search(search: str) -> Response:
 
 
 def RE_recent_analysis(
-    status: str = "All", scope: str = "ALL", nb_analysis: int = 50
+        status: str = "All", scope: str = "ALL", nb_analysis: int = 50
 ) -> Response:
     res: Response = reveng_req(
         get,

@@ -1,6 +1,5 @@
-# -*- coding: utf-8 -*-
-from typing import Optional, Any
 from os.path import dirname, isfile, join
+from typing import Optional, Any
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
@@ -27,7 +26,7 @@ class IconItem(SimpleItem):
 
         self.icon: Optional[QIcon] = (
             QIcon(resource_path) if (
-                resource_path and isfile(resource_path)) else None
+                    resource_path and isfile(resource_path)) else None
         )
 
     @staticmethod

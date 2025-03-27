@@ -1,39 +1,37 @@
-# -*- coding: utf-8 -*-
 from json import load
 from os.path import dirname, isfile, join
 
-from idc import get_input_file_path
-from idc import here
-from idaapi import set_dock_pos
-from idaapi import PluginForm
-from idaapi import unregister_action
-from idaapi import attach_action_to_menu
-from idaapi import register_action
-from idaapi import UI_Hooks
-from idaapi import action_desc_t
-from idaapi import action_handler_t
-from idaapi import create_menu
-from idaapi import delete_menu
-from idaapi import create_toolbar
-from idaapi import delete_toolbar
-from idaapi import attach_action_to_popup
-from idaapi import attach_action_to_toolbar
-from idaapi import add_hotkey
-from idaapi import del_hotkey
-from idaapi import get_widget_type
 from idaapi import AST_ENABLE_ALWAYS
 from idaapi import BWN_DISASM
 from idaapi import BWN_PSEUDOCODE
 from idaapi import DP_TAB, SETMENU_APP
-from idaapi import SETMENU_INS
-from idaapi import SETMENU_ENSURE_SEP
 from idaapi import IDA_SDK_VERSION
+from idaapi import PluginForm
+from idaapi import SETMENU_ENSURE_SEP
+from idaapi import SETMENU_INS
+from idaapi import UI_Hooks
+from idaapi import action_desc_t
+from idaapi import action_handler_t
+from idaapi import add_hotkey
+from idaapi import attach_action_to_menu
+from idaapi import attach_action_to_popup
+from idaapi import attach_action_to_toolbar
+from idaapi import create_menu
+from idaapi import create_toolbar
+from idaapi import del_hotkey
+from idaapi import delete_menu
+from idaapi import delete_toolbar
+from idaapi import get_widget_type
+from idaapi import register_action
+from idaapi import set_dock_pos
+from idaapi import unregister_action
+from idc import get_input_file_path
+from idc import here
 
 from revengai import actions
 from revengai.actions import load_recent_analyses
 from revengai.manager import RevEngState
 from revengai.misc.utils import IDAUtils
-
 
 MENU = "RevEng.AI Toolkit/"
 
@@ -61,12 +59,12 @@ class Handler(action_handler_t):
         return AST_ENABLE_ALWAYS
 
     def register(
-        self,
-        name: str,
-        label: str,
-        shortcut: str = None,
-        tooltip: str = None,
-        icon: int = -1,
+            self,
+            name: str,
+            label: str,
+            shortcut: str = None,
+            tooltip: str = None,
+            icon: int = -1,
     ) -> bool:
         self.name = name
 
@@ -103,9 +101,9 @@ class Hooks(UI_Hooks):
         fpath = get_input_file_path()
 
         if (
-            fpath
-            and isfile(fpath)
-            and get_widget_type(form) in [BWN_DISASM, BWN_PSEUDOCODE]
+                fpath
+                and isfile(fpath)
+                and get_widget_type(form) in [BWN_DISASM, BWN_PSEUDOCODE]
         ):
             # Add separator
             attach_action_to_popup(form, popup, None, None)
@@ -117,24 +115,24 @@ class Hooks(UI_Hooks):
                     if action.get("enabled", True):
                         if self.state.config.is_valid():
                             if (
-                                action["id"] == "reai:wizard"
-                                or (
+                                    action["id"] == "reai:wizard"
+                                    or (
                                     action["id"]
                                     in (
-                                        "reai:rename",
-                                        "reai:breakdown",
-                                        "reai:summary",
+                                            "reai:rename",
+                                            "reai:breakdown",
+                                            "reai:summary",
                                     )
                                     and not IDAUtils.is_function(func_ea)
-                                )
-                                or (
+                            )
+                                    or (
                                     get_widget_type(form) != BWN_PSEUDOCODE
                                     and action["id"]
                                     in (
-                                        "reai:explain",
-                                        "reai:signature",
+                                            "reai:explain",
+                                            "reai:signature",
                                     )
-                                )
+                            )
                             ):
                                 continue
                         elif action["id"] != "reai:wizard":
@@ -170,12 +168,12 @@ class RevEngConfigForm_t(PluginForm):
                 self,
                 caption,
                 options=(
-                    options
-                    | PluginForm.WOPN_TAB
-                    | PluginForm.WCLS_SAVE
-                    | PluginForm.WOPN_MENU
-                    | PluginForm.WOPN_PERSIST
-                    | PluginForm.WOPN_RESTORE
+                        options
+                        | PluginForm.WOPN_TAB
+                        | PluginForm.WCLS_SAVE
+                        | PluginForm.WOPN_MENU
+                        | PluginForm.WOPN_PERSIST
+                        | PluginForm.WOPN_RESTORE
                 ),
             )
 
@@ -207,8 +205,8 @@ class RevEngConfigForm_t(PluginForm):
         with open(join(dirname(__file__), "conf", "actions.json")) as fd:
             for action in load(fd):
                 if action.get("enabled", True) and (
-                    self.state.config.is_valid(
-                    ) or action["id"] == "reai:wizard"
+                        self.state.config.is_valid(
+                        ) or action["id"] == "reai:wizard"
                 ):
                     if "children" in action:
                         for child in action["children"]:
@@ -221,7 +219,7 @@ class RevEngConfigForm_t(PluginForm):
                                 icon=child.get("icon", -1),
                             )
                             if handler.attach_to_menu(
-                                f"{MENU}{action['name']}/"
+                                    f"{MENU}{action['name']}/"
                             ):
                                 self._menus_names.append(handler.name)
                     else:
