@@ -209,7 +209,7 @@ def upload_binary(state: RevEngState) -> None:
                 bg_task,
                 state.config.MODELS[f.iModel.value],
                 f.iTags.value.split(","),
-                "PUBLIC" if f.iScope.value else "PRIVATE",
+                f.iVisibility.value,
                 f.iDebugFile.value,
             )
 
