@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
 from time import sleep
-import re
 
 import idc
 import ida_funcs
@@ -852,11 +851,22 @@ def load_recent_analyses(state: RevEngState) -> None:
                         ),
                     )
 
+                    resp = RE_analysis_lookup(
+                        state.config.get("binary_id", 0)
+                    ).json()
+
+                    analysis_id = resp.get("analysis_id", 0)
+                    state.config.set("analysis_id", analysis_id)
+
+                    logger.info(
+                        f"Saving current analysis ID {analysis_id}"
+                    )
+
                     if state.project_cfg.get("auto_sync"):
                         done, _ = is_analysis_complete(state, fpath)
                         if done:
                             inmain(sync_functions_name, state, fpath)
-            except RequestException as e:
+            except (HTTPError, RequestException) as e:
                 logger.error("Error getting recent analyses: %s", e)
 
         fpath = idc.get_input_file_path()
@@ -999,22 +1009,72 @@ def generate_function_data_types(state: RevEngState) -> None:
         def bg_task() -> None:
             done, status = is_analysis_complete(state, fpath)
             if done:
-                res: Response = RE_analysis_id(
-                    fpath, state.config.get("binary_id", 0))
-                analysis_id = res.json()["analysis_id"]
-                function_ids = []
-                res: Response = RE_analyze_functions(
-                    fpath, state.config.get("binary_id", 0)
-                )
-                for function in res.json()["functions"]:
-                    function_ids.append(function["function_id"])
-                res: Response = RE_generate_data_types(
-                    analysis_id, function_ids)
+                try:
+                    analysis_id = state.config.get("analysis_id", 0)
+
+                    logger.info(
+                        f"Generating data type for analysis ID: {analysis_id}"
+                    )
+
+                    function_ids = []
+
+                    logger.info(
+                        "Getting the list of functions to generate data types"
+                    )
+
+                    res: dict = RE_analyze_functions(
+                        fpath, state.config.get("binary_id", 0)
+                    ).json()
+
+                    success = res.get("success", False)
+
+                    if not success:
+                        logger.error("Error getting function list")
+                        Dialog.showError(
+                            "Function Types",
+                            "Failed to get function list. Please try again.",
+                        )
+                        return
+
+                    for function in res.get("functions", []):
+                        function_ids.append(function["function_id"])
+
+                    res = RE_generate_data_types(
+                        analysis_id,
+                        function_ids
+                    ).json()
+
+                    status = res.get("status", False)
+
+                    if status:
+                        logger.info(
+                            "Successfully started the generation of functions"
+                            " data types"
+                        )
+                        Dialog.showInfo(
+                            "Function Types",
+                            "Successfully started the generation of functions"
+                            " data types",
+                        )
+
+                except HTTPError as e:
+                    resp = e.response.json()
+                    error = resp.get(
+                        "error",
+                        "An unexpected error occurred. Sorry for the"
+                        " inconvenience.",
+                    )
+                    logger.error(
+                        f"Failed to generate function data types: {error}")
+                    Dialog.showError(
+                        "Function Types",
+                        f"Failed to generate function data types: {error}",
+                    )
             else:
-                Dialog.showInfo(
+                Dialog.showError(
                     "Function Types",
-                    "Unable to fulfil your request at this time.\nBinary"
-                    f" analysis status: {status}",
+                    "Unable to complete your request at this time."
+                    " Binary analysis is not yet complete.",
                 )
 
         inthread(bg_task)
