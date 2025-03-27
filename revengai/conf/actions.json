@@ -1,88 +1,88 @@
 [
-  {
-    "id": "reai:wizard",
-    "name": "Run Setup Wizard",
-    "callback": "setup_wizard",
-    "shortcut": "Ctrl+Shift+W"
-  },
-  {
-    "id": "reai:upload",
-    "name": "Upload Binary",
-    "callback": "upload_binary",
-    "shortcut": "Ctrl+Shift+U"
-  },
-  {
-    "id": "reai:check_analyze",
-    "name": "Check Analysis Status",
-    "callback": "check_analyze",
-    "shortcut": "Ctrl+Shift+S"
-  },
-  {
-    "id": "reai:auto_analyze",
-    "name": "Auto Analyse Binary",
-    "callback": "auto_analyze",
-    "shortcut": "Ctrl+Shift+A"
-  },
-  {
-    "id": "reai:functions",
-    "name": "Functions",
-    "callback": "list_reaiplugin_function",
-    "shortcut": "Ctrl+Shift+F",
-    "children": [
-      {
-        "id": "reai:rename",
-        "name": "Rename From Similar Functions",
-        "callback": "rename_function",
-        "shortcut": "Ctrl+Shift+R"
-      },
-      {
-        "id": "reai:push_function_names",
-        "name": "Upload Function Names",
-        "callback": "push_function_names",
-        "shortcut": "Ctrl+Shift+P"
-      },
-      {
-        "id": "reai:generate_function_data_types",
-        "name": "Generate Function Data Types",
-        "callback": "generate_function_data_types",
-        "shortcut": "Ctrl+Shift+G"
-      },
-      {
-        "id": "reai:list_function_data_types",
-        "name": "Apply Function Data Types",
-        "callback": "list_function_data_types",
-        "shortcut": "Ctrl+Shift+T"
-      },
-      {
-        "id": "reai:ai_decompile",
-        "name": "AI Decompiler",
-        "callback": "ai_decompile",
-        "shortcut": "Ctrl+Shift+D"
-      },
-      {
-        "id": "reai:breakdown",
-        "name": "View Function Breakdown",
-        "callback": "function_breakdown",
-        "shortcut": "Ctrl+Shift+B"
-      }
-    ]
-  },
-  {
-    "id": "reai:signature",
-    "enabled": false,
-    "name": "Update Function Signature",
-    "callback": "function_signature"
-  },
-  {
-    "id": "reai:logs",
-    "name": "Download Binary Analysis Logs",
-    "callback": "download_logs",
-    "shortcut": "Ctrl+Shift+L"
-  },
-  {
-    "id": "reai:history",
-    "name": "Binary Analyses History",
-    "callback": "analysis_history",
-    "shortcut": "Ctrl+Shift+H"
-  }
+	{
+		"id": "reai:wizard",
+		"name": "Run Setup Wizard",
+		"callback": "setup_wizard",
+		"shortcut": "Ctrl+Shift+W"
+	},
+	{
+		"id": "reai:upload",
+		"name": "Upload Binary",
+		"callback": "upload_binary",
+		"shortcut": "Ctrl+Shift+U"
+	},
+	{
+		"id": "reai:check_analyze",
+		"name": "Check Analysis Status",
+		"callback": "check_analyze",
+		"shortcut": "Ctrl+Shift+S"
+	},
+	{
+		"id": "reai:auto_analyze",
+		"name": "Auto Analyse Binary",
+		"callback": "auto_analyze",
+		"shortcut": "Ctrl+Shift+A"
+	},
+	{
+		"id": "reai:functions",
+		"name": "Functions",
+		"callback": "list_reaiplugin_function",
+		"shortcut": "Ctrl+Shift+F",
+		"children": [
+			{
+				"id": "reai:rename",
+				"name": "Rename From Similar Functions",
+				"callback": "rename_function",
+				"shortcut": "Ctrl+Shift+R"
+			},
+			{
+				"id": "reai:push_function_names",
+				"name": "Upload Function Names",
+				"callback": "push_function_names",
+				"shortcut": "Ctrl+Shift+P"
+			},
+			{
+				"id": "reai:generate_function_data_types",
+				"name": "Generate Functions Data Types",
+				"callback": "generate_function_data_types",
+				"shortcut": "Ctrl+Shift+G"
+			},
+			{
+				"id": "reai:apply_function_data_types",
+				"name": "Apply Functions Data Types",
+				"callback": "apply_function_data_types",
+				"shortcut": "Ctrl+Shift+T"
+			},
+			{
+				"id": "reai:ai_decompile",
+				"name": "AI Decompiler",
+				"callback": "ai_decompile",
+				"shortcut": "Ctrl+Shift+D"
+			},
+			{
+				"id": "reai:breakdown",
+				"name": "View Function Breakdown",
+				"callback": "function_breakdown",
+				"shortcut": "Ctrl+Shift+B"
+			}
+		]
+	},
+	{
+		"id": "reai:signature",
+		"enabled": false,
+		"name": "Update Function Signature",
+		"callback": "function_signature"
+	},
+	{
+		"id": "reai:logs",
+		"name": "Download Binary Analysis Logs",
+		"callback": "download_logs",
+		"shortcut": "Ctrl+Shift+L"
+	},
+	{
+		"id": "reai:history",
+		"name": "Binary Analyses History",
+		"callback": "analysis_history",
+		"shortcut": "Ctrl+Shift+H"
+	}
 ]
