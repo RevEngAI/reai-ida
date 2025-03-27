@@ -213,7 +213,7 @@ RevEng.AI Toolkit: Upload Binary for Analysis
 Choose your options for binary analysis
 
 <#Debugging information for uploaded binary#~D~ebug Info or PDB\::{iDebugFile}>
-<#Add custom tags to your file#~C~ustom Tags\:      :{iTags}>
+<#Add custom tags to your file#~C~ustom Tags (format: <tag>,<tag>,..)\:      :{iTags}>
 <#Model that you want the file to be analysed by#AI ~M~odel\:         :{iModel}>
 
 Privacy:
