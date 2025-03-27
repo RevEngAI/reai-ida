@@ -21,9 +21,14 @@ class IconItem(SimpleItem):
     def __init__(self, text: str, resource_name: str = None):
         super().__init__(text=text)
 
-        resource_path = IconItem._plugin_resource(resource_name) if resource_name else None
+        resource_path = (
+            IconItem._plugin_resource(resource_name) if resource_name else None
+        )
 
-        self.icon: Optional[QIcon] = QIcon(resource_path) if (resource_path and isfile(resource_path)) else None
+        self.icon: Optional[QIcon] = (
+            QIcon(resource_path) if (
+                resource_path and isfile(resource_path)) else None
+        )
 
     @staticmethod
     def _plugin_resource(resource_name: str) -> str:
