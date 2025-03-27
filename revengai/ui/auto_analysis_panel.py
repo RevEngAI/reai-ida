@@ -155,7 +155,7 @@ class Ui_AutoAnalysisPanel(object):
     def retranslateUi(self, AutoAnalysisPanel):
         _translate = QtCore.QCoreApplication.translate
         AutoAnalysisPanel.setWindowTitle(_translate(
-            "AutoAnalysisPanel", "RevEng.AI Toolkit: Auto Analysis"))
+            "AutoAnalysisPanel", "RevEng.AI Toolkit: Analyse Binary"))
         self.collectionsFilter.setPlaceholderText(
             _translate("AutoAnalysisPanel", "Search Collections…"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(

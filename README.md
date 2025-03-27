@@ -92,13 +92,13 @@ Selecting an entry from the list and then pressing `Rename` will cause the funct
 
 **A right click allows you to rename or breakdown the selected function**
 
-#### Auto Analysis
+#### Analyse Binary
 
-You can also batch analyse the binary to rename functions using the `Auto Analyze Binary`.
+You can also batch analyse the binary to rename functions using the `Analyse Binary`.
 
 ![auto_analyze_menu](./assets/img/7.png)
 
-This tool pull the list of collections you have access to on your account, and allows you to specify which collections you want to be included in your auto analysis by clicking on the checkbox. Selecting no collections will enable all the available collections in your search.
+This tool pull the list of collections you have access to on your account, and allows you to specify which collections you want to be included in your binary analysis by clicking on the checkbox. Selecting no collections will enable all the available collections in your search.
 
 Move the slider to determine the confidence level you want to use for batch renaming. Any function returned that is higher than this value will automatically be renamed in the listing view. Clicking the `Fetch Results` button will kick-off the analysis, which you can track in the progress bar.
 

@@ -222,7 +222,7 @@ class AutoAnalysisDialog(BaseDialog):
                 def worker(chunk: list[int]) -> any:
                     try:
                         if inmain(user_cancelled):
-                            raise CancelledError("Auto analysis cancelled")
+                            raise CancelledError("Analyse binary cancelled")
 
                         return RE_nearest_symbols_batch(
                             function_ids=chunk,
@@ -253,14 +253,14 @@ class AutoAnalysisDialog(BaseDialog):
 
                     try:
                         res = (
-                            CancelledError("Auto analysis cancelled")
+                            CancelledError("Analyse binary cancelled")
                             if future.cancelled()
                             else future.result()
                         )
 
                         if isinstance(res, Exception):
                             logger.error(
-                                "Fetching a chunk of auto analysis failed."
+                                "Fetching a chunk of Analyse Binary failed."
                                 " Reason: %s",
                                 res,
                             )
@@ -268,9 +268,9 @@ class AutoAnalysisDialog(BaseDialog):
                             self._analysis[Analysis.UNSUCCESSFUL] += len(chunk)
 
                             if isinstance(res, CancelledError):
-                                err_msg = "Auto Analysis Cancelled"
+                                err_msg = "Analyse Binary Cancelled"
                             else:
-                                err_msg = "Auto Analysis Failed"
+                                err_msg = "Analyse Binary Failed"
 
                             if isinstance(res, HTTPError):
                                 err_msg = res.response.json().get(
@@ -386,11 +386,11 @@ class AutoAnalysisDialog(BaseDialog):
 
             inmain(inmain(self.ui.resultsTable.model).fill_table, resultsData)
         except HTTPError as e:
-            logger.error("Fetching auto analysis failed. Reason: %s", e)
+            logger.error("Fetching analyse binary failed. Reason: %s", e)
 
             Dialog.showError(
-                "Auto Analysis",
-                f"Auto Analysis Error: {e.response.json()['error']}"
+                "Analyse Binary",
+                f"Analyse Binary Error: {e.response.json()['error']}"
             )
         except RequestException as e:
             logger.error("An unexpected error has occurred. %s", e)
@@ -507,8 +507,8 @@ class AutoAnalysisDialog(BaseDialog):
             logger.error("Getting collections failed. Reason: %s", e)
 
             Dialog.showError(
-                "Auto Analysis",
-                f"Auto Analysis Error: {e.response.json()['error']}"
+                "Analyse Binary",
+                f"Analyse Binary Error: {e.response.json()['error']}"
             )
         except RequestException as e:
             logger.error("An unexpected error has occurred. %s", e)

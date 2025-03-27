@@ -258,7 +258,7 @@ def auto_analyze(state: RevEngState) -> None:
                 inmain(dialog.exec_)
             else:
                 Dialog.showInfo(
-                    "Auto Analysis",
+                    "Analyse Binary",
                     "Unable to fulfil your request at this time.\nBinary"
                     f" analysis status: {status}",
                 )
