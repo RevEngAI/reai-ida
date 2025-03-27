@@ -36,8 +36,7 @@ class Dialog(object):
 
     @staticmethod
     def showError(title: str, message: str) -> None:
-        execute_sync(Requests.MsgBox(title, message,
-                                     QMessageBox.Warning), MFF_FAST)
+        execute_sync(Requests.MsgBox(title, message, QMessageBox.Warning), MFF_FAST)
 
 
 class BaseForm(Form):
@@ -61,16 +60,16 @@ class BaseForm(Form):
 class StatusForm(BaseForm):
     class StatusFormChooser(Choose):
         def __init__(
-                self,
-                title: str,
-                state: RevEngState,
-                items: list,
-                flags: int = CH_CAN_DEL
-                             | CH_CAN_EDIT
-                             | CH_CAN_REFRESH
-                             | CH_MODAL
-                             | CH_NO_STATUS_BAR
-                             | CH_NO_FILTER,
+            self,
+            title: str,
+            state: RevEngState,
+            items: list,
+            flags: int = CH_CAN_DEL
+            | CH_CAN_EDIT
+            | CH_CAN_REFRESH
+            | CH_MODAL
+            | CH_NO_STATUS_BAR
+            | CH_NO_FILTER,
         ):
             Choose.__init__(
                 self,
@@ -115,9 +114,7 @@ class StatusForm(BaseForm):
         def OnGetIcon(self, sel):
             pos = sel if isinstance(sel, int) else sel[0]
 
-            if int(self.OnGetLine(pos)[1]) == self.state.config.get(
-                    "binary_id"
-            ):
+            if int(self.OnGetLine(pos)[1]) == self.state.config.get("binary_id"):
                 return self.icon
             if self.OnGetLine(pos)[2] == "Error":
                 return 62
@@ -145,8 +142,7 @@ class StatusForm(BaseForm):
         def OnRefresh(self, sel) -> None:
             pos = sel if isinstance(sel, int) else sel[0]
 
-            if 0 <= pos < self.OnGetSize() and \
-                    self.OnGetLine(pos)[2] != "Error":
+            if 0 <= pos < self.OnGetSize() and self.OnGetLine(pos)[2] != "Error":
                 binary_id = int(self.OnGetLine(pos)[1])
 
                 logger.info("Selecting analysis ID %d as current", binary_id)
@@ -215,6 +211,7 @@ Choose your options for binary analysis
 <#Debugging information for uploaded binary#~D~ebug Info or PDB\::{iDebugFile}>
 <#Add custom tags to your file#~C~ustom Tags (format: <tag>,<tag>,..)\:      :{iTags}>
 <#Model that you want the file to be analysed by#AI ~M~odel\:         :{iModel}>
+<#Visibility a public or private visibility#Visibility\:         :{iVisibility}>
 
 Privacy:
     <#You are the only one able to access this file#Private to you:{rOptPrivate}>
@@ -232,6 +229,9 @@ Privacy:
                 "iTags": Form.StringInput(swidth=40, tp=Form.FT_ASCII),
                 "iModel": Form.DropdownListControl(
                     swidth=40, selval=index, items=state.config.MODELS
+                ),
+                "iVisibility": Form.DropdownListControl(
+                    swidth=40, selval=index, items=["public", "private"]
                 ),
             },
         )
