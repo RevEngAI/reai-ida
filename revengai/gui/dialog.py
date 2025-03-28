@@ -178,7 +178,7 @@ class StatusForm(BaseForm):
         Form.__init__(
             self,
             r"""BUTTON CANCEL NONE
-RevEng.AI Toolkit: Binary Analyses History
+RevEng.AI: Binary Analyses History
 
 {FormChangeCb}
 View and manage analyses of the current binary:
@@ -203,25 +203,31 @@ class UploadBinaryForm(BaseForm):
         Form.__init__(
             self,
             r"""BUTTON YES* Analyse
-RevEng.AI Toolkit: Upload Binary for Analysis
+RevEng.AI: Upload Binary for Analysis
 
 {FormChangeCb}
 Choose your options for binary analysis
 
 <#Debugging information for uploaded binary#~D~ebug Info or PDB\::{iDebugFile}>
-<#Add custom tags to your file#~C~ustom Tags (format: <tag>,<tag>,..)\:      :{iTags}>
+<#Add custom tags to your file#~C~ustom Tags (format\: tag,tag)\:      :{iTags}>
 <#Model that you want the file to be analysed by#AI ~M~odel\:         :{iModel}>
-<#Visibility can either be public or private to yourself#Visibility\:         :{iVisibility}>
+
+Privacy:
+    <#You are the only one able to access this file#Private to you:{rOptPrivate}>
+    <#Everyone will be able to search against this file#Public access:{rOptPublic}>{iScope}>
 """,
             {
                 "FormChangeCb": Form.FormChangeCb(self.OnFormChange),
+                "iScope": Form.RadGroupControl(
+                    (
+                        "rOptPrivate",
+                        "rOptPublic",
+                    )
+                ),
                 "iDebugFile": Form.FileInput(swidth=40, open=True),
                 "iTags": Form.StringInput(swidth=40, tp=Form.FT_ASCII),
                 "iModel": Form.DropdownListControl(
                     swidth=40, selval=index, items=state.config.MODELS
-                ),
-                "iVisibility": Form.DropdownListControl(
-                    swidth=40, selval=index, items=["public", "private"]
                 ),
             },
         )
@@ -234,12 +240,12 @@ class AboutForm(BaseForm):
         Form.__init__(
             self,
             r"""BUTTON YES* Open RevEng.AI Website
-RevEng.AI Toolkit: About
+RevEng.AI: About
 
 {FormChangeCb}
-RevEng.AI Toolkit IDA plugin v%s.
+RevEng.AI IDA plugin v%s.
 
-RevEng.AI Toolkit is released under the GPL v2.
+RevEng.AI IDA Plugin is released under the GPL v2.
 Find more info at https://reveng.ai/
 """
             % __version__,
@@ -261,10 +267,10 @@ class UpdateForm(BaseForm):
         Form.__init__(
             self,
             r"""BUTTON YES* Open RevEng.AI Website
-RevEng.AI Toolkit: Check for Update
+RevEng.AI: Check for Update
 
 {FormChangeCb}
-Your RevEng.AI Toolkit IDA plugin is v%s.
+Your RevEng.AI IDA plugin is v%s.
 %s
 """
             % (

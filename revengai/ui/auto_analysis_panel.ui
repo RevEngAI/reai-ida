@@ -14,7 +14,7 @@
             <enum>Qt::NoContextMenu</enum>
         </property>
         <property name="windowTitle">
-            <string>RevEng.AI Toolkit: Analyse Binary</string>
+            <string>RevEng.AI: Analyse Binary</string>
         </property>
         <property name="windowIcon">
             <iconset>

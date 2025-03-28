@@ -1,6 +1,6 @@
 # <img src="./revengai/resources/logo.png" width=20> RevEng.AI IDA Pro Plugin
 
-IDA Pro Plugin for [RevEng.AI Toolkit](https://reveng.ai/).
+IDA Pro Plugin for [RevEng.AI](https://reveng.ai/).
 
 ### Features Supported
 
@@ -28,13 +28,13 @@ Ensure the latest version of the [reait](https://github.com/RevEngAI/reait/relea
 
 ## Setup & Usage 📦
 
-Open IDA and if the plugin has loaded successfully it should be visible under `RevEng.AI Toolkit` menu.
+Open IDA and if the plugin has loaded successfully it should be visible under `RevEng.AI` menu.
 
 ![menu](./assets/img/1.png)
 
-If `RevEng.AI Toolkit` menu does not appear in the menubar, you can:
+If `RevEng.AI` menu does not appear in the menubar, you can:
 - either click on <img src="revengai/resources/favicon.png" width="16"/> displayed in the toolbar
-- or click on `Edit > Plugins` then `RevEng.AI Toolkit`
+- or click on `Edit > Plugins` then `RevEng.AI`
 
 ![plugin](./assets/img/13.png)
 

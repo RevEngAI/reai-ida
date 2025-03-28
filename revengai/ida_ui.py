@@ -33,7 +33,7 @@ from revengai.actions import load_recent_analyses
 from revengai.manager import RevEngState
 from revengai.misc.utils import IDAUtils
 
-MENU = "RevEng.AI Toolkit/"
+MENU = "RevEng.AI/"
 
 
 class Handler(action_handler_t):

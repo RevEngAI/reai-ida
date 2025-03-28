@@ -14,7 +14,7 @@
             <enum>Qt::NoContextMenu</enum>
         </property>
         <property name="windowTitle">
-            <string>RevEng.AI Toolkit: Function Rename</string>
+            <string>RevEng.AI: Function Rename</string>
         </property>
         <property name="windowIcon">
             <iconset>

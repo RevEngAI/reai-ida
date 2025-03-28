@@ -14,7 +14,7 @@
             <enum>Qt::NoContextMenu</enum>
         </property>
         <property name="windowTitle">
-            <string>RevEng.AI Toolkit: Synchronise Functions</string>
+            <string>RevEng.AI: Synchronise Functions</string>
         </property>
         <property name="windowIcon">
             <iconset>

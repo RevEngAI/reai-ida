@@ -193,7 +193,7 @@ def upload_binary(state: RevEngState) -> None:
                 bg_task,
                 state.config.MODELS[f.iModel.value],
                 f.iTags.value.split(","),
-                f.iVisibility.value,
+                "PUBLIC" if f.iScope.value else "PRIVATE",
                 f.iDebugFile.value,
             )
 
@@ -956,11 +956,9 @@ def generate_function_data_types(state: RevEngState) -> None:
             if done:
                 try:
                     analysis_id = state.config.get("analysis_id", 0)
-
                     logger.info(f"Generating data type for analysis ID: {analysis_id}")
 
                     function_ids = []
-
                     logger.info("Getting the list of functions to generate data types")
 
                     res: dict = RE_analyze_functions(
@@ -981,7 +979,6 @@ def generate_function_data_types(state: RevEngState) -> None:
                         function_ids.append(function["function_id"])
 
                     res = RE_generate_data_types(analysis_id, function_ids).json()
-
                     status = res.get("status", False)
 
                     if status:
@@ -1513,13 +1510,13 @@ def update(_) -> None:
         f.Free()
     except RequestException as e:
         logger.warning(
-            "RevEng.AI Toolkit failed to connect to GitHub to check for the"
+            "RevEng.AI failed to connect to GitHub to poll for the"
             " latest plugin update. %s",
             e,
         )
         Dialog.showInfo(
             "Check for Update",
-            "RevEng.AI Toolkit has failed to connect to the internet (Github)."
+            "RevEng.AI has failed to connect to the internet (GitHub)."
             " Try again later.",
         )
 

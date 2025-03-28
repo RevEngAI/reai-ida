@@ -35,7 +35,7 @@ class RevEngSetupWizard(QWizard):
         self.addPage(UserCredentialsPage(self.state))
         self.addPage(UserAvailableModelsPage(self.state))
 
-        self.setWindowTitle("RevEng.AI Toolkit: Setup Wizard")
+        self.setWindowTitle("RevEng.AI: Setup Wizard")
         self.setOptions(QWizard.CancelButtonOnLeft |
                         QWizard.NoBackButtonOnStartPage)
         self.setWizardStyle(

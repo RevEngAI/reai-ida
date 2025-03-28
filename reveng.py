@@ -43,7 +43,7 @@ class RevEngPlugin(plugin_t):
     # method has no functionality.
     flags = 0 if IDA_SDK_VERSION > 810 else PLUGIN_HIDE
     wanted_hotkey = ""
-    wanted_name = "RevEng.AI Toolkit"
+    wanted_name = "RevEng.AI"
     help = f"Configure IDA plugin for {wanted_name}"
     comment = f"AI-assisted reverse engineering from {wanted_name}"
 
@@ -126,7 +126,7 @@ def PLUGIN_ENTRY():
         return RevEngPlugin()
     else:
         msg(
-            "[!] RevEng.AI Toolkit requires the dependencies to be "
+            "[!] RevEng.AI requires the dependencies to be "
             "installed.\n"
         )
 
