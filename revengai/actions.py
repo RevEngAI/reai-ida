@@ -1187,7 +1187,11 @@ def apply_function_data_types(state: RevEngState) -> None:
                     function_id = item.get("function_id", 0)
 
                     if function_types and len(func_deps) > 0:
-                        # convert func_deps to a list of json objects
+                        # TODO: this might be redundant, check if I can
+                        # TODO: instantiate the object directly from dict
+                        # TODO: like Function(**function_types) maybe
+                        # TODO: creating an utility function is the best
+                        # TODO: approach
                         deps_types = [x for x in map(
                             lambda x: json.dumps(x),
                             func_deps
@@ -1222,6 +1226,11 @@ def apply_function_data_types(state: RevEngState) -> None:
                             )
 
                     if function_types:
+                        # TODO: this might be redundant, check if I can
+                        # TODO: instantiate the object directly from dict
+                        # TODO: like Function(**function_types) maybe
+                        # TODO: creating an utility function is the best
+                        # TODO: approach
                         fnc = json.dumps(function_types)
                         func = Function.loads(fnc, fmt=ArtifactFormat.JSON)
                         func_res = apply_type(deci, func)
