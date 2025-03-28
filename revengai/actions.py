@@ -1250,6 +1250,14 @@ def apply_function_data_types(state: RevEngState) -> None:
                                 "Applied data types for function id "
                                 f"{function_id}"
                             )
+
+                logger.info("Function data types application completed")
+            else:
+                logger.warning("No function data types to apply")
+                Dialog.showInfo(
+                    "Function Types",
+                    "No function data types to apply. Please try again.",
+                )
         except HTTPError as e:
             resp: dict = e.response.json()
             error = resp.get(
