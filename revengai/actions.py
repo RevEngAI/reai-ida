@@ -1250,9 +1250,6 @@ def apply_function_data_types(state: RevEngState) -> None:
                                 "Applied data types for function id "
                                 f"{function_id}"
                             )
-
-            # TODO: wait for the endpoint to be fixed
-
         except HTTPError as e:
             resp: dict = e.response.json()
             error = resp.get(
