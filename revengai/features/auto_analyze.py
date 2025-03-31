@@ -14,8 +14,7 @@ from idautils import Functions
 from requests import Response, HTTPError, RequestException
 
 from reait.api import RE_nearest_symbols_batch
-
-from revengai.api import RE_collection_search
+from reait.api import RE_collections_search
 from revengai.features import BaseDialog
 from revengai.misc.utils import IDAUtils
 from revengai.misc.qtutils import inthread, inmain
@@ -463,11 +462,23 @@ class AutoAnalysisDialog(BaseDialog):
 
             inmain(self.ui.fetchButton.setEnabled, False)
 
-            res: Response = RE_collection_search(search)
+            logger.info(
+                "Searching for collections with '%s'", search or "N/A"
+            )
+
+            res: dict = RE_collections_search(
+                partial_collection_name=search,
+                page=1,
+                page_size=1024,
+            ).json()
+
+            result_collections = res.get("data", {}).get("results", [])
+
+            logger.info(f"Found {len(result_collections)} collections")
 
             collections = []
 
-            for collection in res.json()["collections"]:
+            for collection in result_collections:
                 if isinstance(collection, str):
                     collections.append(
                         (
@@ -482,7 +493,7 @@ class AutoAnalysisDialog(BaseDialog):
                     collections.append(
                         (
                             IconItem(
-                                collection["name"],
+                                collection["collection_name"],
                                 (
                                     "lock.png"
                                     if collection["scope"] == "PRIVATE"
@@ -491,7 +502,7 @@ class AutoAnalysisDialog(BaseDialog):
                             ),
                             CheckableItem(
                                 checked=self.ui.layoutFilter.is_present(
-                                    collection["name"]
+                                    collection["collection_name"]
                                 )
                             ),
                         )
@@ -508,12 +519,13 @@ class AutoAnalysisDialog(BaseDialog):
                 round(inmain(self.ui.collectionsTable.width) * 0.9),
             )
         except HTTPError as e:
-            logger.error("Getting collections failed. Reason: %s", e)
-
-            Dialog.showError(
-                "Auto Analysis",
-                f"Auto Analysis Error: {e.response.json()['error']}"
-            )
+            if e.response.status_code != 400:
+                message = e.json().get("error", "Unknown error")
+                logger.error(f"Getting collections failed. Reason: {message}")
+                Dialog.showError(
+                    "Auto Analysis",
+                    f"Auto Analysis Error: {message}"
+                )
         except RequestException as e:
             logger.error("An unexpected error has occurred. %s", e)
         finally:
