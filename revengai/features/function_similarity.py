@@ -8,11 +8,11 @@ from idaapi import ASKBTN_YES, hide_wait_box, show_wait_box
 from PyQt5.QtCore import Qt, QModelIndex
 from PyQt5.QtGui import QIntValidator, QCursor
 
-from requests import Response, HTTPError, RequestException
+from requests import HTTPError, RequestException
 
 from reait.api import RE_nearest_symbols_batch
+from reait.api import RE_collections_search
 
-from revengai.api import RE_collection_search
 from revengai.features import BaseDialog
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
@@ -255,11 +255,19 @@ class FunctionSimilarityDialog(BaseDialog):
 
             inmain(self.ui.fetchButton.setEnabled, False)
 
-            res: Response = RE_collection_search(search)
+            res: dict = RE_collections_search(
+                partial_collection_name=search,
+                page=1,
+                page_size=1024,
+            ).json()
+
+            result_collections = res.get("data", {}).get("results", [])
+
+            logger.info(f"Found {len(result_collections)} collections")
 
             collections = []
 
-            for collection in res.json()["collections"]:
+            for collection in result_collections:
                 if isinstance(collection, str):
                     collections.append(
                         (
@@ -274,7 +282,7 @@ class FunctionSimilarityDialog(BaseDialog):
                     collections.append(
                         (
                             IconItem(
-                                collection["name"],
+                                collection["collection_name"],
                                 (
                                     "lock.png"
                                     if collection["scope"] == "PRIVATE"
@@ -283,7 +291,7 @@ class FunctionSimilarityDialog(BaseDialog):
                             ),
                             CheckableItem(
                                 checked=self.ui.layoutFilter.is_present(
-                                    collection["name"]
+                                    collection["collection_name"]
                                 )
                             ),
                         )
@@ -299,13 +307,13 @@ class FunctionSimilarityDialog(BaseDialog):
                 round(inmain(self.ui.collectionsTable.width) * 0.8),
             )
         except HTTPError as e:
-            logger.error("Getting collections failed. Reason: %s", e)
-
-            Dialog.showError(
-                "Function Rename",
-                "Function Rename Error: "
-                f"{e.response.json().get('error', 'unknown')}",
-            )
+            if e.response.status_code != 400:
+                message = e.json().get("error", "Unknown error")
+                logger.error(f"Getting collections failed. Reason: {message}")
+                Dialog.showError(
+                    "Auto Analysis",
+                    f"Auto Analysis Error: {message}"
+                )
         except RequestException as e:
             logger.error("An unexpected error has occurred. %s", e)
         finally:
