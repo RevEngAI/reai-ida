@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import QMenu
 from idaapi import hide_wait_box, show_wait_box, user_cancelled
 from idautils import Functions
 
-from requests import Response, HTTPError, RequestException
+from requests import HTTPError, RequestException
 
 from reait.api import RE_nearest_symbols_batch
 from reait.api import RE_collections_search
@@ -98,16 +98,19 @@ class AutoAnalysisDialog(BaseDialog):
         for func_ea in Functions():
             start_addr = idc.get_func_attr(func_ea, idc.FUNCATTR_START)
             if IDAUtils.is_in_valid_segment(start_addr):
-                self._functions.append(
-                    {
-                        "name": IDAUtils.get_demangled_func_name(func_ea),
-                        "start_addr": (start_addr - self.base_addr),
-                        "end_addr": (
-                            idc.get_func_attr(func_ea, idc.FUNCATTR_END)
-                            - self.base_addr
-                        ),
-                    }
-                )
+                # add only if the function name starts with sub_
+                name = IDAUtils.get_demangled_func_name(func_ea)
+                if name.startswith("sub_"):
+                    self._functions.append(
+                        {
+                            "name": name,
+                            "start_addr": (start_addr - self.base_addr),
+                            "end_addr": (
+                                idc.get_func_attr(func_ea, idc.FUNCATTR_END)
+                                - self.base_addr
+                            ),
+                        }
+                    )
 
         self.ui.progressBar.setProperty(
             "maximum", 2 + (len(self._functions) << 1))
