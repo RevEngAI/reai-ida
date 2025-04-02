@@ -31,7 +31,6 @@ from requests import get, HTTPError, Response, RequestException
 
 from revengai import __version__
 from revengai.api import (
-    RE_explain,
     RE_functions_dump,
     RE_search,
     RE_recent_analysis,
@@ -432,102 +431,6 @@ def push_function_names(state: RevEngState) -> None:
                 )
 
         inthread(bg_task)
-
-
-def explain_function(state: RevEngState) -> None:
-    fpath = idc.get_input_file_path()
-
-    if is_condition_met(state, fpath):
-
-        def bg_task(pseudo_code: str) -> None:
-            if pseudo_code and len(pseudo_code) > 0:
-                try:
-                    language = None
-                    try:
-                        # Gets the programming language from the current binary
-                        ret = run(
-                            f"rabin2 -I {fpath} | grep 'lang '",
-                            shell=True,
-                            capture_output=True,
-                            timeout=5,
-                        )
-
-                        if ret.returncode == 0:
-                            language = ret.stdout.split(b" ")[-1].strip().decode()
-                    except SubprocessError as e:
-                        logger.error(
-                            "Failed to get the programming language. " "Reason: %s",
-                            e,
-                        )
-
-                    res: Response = RE_explain(pseudo_code, language)
-
-                    error = res.json().get("error", None)
-                    if error:
-                        logger.error("Error with function explanation: %s", error)
-                        Dialog.showError(
-                            "", f"Error getting function explanation: {error}"
-                        )
-                    else:
-                        comment = (
-                            "RevEng.AI Auto-generated Explanation:\n\n"
-                            f"{res.json()['explanation']}"
-                        )
-
-                        logger.info(comment)
-                        inmain(IDAUtils.set_comment, inmain(idc.here), comment)
-                except HTTPError as e:
-                    logger.error("Error with function explanation: %s", e)
-
-                    error = e.response.json().get(
-                        "error",
-                        "An unexpected error occurred. Sorry for the" " inconvenience.",
-                    )
-                    Dialog.showError(
-                        "Function Explanation",
-                        f"Error getting function explanation: {error}",
-                    )
-            else:
-                info = inmain(idaapi.get_inf_structure)
-
-                procname = info.procname.lower()
-                bits = (
-                    64 if inmain(info.is_64bit) else 32 if inmain(info.is_32bit) else 16
-                )
-
-                # https://github.com/williballenthin/python-idb/blob/master/idb/idapython.py#L955-L1046
-                if any(
-                    procname.startswith(arch)
-                    for arch in (
-                        "metapc",
-                        "athlon",
-                        "k62",
-                        "p2",
-                        "p3",
-                        "p4",
-                        "80",
-                    )
-                ):
-                    arch = "x86_64" if bits == 64 else "x86"
-                elif procname.startswith("arm"):
-                    arch = "ARM64" if bits == 64 else "ARM"
-                elif procname.startswith("mips"):
-                    arch = f"MIPS{bits}"
-                elif procname.startswith("ppc"):
-                    arch = f"PPC{bits}"
-                elif procname.startswith("sparc"):
-                    arch = f"SPARC{bits}"
-                else:
-                    arch = "unknown arch"
-
-                logger.warning("Hex-Rays %s decompiler is not available", arch)
-                inmain(
-                    idc.warning,
-                    f"Hex-Rays {arch} decompiler is not available.",
-                )
-
-        inthread(bg_task, IDAUtils.decompile_func(idc.here()))
-
 
 def download_logs(state: RevEngState) -> None:
     fpath = idc.get_input_file_path()
