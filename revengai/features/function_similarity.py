@@ -1,28 +1,22 @@
-# -*- coding: utf-8 -*-
 import logging
 
 import idc
-from PyQt5.QtWidgets import QMenu
-from idaapi import ASKBTN_YES, hide_wait_box, show_wait_box
-
 from PyQt5.QtCore import Qt, QModelIndex
 from PyQt5.QtGui import QIntValidator, QCursor
-
+from PyQt5.QtWidgets import QMenu
+from idaapi import ASKBTN_YES, hide_wait_box, show_wait_box
 from requests import HTTPError, RequestException
-
 from reait.api import RE_nearest_symbols_batch
 from reait.api import RE_collections_search
-
 from revengai.features import BaseDialog
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
-from revengai.misc.utils import IDAUtils
 from revengai.misc.qtutils import inthread, inmain
+from revengai.misc.utils import IDAUtils
 from revengai.models import CheckableItem, IconItem, SimpleItem
 from revengai.models.checkable_model import RevEngCheckableTableModel
 from revengai.models.table_model import RevEngTableModel
 from revengai.ui.function_similarity_panel import Ui_FunctionSimilarityPanel
-
 
 logger = logging.getLogger("REAI")
 
@@ -130,7 +124,7 @@ class FunctionSimilarityDialog(BaseDialog):
             if function_id is None:
                 func_name = inmain(
                     IDAUtils.get_demangled_func_name, self.v_addr +
-                    self.base_addr
+                                                      self.base_addr
                 )
 
                 inmain(idc.warning, f"No matches found for {func_name}.")
@@ -183,7 +177,7 @@ class FunctionSimilarityDialog(BaseDialog):
         except HTTPError as e:
             error = e.response.json().get(
                 "error", "An unexpected error occurred. Sorry for the "
-                "inconvenience."
+                         "inconvenience."
             )
             Dialog.showError("Function Renaming", error)
         except RequestException as e:
@@ -216,8 +210,8 @@ class FunctionSimilarityDialog(BaseDialog):
 
         if selected and isinstance(selected[0], SimpleItem):
             if not IDAUtils.set_name(
-                self.v_addr + self.base_addr,
-                selected[0].text
+                    self.v_addr + self.base_addr,
+                    selected[0].text
             ):
                 Dialog.showError(
                     "Rename Function Error",
@@ -234,11 +228,11 @@ class FunctionSimilarityDialog(BaseDialog):
                 )
 
                 if self.state.project_cfg.get("func_type") \
-                    and ASKBTN_YES == idc.ask_yn(
-                        ASKBTN_YES,
-                        "HIDECANCEL\nWould you also like to update the "
-                        "function "
-                        "declaration?",
+                        and ASKBTN_YES == idc.ask_yn(
+                    ASKBTN_YES,
+                    "HIDECANCEL\nWould you also like to update the "
+                    "function "
+                    "declaration?",
                 ):
                     # Prevent circular import
                     from revengai.actions import function_signature
@@ -329,9 +323,9 @@ class FunctionSimilarityDialog(BaseDialog):
         selected = self.ui.resultsTable.model().get_data(rows[0])
 
         if (
-            selected
-            and self.ui.renameButton.isEnabled()
-            and isinstance(selected[0], SimpleItem)
+                selected
+                and self.ui.renameButton.isEnabled()
+                and isinstance(selected[0], SimpleItem)
         ):
             menu = QMenu()
             renameAction = menu.addAction(self.ui.renameButton.text())
@@ -379,10 +373,10 @@ class FunctionSimilarityDialog(BaseDialog):
     def _callback(self, text: str) -> None:
         for row_item in self.ui.collectionsTable.model().get_datas():
             if isinstance(row_item[1], CheckableItem) and (
-                isinstance(row_item[0], str)
-                and row_item[0] == text
-                or isinstance(row_item[0], SimpleItem)
-                and row_item[0].text == text
+                    isinstance(row_item[0], str)
+                    and row_item[0] == text
+                    or isinstance(row_item[0], SimpleItem)
+                    and row_item[0].text == text
             ):
                 row_item[1].checkState = Qt.Unchecked
 

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from os.path import dirname, join
 
 from idaapi import load_custom_icon, free_custom_icon

@@ -1,8 +1,8 @@
-# -*- coding: utf-8 -*-
 import abc
 import logging
+from itertools import filterfalse
 
-from idc import get_input_file_path
+from PyQt5.QtWidgets import QMessageBox
 from idaapi import (
     CH_CAN_DEL,
     CH_CAN_EDIT,
@@ -18,18 +18,13 @@ from idaapi import (
     execute_sync,
     open_url,
 )
-
-from PyQt5.QtWidgets import QMessageBox
-
-from itertools import filterfalse
-
+from idc import get_input_file_path
 from reait.api import RE_delete
 
 from revengai import __version__
 from revengai.gui import Requests
 from revengai.manager import RevEngState
 from revengai.misc.qtutils import inthread
-
 
 logger = logging.getLogger("REAI")
 
@@ -41,8 +36,7 @@ class Dialog(object):
 
     @staticmethod
     def showError(title: str, message: str) -> None:
-        execute_sync(Requests.MsgBox(title, message,
-                     QMessageBox.Warning), MFF_FAST)
+        execute_sync(Requests.MsgBox(title, message, QMessageBox.Warning), MFF_FAST)
 
 
 class BaseForm(Form):
@@ -120,9 +114,7 @@ class StatusForm(BaseForm):
         def OnGetIcon(self, sel):
             pos = sel if isinstance(sel, int) else sel[0]
 
-            if int(self.OnGetLine(pos)[1]) == self.state.config.get(
-                "binary_id"
-            ):
+            if int(self.OnGetLine(pos)[1]) == self.state.config.get("binary_id"):
                 return self.icon
             if self.OnGetLine(pos)[2] == "Error":
                 return 62
@@ -150,8 +142,7 @@ class StatusForm(BaseForm):
         def OnRefresh(self, sel) -> None:
             pos = sel if isinstance(sel, int) else sel[0]
 
-            if 0 <= pos < self.OnGetSize() and \
-                    self.OnGetLine(pos)[2] != "Error":
+            if 0 <= pos < self.OnGetSize() and self.OnGetLine(pos)[2] != "Error":
                 binary_id = int(self.OnGetLine(pos)[1])
 
                 logger.info("Selecting analysis ID %d as current", binary_id)
@@ -187,7 +178,7 @@ class StatusForm(BaseForm):
         Form.__init__(
             self,
             r"""BUTTON CANCEL NONE
-RevEng.AI Toolkit: Binary Analyses History
+RevEng.AI: Binary Analyses History
 
 {FormChangeCb}
 View and manage analyses of the current binary:
@@ -211,14 +202,14 @@ class UploadBinaryForm(BaseForm):
 
         Form.__init__(
             self,
-            r"""BUTTON YES* Analyse
-RevEng.AI Toolkit: Upload Binary for Analysis
+            r"""BUTTON YES* Upload
+RevEng.AI: Upload Binary
 
 {FormChangeCb}
-Choose your options for binary analysis
+Please provide the following information to upload the binary:
 
 <#Debugging information for uploaded binary#~D~ebug Info or PDB\::{iDebugFile}>
-<#Add custom tags to your file#~C~ustom Tags\:      :{iTags}>
+<#Add custom tags to your file#~C~ustom Tags (format\: tag,tag)\:      :{iTags}>
 <#Model that you want the file to be analysed by#AI ~M~odel\:         :{iModel}>
 
 Privacy:
@@ -249,12 +240,12 @@ class AboutForm(BaseForm):
         Form.__init__(
             self,
             r"""BUTTON YES* Open RevEng.AI Website
-RevEng.AI Toolkit: About
+RevEng.AI: About
 
 {FormChangeCb}
-RevEng.AI Toolkit IDA plugin v%s.
+RevEng.AI IDA plugin v%s.
 
-RevEng.AI Toolkit is released under the GPL v2.
+RevEng.AI IDA Plugin is released under the GPL v2.
 Find more info at https://reveng.ai/
 """
             % __version__,
@@ -276,10 +267,10 @@ class UpdateForm(BaseForm):
         Form.__init__(
             self,
             r"""BUTTON YES* Open RevEng.AI Website
-RevEng.AI Toolkit: Check for Update
+RevEng.AI: Check for Update
 
 {FormChangeCb}
-Your RevEng.AI Toolkit IDA plugin is v%s.
+Your RevEng.AI IDA plugin is v%s.
 %s
 """
             % (

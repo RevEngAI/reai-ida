@@ -1,14 +1,11 @@
-# -*- coding: utf-8 -*-
 import logging
 from contextlib import closing
-
 from os import makedirs
 from os.path import join, basename
 from sqlite3 import connect, Connection, Error
 from weakref import finalize
 
 from idaapi import get_user_idadir
-
 
 logger = logging.getLogger("REAI")
 
@@ -70,8 +67,8 @@ class RevEngDatabase(object):
         try:
             with closing(self.conn.cursor()) as cursor:
                 for table in (
-                    "upload",
-                    "analysis",
+                        "upload",
+                        "analysis",
                 ):
                     cursor.execute(f"DROP TABLE {table}")
         except Error as e:
@@ -103,8 +100,8 @@ class RevEngDatabase(object):
         try:
             with closing(self.conn.cursor()) as cursor:
                 for table in (
-                    "upload",
-                    "analysis",
+                        "upload",
+                        "analysis",
                 ):
                     cursor.execute(
                         f"DELETE FROM {table} WHERE sha_256_hash = ?", (
@@ -153,12 +150,12 @@ class RevEngDatabase(object):
             )
 
     def add_analysis(
-        self,
-        sha_256_hash: str,
-        bid: int,
-        status: str = "",
-        creation: str = "",
-        model_name: str = "",
+            self,
+            sha_256_hash: str,
+            bid: int,
+            status: str = "",
+            creation: str = "",
+            model_name: str = "",
     ) -> None:
         try:
             with closing(self.conn.cursor()) as cursor:

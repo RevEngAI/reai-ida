@@ -1,23 +1,22 @@
-# -*- coding: utf-8 -*-
 from typing import Optional
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QPoint
 from PyQt5.QtCore import QRect
 from PyQt5.QtCore import QSize
-from PyQt5.QtCore import QPoint
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QCheckBox
 from PyQt5.QtWidgets import QLayout
 from PyQt5.QtWidgets import QLayoutItem
-from PyQt5.QtWidgets import QWidget
 from PyQt5.QtWidgets import QSizePolicy
-from PyQt5.QtWidgets import QCheckBox
+from PyQt5.QtWidgets import QWidget
 
 
 class CustomFlowLayout(QLayout):
     def __init__(
-        self,
-        parent: QWidget = None,
-        margin: int = 0,
-        spacing: int = -1
+            self,
+            parent: QWidget = None,
+            margin: int = 0,
+            spacing: int = -1
     ):
         super().__init__(parent)
 
@@ -46,10 +45,10 @@ class CustomFlowLayout(QLayout):
             self._items.append(a0)
 
     def addWidget(
-        self,
-        w: QWidget,
-        position: int = None,
-        align: Qt.AlignmentFlag = Qt.AlignLeft
+            self,
+            w: QWidget,
+            position: int = None,
+            align: Qt.AlignmentFlag = Qt.AlignLeft
     ) -> None:
         if position is not None:
             self.__pending_positions[w] = position

@@ -1,9 +1,7 @@
-# -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from requests import get, post, Response
-
 from reait.api import reveng_req, re_binary_id
+from requests import get, post, Response
 
 
 def RE_models() -> Response:
@@ -37,8 +35,7 @@ def RE_explain(pseudo_code: str, language: str = None) -> Response:
 def RE_search(fpath: str) -> Response:
     bin_id = re_binary_id(fpath)
 
-    res: Response = reveng_req(
-        get, "v1/search", json_data={"sha_256_hash": bin_id})
+    res: Response = reveng_req(get, "v1/search", json_data={"sha_256_hash": bin_id})
 
     res.raise_for_status()
     return res
@@ -69,8 +66,7 @@ def RE_recent_analysis(
 
 
 def RE_generate_summaries(function_id: int) -> Response:
-    res: Response = reveng_req(
-        get, f"v1/functions/blocks_comments/{function_id}")
+    res: Response = reveng_req(get, f"v1/functions/blocks_comments/{function_id}")
 
     res.raise_for_status()
     return res

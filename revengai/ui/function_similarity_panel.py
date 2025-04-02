@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 
 # Form implementation generated from reading ui file
 # 'function_similarity_panel.ui'
@@ -188,7 +187,7 @@ class Ui_FunctionSimilarityPanel(object):
     def retranslateUi(self, FunctionSimilarityPanel):
         _translate = QtCore.QCoreApplication.translate
         FunctionSimilarityPanel.setWindowTitle(_translate(
-            "FunctionSimilarityPanel", "RevEng.AI Toolkit: Function Rename"))
+            "FunctionSimilarityPanel", "RevEng.AI: Function Rename"))
         self.collectionsFilter.setPlaceholderText(_translate(
             "FunctionSimilarityPanel", "Search collections…"))
         self.checkBox.setText(_translate(

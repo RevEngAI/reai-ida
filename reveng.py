@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import logging
 
 from idc import (
@@ -21,6 +20,7 @@ from idaapi import (
     PLUGIN_SKIP,
     PLUGIN_KEEP,
     PLUGIN_HIDE,
+    PLUGIN_UNL,
 )
 
 from revengai.manager import RevEngState
@@ -44,20 +44,20 @@ class RevEngPlugin(plugin_t):
     # method has no functionality.
     flags = 0 if IDA_SDK_VERSION > 810 else PLUGIN_HIDE
     wanted_hotkey = ""
-    wanted_name = "RevEng.AI Toolkit"
+    wanted_name = "RevEngAI"
     help = f"Configure IDA plugin for {wanted_name}"
     comment = f"AI-assisted reverse engineering from {wanted_name}"
 
     def __init__(self):
         super(RevEngPlugin, self).__init__()
 
-        self.initialized = False
-        self.state = RevEngState()
-
     def init(self) -> int:
         """
         Called when the plugin is initialised.
         """
+        self.initialized = False
+        self.state = RevEngState()
+
         if IDA_SDK_VERSION < 800:
             logger.warning("%s support 8.X IDA => skipping...",
                            self.wanted_name)
@@ -77,28 +77,26 @@ class RevEngPlugin(plugin_t):
                 " skipping...",
                 self.wanted_name,
             )
-            return PLUGIN_SKIP
+            return PLUGIN_UNL
 
         logger.info("%s plugin starts", self.wanted_name)
 
         self.run()
         return PLUGIN_KEEP
 
-    def reload_plugin(self) -> bool:
+    def run(self, _= None) -> bool:
         if self.initialized:
             self.term()
 
-        logger.info("Reloading %s...", self.wanted_name)
+        logger.info("Starting %s..", self.wanted_name)
 
+        # NOTE: the first call initialises the GUI components
         self.state.start_plugin()
+        # NOTE: the second call actually invokes the creation of the GUI
+        self.state.start_plugin()
+        
         self.initialized = True
         return True
-
-    def run(self, _=None) -> bool:
-        """
-        Called when the plugin is invoked.
-        """
-        return self.reload_plugin()
 
     def term(self) -> None:
         """

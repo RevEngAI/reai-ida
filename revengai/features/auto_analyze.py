@@ -1,8 +1,7 @@
-# -*- coding: utf-8 -*-
 import logging
 from concurrent.futures import ThreadPoolExecutor, CancelledError
-from re import sub
 from enum import IntEnum
+from re import sub
 
 import idc
 from PyQt5.QtCore import Qt, QModelIndex
@@ -10,20 +9,17 @@ from PyQt5.QtGui import QCursor
 from PyQt5.QtWidgets import QMenu
 from idaapi import hide_wait_box, show_wait_box, user_cancelled
 from idautils import Functions
-
 from requests import HTTPError, RequestException
-
 from reait.api import RE_nearest_symbols_batch
 from reait.api import RE_collections_search
 from revengai.features import BaseDialog
-from revengai.misc.utils import IDAUtils
-from revengai.misc.qtutils import inthread, inmain
-from revengai.models import CheckableItem, IconItem, SimpleItem
-from revengai.models.checkable_model import RevEngCheckableTableModel
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
+from revengai.misc.qtutils import inthread, inmain
+from revengai.misc.utils import IDAUtils
+from revengai.models import CheckableItem, IconItem, SimpleItem
+from revengai.models.checkable_model import RevEngCheckableTableModel
 from revengai.ui.auto_analysis_panel import Ui_AutoAnalysisPanel
-
 
 logger = logging.getLogger("REAI")
 
@@ -134,9 +130,9 @@ class AutoAnalysisDialog(BaseDialog):
         selected = self.ui.resultsTable.model().get_data(rows[0])
 
         if (
-            selected
-            and self.ui.renameButton.isEnabled()
-            and isinstance(selected[2], CheckableItem)
+                selected
+                and self.ui.renameButton.isEnabled()
+                and isinstance(selected[2], CheckableItem)
         ):
             menu = QMenu()
             renameAction = menu.addAction(self.ui.renameButton.text())
@@ -162,8 +158,8 @@ class AutoAnalysisDialog(BaseDialog):
             inmain(show_wait_box, "Getting results…")
 
             self._analysis = [
-                0,
-            ] * len(Analysis)
+                                 0,
+                             ] * len(Analysis)
 
             inmain(self.ui.fetchButton.setEnabled, False)
             inmain(self.ui.renameButton.setEnabled, False)
@@ -211,24 +207,24 @@ class AutoAnalysisDialog(BaseDialog):
 
             max_workers = 1
             if self.state.project_cfg.get("parallelize_query") and not inmain(
-                user_cancelled
+                    user_cancelled
             ):
                 max_workers = self.state.project_cfg.get("max_workers")
 
             # Launch parallel tasks
             with ThreadPoolExecutor(
-                max_workers=max_workers, thread_name_prefix="reai-batch"
+                    max_workers=max_workers, thread_name_prefix="reai-batch"
             ) as executor:
                 collections = inmain(self._selected_collections)
                 distance = 1.0 - (
-                    int(inmain(self.ui.confidenceSlider.property, "value"))
-                    / int(inmain(self.ui.confidenceSlider.property, "maximum"))
+                        int(inmain(self.ui.confidenceSlider.property, "value"))
+                        / int(inmain(self.ui.confidenceSlider.property, "maximum"))
                 )
 
                 def worker(chunk: list[int]) -> any:
                     try:
                         if inmain(user_cancelled):
-                            raise CancelledError("Auto analysis cancelled")
+                            raise CancelledError("Analyse binary cancelled")
 
                         res: dict = RE_nearest_symbols_batch(
                             function_ids=chunk,
@@ -289,14 +285,14 @@ class AutoAnalysisDialog(BaseDialog):
 
                     try:
                         res = (
-                            CancelledError("Auto analysis cancelled")
+                            CancelledError("Analyse binary cancelled")
                             if future.cancelled()
                             else future.result()
                         )
 
                         if isinstance(res, Exception):
                             logger.error(
-                                "Fetching a chunk of auto analysis failed."
+                                "Fetching a chunk of Analyse Binary failed."
                                 " Reason: %s",
                                 res,
                             )
@@ -304,9 +300,9 @@ class AutoAnalysisDialog(BaseDialog):
                             self._analysis[Analysis.UNSUCCESSFUL] += len(chunk)
 
                             if isinstance(res, CancelledError):
-                                err_msg = "Auto Analysis Cancelled"
+                                err_msg = "Analyse Binary Cancelled"
                             else:
-                                err_msg = "Auto Analysis Failed"
+                                err_msg = "Analyse Binary Failed"
 
                             if isinstance(res, HTTPError):
                                 err_msg = res.response.json().get(
@@ -334,7 +330,7 @@ class AutoAnalysisDialog(BaseDialog):
                                                     for function in
                                                     self._functions
                                                     if func_addr
-                                                    == function["start_addr"]
+                                                       == function["start_addr"]
                                                 ),
                                                 "Unknown",
                                             ),
@@ -351,7 +347,7 @@ class AutoAnalysisDialog(BaseDialog):
                                         for func_addr, func_id in
                                         self.analyzed_functions.items()
                                         if symbol["origin_function_id"] ==
-                                        func_id
+                                           func_id
                                     ),
                                     None,
                                 )
@@ -372,7 +368,7 @@ class AutoAnalysisDialog(BaseDialog):
                                                 function["name"]
                                                 for function in self._functions
                                                 if func_addr ==
-                                                function["start_addr"]
+                                                   function["start_addr"]
                                             ),
                                             "Unknown",
                                         )
@@ -423,11 +419,11 @@ class AutoAnalysisDialog(BaseDialog):
 
             inmain(inmain(self.ui.resultsTable.model).fill_table, resultsData)
         except HTTPError as e:
-            logger.error("Fetching auto analysis failed. Reason: %s", e)
+            logger.error("Fetching analyse binary failed. Reason: %s", e)
 
             Dialog.showError(
-                "Auto Analysis",
-                f"Auto Analysis Error: {e.response.json()['error']}"
+                "Analyse Binary",
+                f"Analyse Binary Error: {e.response.json()['error']}"
             )
         except RequestException as e:
             logger.error("An unexpected error has occurred. %s", e)
@@ -575,16 +571,16 @@ class AutoAnalysisDialog(BaseDialog):
 
         for row_item in self.ui.resultsTable.model().get_datas():
             if (
-                isinstance(row_item[2], CheckableItem)
-                and row_item[2].checkState == Qt.Checked
+                    isinstance(row_item[2], CheckableItem)
+                    and row_item[2].checkState == Qt.Checked
             ):
                 symbol = row_item[2].data
 
                 nnfn = symbol['nearest_neighbor_function_name']
 
                 if IDAUtils.set_name(
-                    symbol["function_addr"] + self.base_addr,
-                    symbol["nearest_neighbor_function_name"],
+                        symbol["function_addr"] + self.base_addr,
+                        symbol["nearest_neighbor_function_name"],
                 ):
                     func_id = self._get_function_id(symbol["function_addr"])
                     if func_id:
@@ -620,14 +616,14 @@ class AutoAnalysisDialog(BaseDialog):
 
     def _rename_function(self, selected, batches: list = None) -> None:
         if selected and len(selected) > 3 and isinstance(
-            selected[2],
-            SimpleItem
+                selected[2],
+                SimpleItem
         ):
             symbol = selected[2].data
 
             if IDAUtils.set_name(
-                symbol["function_addr"] + self.base_addr,
-                symbol["nearest_neighbor_function_name"],
+                    symbol["function_addr"] + self.base_addr,
+                    symbol["nearest_neighbor_function_name"],
             ):
                 inthread(
                     self._function_rename,
@@ -688,10 +684,10 @@ class AutoAnalysisDialog(BaseDialog):
     def _callback(self, text: str) -> None:
         for row_item in self.ui.collectionsTable.model().get_datas():
             if isinstance(row_item[1], CheckableItem) and (
-                isinstance(row_item[0], str)
-                and row_item[0] == text
-                or isinstance(row_item[0], SimpleItem)
-                and row_item[0].text == text
+                    isinstance(row_item[0], str)
+                    and row_item[0] == text
+                    or isinstance(row_item[0], SimpleItem)
+                    and row_item[0].text == text
             ):
                 row_item[1].checkState = Qt.Unchecked
 

@@ -1,9 +1,7 @@
-# -*- coding: utf-8 -*-
+from logging.config import fileConfig
 from os import makedirs
 from pathlib import Path
 from shutil import rmtree
-from logging.config import fileConfig
-
 
 LOG_CONFIG_FILENAME = "log.ini"
 LOG_FILENAME = "reai.log"

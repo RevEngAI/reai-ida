@@ -1,6 +1,6 @@
 # <img src="./revengai/resources/logo.png" width=20> RevEng.AI IDA Pro Plugin
 
-IDA Pro Plugin for [RevEng.AI Toolkit](https://reveng.ai/).
+IDA Pro Plugin for [RevEng.AI](https://reveng.ai/).
 
 ### Features Supported
 
@@ -28,13 +28,13 @@ Ensure the latest version of the [reait](https://github.com/RevEngAI/reait/relea
 
 ## Setup & Usage 📦
 
-Open IDA and if the plugin has loaded successfully it should be visible under `RevEng.AI Toolkit` menu.
+Open IDA and if the plugin has loaded successfully it should be visible under `RevEng.AI` menu.
 
 ![menu](./assets/img/1.png)
 
-If `RevEng.AI Toolkit` menu does not appear in the menubar, you can:
+If `RevEng.AI` menu does not appear in the menubar, you can:
 - either click on <img src="revengai/resources/favicon.png" width="16"/> displayed in the toolbar
-- or click on `Edit > Plugins` then `RevEng.AI Toolkit`
+- or click on `Edit > Plugins` then `RevEng.AI`
 
 ![plugin](./assets/img/13.png)
 
@@ -92,13 +92,13 @@ Selecting an entry from the list and then pressing `Rename` will cause the funct
 
 **A right click allows you to rename or breakdown the selected function**
 
-#### Auto Analysis
+#### Analyse Binary
 
-You can also batch analyse the binary to rename functions using the `Auto Analyze Binary`.
+You can also batch analyse the binary to rename functions using the `Analyse Binary`.
 
 ![auto_analyze_menu](./assets/img/7.png)
 
-This tool pull the list of collections you have access to on your account, and allows you to specify which collections you want to be included in your auto analysis by clicking on the checkbox. Selecting no collections will enable all the available collections in your search.
+This tool pull the list of collections you have access to on your account, and allows you to specify which collections you want to be included in your binary analysis by clicking on the checkbox. Selecting no collections will enable all the available collections in your search.
 
 Move the slider to determine the confidence level you want to use for batch renaming. Any function returned that is higher than this value will automatically be renamed in the listing view. Clicking the `Fetch Results` button will kick-off the analysis, which you can track in the progress bar.
 
@@ -119,14 +119,6 @@ Once clicked, a dialog box appears inviting to confirm the generation of block s
 ![confirm_summaries](./assets/img/15.png)
 
 ⚠️ This action is irrevocable and no refunds can be issued on the credits used.
-
-## Function Explanation
-
-You can also use the plugin to generate a function comment that can be useful for explaining what the function is doing.
-
-Select the function you are interested in, and from the decompiler view select `Explain This Function` from the right-click menu.
-
-![explain_function](./assets/img/10.png)
 
 # Troubleshooting
 

@@ -1,5 +1,9 @@
-# -*- coding: utf-8 -*-
 import logging
+from concurrent.futures import ThreadPoolExecutor
+from datetime import date, datetime, timedelta
+from os.path import basename, isfile
+from subprocess import run, SubprocessError
+from threading import Timer
 from time import sleep
 
 import idc
@@ -42,17 +46,18 @@ from reait.api import (
     RE_poll_ai_decompilation,
     RE_begin_ai_decompilation,
 )
+from requests import get, HTTPError, Response, RequestException
 
 from revengai import __version__
 from revengai.api import (
-    RE_explain,
     RE_functions_dump,
     RE_search,
     RE_recent_analysis,
     RE_generate_summaries,
 )
+from revengai.features.auto_analyze import AutoAnalysisDialog
+from revengai.features.function_similarity import FunctionSimilarityDialog
 from revengai.features.sync_functions import SyncFunctionsDialog
-from revengai.misc.qtutils import inthread, inmain
 from revengai.gui.dialog import (
     Dialog,
     StatusForm,
@@ -61,11 +66,9 @@ from revengai.gui.dialog import (
     UpdateForm,
 )
 from revengai.manager import RevEngState
-from revengai.features.auto_analyze import AutoAnalysisDialog
-from revengai.features.function_similarity import FunctionSimilarityDialog
+from revengai.misc.qtutils import inthread, inmain
 from revengai.misc.utils import IDAUtils
 from revengai.wizard.wizard import RevEngSetupWizard
-
 
 logger = logging.getLogger("REAI")
 
@@ -139,8 +142,7 @@ def upload_binary(state: RevEngState) -> None:
                             model_name=model,
                             tags=tags,
                             symbols=symbols,
-                            duplicate=state.project_cfg.get(
-                                "duplicate_analysis"),
+                            duplicate=state.project_cfg.get("duplicate_analysis"),
                         )
 
                         analysis = res.json()
@@ -149,14 +151,8 @@ def upload_binary(state: RevEngState) -> None:
 
                         analysis_info = res.json()
 
-                        state.config.set(
-                            "binary_id",
-                            analysis["binary_id"]
-                        )
-                        state.config.set(
-                            "analysis_id",
-                            analysis_info["analysis_id"]
-                        )
+                        state.config.set("binary_id", analysis["binary_id"])
+                        state.config.set("analysis_id", analysis_info["analysis_id"])
 
                         inmain(
                             state.config.database.add_analysis,
@@ -174,8 +170,7 @@ def upload_binary(state: RevEngState) -> None:
                         # Periodically check the status of the uploaded binary
                         periodic_check(fpath, analysis["binary_id"])
                 except RequestException as e:
-                    logger.error("Error analyzing %s. Reason: %s",
-                                 basename(fpath), e)
+                    logger.error("Error analyzing %s. Reason: %s", basename(fpath), e)
 
                     err_msg = ""
                     if isinstance(e, HTTPError):
@@ -205,14 +200,8 @@ def upload_binary(state: RevEngState) -> None:
                 functions.append(
                     {
                         "name": IDAUtils.get_demangled_func_name(func_ea),
-                        "start_addr": idc.get_func_attr(
-                            func_ea,
-                            idc.FUNCATTR_START
-                        ),
-                        "end_addr": idc.get_func_attr(
-                            func_ea,
-                            idc.FUNCATTR_END
-                        ),
+                        "start_addr": idc.get_func_attr(func_ea, idc.FUNCATTR_START),
+                        "end_addr": idc.get_func_attr(func_ea, idc.FUNCATTR_END),
                     }
                 )
 
@@ -261,8 +250,7 @@ def check_analyze(state: RevEngState) -> None:
                     "Error getting binary analysis status: %s",
                     e.response.json().get(
                         "error",
-                        "An unexpected error occurred. Sorry for the"
-                        " inconvenience.",
+                        "An unexpected error occurred. Sorry for the" " inconvenience.",
                     ),
                 )
 
@@ -288,7 +276,7 @@ def auto_analyze(state: RevEngState) -> None:
                 inmain(dialog.exec_)
             else:
                 Dialog.showInfo(
-                    "Auto Analysis",
+                    "Analyse Binary",
                     "Unable to fulfil your request at this time.\nBinary"
                     f" analysis status: {status}",
                 )
@@ -307,9 +295,7 @@ def decompile_function_notes(state: RevEngState) -> None:
     ida_functions = [
         {
             "name": IDAUtils.get_demangled_func_name(func_ea),
-            "start_addr": idc.get_func_attr(
-                func_ea, idc.FUNCATTR_START
-            ) - base_addr,
+            "start_addr": idc.get_func_attr(func_ea, idc.FUNCATTR_START) - base_addr,
             "loc": idc.get_func_attr(func_ea, idc.FUNCATTR_START),
         }
         for func_ea in Functions()
@@ -347,8 +333,7 @@ def decompile_function_notes(state: RevEngState) -> None:
     # Prepare function details
     function_ids = [func["function_id"] for func in analyzed_functions]
     function_details = {
-        int(func["function_vaddr"]): func["function_id"] for func in
-        analyzed_functions
+        int(func["function_vaddr"]): func["function_id"] for func in analyzed_functions
     }
 
     """
@@ -406,10 +391,7 @@ def push_function_names(state: RevEngState) -> None:
             ida_functions.append(
                 {
                     "name": IDAUtils.get_demangled_func_name(func_ea),
-                    "start_addr": idc.get_func_attr(
-                        func_ea,
-                        idc.FUNCATTR_START
-                    )
+                    "start_addr": idc.get_func_attr(func_ea, idc.FUNCATTR_START)
                     - base_addr,
                 }
             )
@@ -431,13 +413,11 @@ def push_function_names(state: RevEngState) -> None:
                     )
 
             except HTTPError as e:
-                logger.error(
-                    "Unable to obtain function argument details. %s", e)
+                logger.error("Unable to obtain function argument details. %s", e)
 
                 error = e.response.json().get(
                     "error",
-                    "An unexpected error occurred. Sorry for the "
-                    "inconvenience.",
+                    "An unexpected error occurred. Sorry for the " "inconvenience.",
                 )
                 Dialog.showError(
                     "Function Signature",
@@ -450,8 +430,7 @@ def push_function_names(state: RevEngState) -> None:
                         if func["function_vaddr"] == ida_func[
                             "start_addr"
                         ] and not ida_func["name"].startswith("sub_"):
-                            function_remap[func["function_id"]
-                                           ] = ida_func["name"]
+                            function_remap[func["function_id"]] = ida_func["name"]
 
                 res: Response = RE_functions_rename_batch(function_remap)
                 if res.json()["success"]:
@@ -459,13 +438,11 @@ def push_function_names(state: RevEngState) -> None:
                 else:
                     logger.error("Error pushing function names")
             except HTTPError as e:
-                logger.error(
-                    "Unable to obtain function argument details. %s", e)
+                logger.error("Unable to obtain function argument details. %s", e)
 
                 error = e.response.json().get(
                     "error",
-                    "An unexpected error occurred. Sorry for the"
-                    " inconvenience.",
+                    "An unexpected error occurred. Sorry for the" " inconvenience.",
                 )
                 Dialog.showError(
                     "Function Signature",
@@ -473,104 +450,6 @@ def push_function_names(state: RevEngState) -> None:
                 )
 
         inthread(bg_task)
-
-
-def explain_function(state: RevEngState) -> None:
-    fpath = idc.get_input_file_path()
-
-    if is_condition_met(state, fpath):
-
-        def bg_task(pseudo_code: str) -> None:
-            if pseudo_code and len(pseudo_code) > 0:
-                try:
-                    language = None
-                    try:
-                        # Gets the programming language from the current binary
-                        ret = run(
-                            f"rabin2 -I {fpath} | grep 'lang '",
-                            shell=True,
-                            capture_output=True,
-                            timeout=5,
-                        )
-
-                        if ret.returncode == 0:
-                            language = ret.stdout.split(
-                                b" ")[-1].strip().decode()
-                    except SubprocessError as e:
-                        logger.error(
-                            "Failed to get the programming language. "
-                            "Reason: %s",
-                            e,
-                        )
-
-                    res: Response = RE_explain(pseudo_code, language)
-
-                    error = res.json().get("error", None)
-                    if error:
-                        logger.error(
-                            "Error with function explanation: %s", error)
-                        Dialog.showError(
-                            "", f"Error getting function explanation: {error}"
-                        )
-                    else:
-                        comment = "RevEng.AI Auto-generated Explanation:\n\n" \
-                            f"{res.json()['explanation']}"
-
-                        logger.info(comment)
-                        inmain(IDAUtils.set_comment, inmain(idc.here), comment)
-                except HTTPError as e:
-                    logger.error("Error with function explanation: %s", e)
-
-                    error = e.response.json().get(
-                        "error",
-                        "An unexpected error occurred. Sorry for the"
-                        " inconvenience.",
-                    )
-                    Dialog.showError(
-                        "Function Explanation",
-                        f"Error getting function explanation: {error}",
-                    )
-            else:
-                info = inmain(idaapi.get_inf_structure)
-
-                procname = info.procname.lower()
-                bits = (
-                    64 if inmain(info.is_64bit) else 32 if inmain(
-                        info.is_32bit) else 16
-                )
-
-                # https://github.com/williballenthin/python-idb/blob/master/idb/idapython.py#L955-L1046
-                if any(
-                    procname.startswith(arch)
-                    for arch in (
-                        "metapc",
-                        "athlon",
-                        "k62",
-                        "p2",
-                        "p3",
-                        "p4",
-                        "80",
-                    )
-                ):
-                    arch = "x86_64" if bits == 64 else "x86"
-                elif procname.startswith("arm"):
-                    arch = "ARM64" if bits == 64 else "ARM"
-                elif procname.startswith("mips"):
-                    arch = f"MIPS{bits}"
-                elif procname.startswith("ppc"):
-                    arch = f"PPC{bits}"
-                elif procname.startswith("sparc"):
-                    arch = f"SPARC{bits}"
-                else:
-                    arch = "unknown arch"
-
-                logger.warning("Hex-Rays %s decompiler is not available", arch)
-                inmain(
-                    idc.warning,
-                    f"Hex-Rays {arch} decompiler is not available.",
-                )
-
-        inthread(bg_task, IDAUtils.decompile_func(idc.here()))
 
 
 def download_logs(state: RevEngState) -> None:
@@ -587,15 +466,13 @@ def download_logs(state: RevEngState) -> None:
                 )
 
                 if res.json()["success"]:
-                    filename = inmain(idaapi.ask_file, 1,
-                                      "*.log", "Output Filename:")
+                    filename = inmain(idaapi.ask_file, 1, "*.log", "Output Filename:")
 
                     if filename:
                         with open(filename, "w") as fd:
                             fd.write(res.json()["logs"])
                     else:
-                        logger.warning(
-                            "No output directory provided to export logs to")
+                        logger.warning("No output directory provided to export logs to")
                         inmain(
                             idc.warning,
                             "No output directory provided to export logs to.",
@@ -607,21 +484,18 @@ def download_logs(state: RevEngState) -> None:
                     )
                     inmain(
                         idc.warning,
-                        "No binary analysis logs found for:"
-                        f" {basename(fpath)}.",
+                        "No binary analysis logs found for:" f" {basename(fpath)}.",
                     )
             except HTTPError as e:
                 logger.error(
-                    "Unable to download binary analysis logs for: %s."
-                    " Reason: %s",
+                    "Unable to download binary analysis logs for: %s." " Reason: %s",
                     basename(fpath),
                     e,
                 )
 
                 error = e.response.json().get(
                     "error",
-                    "An unexpected error occurred. Sorry for the "
-                    "inconvenience.",
+                    "An unexpected error occurred. Sorry for the " "inconvenience.",
                 )
 
                 Dialog.showError(
@@ -683,8 +557,7 @@ def function_signature(
                             IDAUtils.refresh_pseudocode_view(func_ea)
 
                             logger.info(
-                                "New function declaration '%s' set at"
-                                " address 0x%X",
+                                "New function declaration '%s' set at" " address 0x%X",
                                 func_sig,
                                 func_ea,
                             )
@@ -701,13 +574,11 @@ def function_signature(
                                 f" with:\n{func_sig}",
                             )
             except HTTPError as e:
-                logger.error(
-                    "Unable to obtain function argument details. %s", e)
+                logger.error("Unable to obtain function argument details. %s", e)
 
                 error = e.response.json().get(
                     "error",
-                    "An unexpected error occurred. Sorry for the"
-                    " inconvenience.",
+                    "An unexpected error occurred. Sorry for the" " inconvenience.",
                 )
                 Dialog.showError(
                     "Function Signature",
@@ -749,8 +620,7 @@ def analysis_history(state: RevEngState) -> None:
                 today = date.today()
 
                 for binary in results:
-                    creation = datetime.fromisoformat(
-                        binary["creation"]).astimezone()
+                    creation = datetime.fromisoformat(binary["creation"]).astimezone()
 
                     binaries.append(
                         (
@@ -762,12 +632,8 @@ def analysis_history(state: RevEngState) -> None:
                                 if creation.date() == today
                                 else (
                                     creation.strftime("Yesterday at %H:%M:%S")
-                                    if creation.date() == today - timedelta(
-                                        days=1
-                                    )
-                                    else creation.strftime(
-                                        "%Y-%m-%d, %H:%M:%S"
-                                    )
+                                    if creation.date() == today - timedelta(days=1)
+                                    else creation.strftime("%Y-%m-%d, %H:%M:%S")
                                 )
                             ),
                             binary["model_name"],
@@ -797,8 +663,7 @@ def analysis_history(state: RevEngState) -> None:
 
                 error = e.response.json().get(
                     "error",
-                    "An unexpected error occurred. Sorry for the "
-                    "inconvenience.",
+                    "An unexpected error occurred. Sorry for the " "inconvenience.",
                 )
                 Dialog.showError(
                     "Binary Analysis History",
@@ -861,16 +726,12 @@ def load_recent_analyses(state: RevEngState) -> None:
                         ),
                     )
 
-                    resp = RE_analysis_lookup(
-                        state.config.get("binary_id", 0)
-                    ).json()
+                    resp = RE_analysis_lookup(state.config.get("binary_id", 0)).json()
 
                     analysis_id = resp.get("analysis_id", 0)
                     state.config.set("analysis_id", analysis_id)
 
-                    logger.info(
-                        f"Saving current analysis ID {analysis_id}"
-                    )
+                    logger.info(f"Saving current analysis ID {analysis_id}")
 
                     if state.project_cfg.get("auto_sync"):
                         done, _ = is_analysis_complete(state, fpath)
@@ -927,10 +788,7 @@ def sync_functions_name(state: RevEngState, fpath: str) -> None:
             functions.append(
                 {
                     "name": IDAUtils.get_demangled_func_name(func_ea),
-                    "start_addr": idc.get_func_attr(
-                        func_ea,
-                        idc.FUNCATTR_START
-                    )
+                    "start_addr": idc.get_func_attr(func_ea, idc.FUNCATTR_START)
                     - base_addr,
                 }
             )
@@ -1021,16 +879,10 @@ def generate_function_data_types(state: RevEngState) -> None:
             if done:
                 try:
                     analysis_id = state.config.get("analysis_id", 0)
-
-                    logger.info(
-                        f"Generating data type for analysis ID: {analysis_id}"
-                    )
+                    logger.info(f"Generating data type for analysis ID: {analysis_id}")
 
                     function_ids = []
-
-                    logger.info(
-                        "Getting the list of functions to generate data types"
-                    )
+                    logger.info("Getting the list of functions to generate data types")
 
                     res: dict = RE_analyze_functions(
                         fpath, state.config.get("binary_id", 0)
@@ -1049,11 +901,7 @@ def generate_function_data_types(state: RevEngState) -> None:
                     for function in res.get("functions", []):
                         function_ids.append(function["function_id"])
 
-                    res = RE_generate_data_types(
-                        analysis_id,
-                        function_ids
-                    ).json()
-
+                    res = RE_generate_data_types(analysis_id, function_ids).json()
                     status = res.get("status", False)
 
                     if status:
@@ -1071,11 +919,9 @@ def generate_function_data_types(state: RevEngState) -> None:
                     resp = e.response.json()
                     error = resp.get(
                         "error",
-                        "An unexpected error occurred. Sorry for the"
-                        " inconvenience.",
+                        "An unexpected error occurred. Sorry for the" " inconvenience.",
                     )
-                    logger.error(
-                        f"Failed to generate function data types: {error}")
+                    logger.error(f"Failed to generate function data types: {error}")
                     Dialog.showError(
                         "Function Types",
                         f"Failed to generate function data types: {error}",
@@ -1206,7 +1052,7 @@ def apply_function_data_types(state: RevEngState) -> None:
                             f"Loaded {len(deps_types)} for function "
                             f"{function_id}"
                         )
-
+                        
                         deps_res = apply_types(deci, deps)
                         if deps_res is not None:
                             logger.error(
@@ -1298,9 +1144,7 @@ def ai_decompile(state: RevEngState) -> None:
 
             if not res.get("success", False):
                 return error_and_close_view(
-                    callback,
-                    "Unable to analyze functions for AI"
-                    " decompilation"
+                    callback, "Unable to analyze functions for AI" " decompilation"
                 )
 
             functions: list[dict] = res.get("functions", [])
@@ -1325,9 +1169,7 @@ def ai_decompile(state: RevEngState) -> None:
                 f" with id {target_function['function_id']}"
             )
 
-            res = RE_poll_ai_decompilation(
-                target_function["function_id"]
-            ).json()
+            res = RE_poll_ai_decompilation(target_function["function_id"]).json()
 
             if not res.get("status", False):
                 return error_and_close_view(callback, get_api_error(res))
@@ -1337,9 +1179,7 @@ def ai_decompile(state: RevEngState) -> None:
 
             if poll_status == "uninitialised":
                 logger.info("Starting AI Decompilation")
-                res = RE_begin_ai_decompilation(
-                    target_function["function_id"]
-                ).json()
+                res = RE_begin_ai_decompilation(target_function["function_id"]).json()
 
                 if not res.get("status", False):
                     return error_and_close_view(callback, get_api_error(res))
@@ -1354,9 +1194,7 @@ def ai_decompile(state: RevEngState) -> None:
                 sleep(3)
 
                 # poll again the status
-                res = RE_poll_ai_decompilation(
-                    target_function["function_id"]
-                ).json()
+                res = RE_poll_ai_decompilation(target_function["function_id"]).json()
 
                 if not res.get("status", False):
                     return error_and_close_view(callback, get_api_error(res))
@@ -1384,29 +1222,17 @@ def ai_decompile(state: RevEngState) -> None:
 
             c_code = decompilation_data.get("decompilation", "")
 
-            function_mapping_full = decompilation_data.get(
-                "function_mapping_full", {}
-            )
+            function_mapping_full = decompilation_data.get("function_mapping_full", {})
 
-            inverse_string_map = function_mapping_full.get(
-                "inverse_string_map",
-                []
-            )
+            inverse_string_map = function_mapping_full.get("inverse_string_map", [])
 
-            inverse_function_map = function_mapping_full.get(
-                "inverse_function_map",
-                []
-            )
+            inverse_function_map = function_mapping_full.get("inverse_function_map", [])
 
             for key, value in inverse_string_map.items():
-                c_code = c_code.replace(
-                    key, value.get("string", key)
-                )
+                c_code = c_code.replace(key, value.get("string", key))
 
             for key, value in inverse_function_map.items():
-                c_code = c_code.replace(
-                    key, value.get("name", key)
-                )
+                c_code = c_code.replace(key, value.get("name", key))
 
             logger.info("Update UI with decompiled code")
             idaapi.execute_sync(lambda: callback(c_code), idaapi.MFF_FAST)
@@ -1441,20 +1267,21 @@ def ai_decompile(state: RevEngState) -> None:
             # subtract the image base address from the start address
             start_addr = func_ea.start_ea - image_base
             logger.info(
-                "Starting AI Decompilation of function "
-                f"{hex(func_ea.start_ea)}")
+                "Starting AI Decompilation of function " f"{hex(func_ea.start_ea)}"
+            )
             try:
                 # Create a custom viewer subview for the decompiled code4
                 sv = idaapi.simplecustviewer_t()
                 if sv.Create(f"AI Decompilation of {func_name}"):
                     sv.ClearLines()
-                    sv.AddLine(
-                        "Please wait while the function is decompiled...")
+                    sv.AddLine("Please wait while the function is decompiled...")
                     sv.Show()
             except Exception as e:
                 print(f"Error: {e}")
             inthread(bg_task, start_addr, handle_ai_decomp)
 
+def auto_unstrip(state: RevEngState) -> None:
+    pass
 
 def generate_summaries(state: RevEngState, function_id: int = 0) -> None:
     fpath = idc.get_input_file_path()
@@ -1522,8 +1349,7 @@ def generate_summaries(state: RevEngState, function_id: int = 0) -> None:
                 try:
                     inmain(
                         idaapi.show_wait_box,
-                        "HIDECANCEL\nGenerating block summaries for"
-                        f" {func_name}…",
+                        "HIDECANCEL\nGenerating block summaries for" f" {func_name}…",
                     )
 
                     res: Response = RE_generate_summaries(func_id)
@@ -1532,10 +1358,7 @@ def generate_summaries(state: RevEngState, function_id: int = 0) -> None:
                 except HTTPError as e:
                     logger.error(
                         "Error generating block summaries: %s",
-                        e.response.json().get(
-                            "error",
-                            "An unexpected error occurred."
-                        ),
+                        e.response.json().get("error", "An unexpected error occurred."),
                     )
                 finally:
                     inmain(idaapi.hide_wait_box)
@@ -1611,14 +1434,9 @@ def is_file_supported(state: RevEngState, fpath: str) -> bool:
         )
 
         if any(
-            file_format == fmt for fmt in state.config.OPTIONS.get(
-                "file_options", []
-            )
+            file_format == fmt for fmt in state.config.OPTIONS.get("file_options", [])
         ) and any(
-            isa_format == fmt for fmt in state.config.OPTIONS.get(
-                "isa_options",
-                []
-            )
+            isa_format == fmt for fmt in state.config.OPTIONS.get("isa_options", [])
         ):
             return True
     except Exception as e:
@@ -1626,8 +1444,7 @@ def is_file_supported(state: RevEngState, fpath: str) -> bool:
         pass
 
     idc.warning(
-        f"{basename(fpath)} file format is not currently supported by "
-        "RevEng.AI"
+        f"{basename(fpath)} file format is not currently supported by " "RevEng.AI"
     )
 
     return False
@@ -1659,13 +1476,13 @@ def update(_) -> None:
         f.Free()
     except RequestException as e:
         logger.warning(
-            "RevEng.AI Toolkit failed to connect to GitHub to check for the"
+            "RevEng.AI failed to connect to GitHub to poll for the"
             " latest plugin update. %s",
             e,
         )
         Dialog.showInfo(
             "Check for Update",
-            "RevEng.AI Toolkit has failed to connect to the internet (Github)."
+            "RevEng.AI has failed to connect to the internet (GitHub)."
             " Try again later.",
         )
 
@@ -1694,8 +1511,7 @@ def periodic_check(fpath: str, binary_id: int) -> None:
                         bid,
                     )
         except RequestException as ex:
-            logger.error(
-                "Error getting binary analysis status. Reason: %s", ex)
+            logger.error("Error getting binary analysis status. Reason: %s", ex)
 
     Timer(30, _worker, args=(binary_id,)).start()
     logger.info(
