@@ -230,14 +230,44 @@ class AutoAnalysisDialog(BaseDialog):
                         if inmain(user_cancelled):
                             raise CancelledError("Auto analysis cancelled")
 
-                        return RE_nearest_symbols_batch(
+                        res: dict = RE_nearest_symbols_batch(
                             function_ids=chunk,
                             distance=distance,
                             collections=collections,
                             nns=1,
-                        ).json()["function_matches"]
-                    except Exception as ex:
-                        return ex
+                            debug_enabled=inmain(self.ui.checkBox.isChecked)
+                        ).json()
+
+                        function_ids = ", ".join(map(str, chunk))
+
+                        logger.info(
+                            f"Completed batch for functions {function_ids}"
+                        )
+
+                        matches = res.get("function_matches", [])
+
+                        if not matches:
+                            logger.warning(
+                                f"Batch for functions {function_ids} returned"
+                                " no results"
+                            )
+
+                            return []
+
+                        logger.info(
+                            f"Batch for functions {function_ids} returned "
+                            f"{len(matches)} results"
+                        )
+
+                        return matches
+
+                    except HTTPError as e:
+                        logger.error(
+                            "Fetching a chunk of auto analysis failed."
+                            " Reason: %s",
+                            e,
+                        )
+                        return None
 
                 # Start the ANN batch operations and mark each future with its
                 # chunk
@@ -388,7 +418,8 @@ class AutoAnalysisDialog(BaseDialog):
 
             resultsData.sort(key=lambda tup: tup[0])
 
-            self._analysis[Analysis.TOTAL.value] = len(resultsData)
+            # This is dumb we already populated it with the number of functions
+            # self._analysis[Analysis.TOTAL.value] = len(resultsData)
 
             inmain(inmain(self.ui.resultsTable.model).fill_table, resultsData)
         except HTTPError as e:
