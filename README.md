@@ -120,14 +120,6 @@ Once clicked, a dialog box appears inviting to confirm the generation of block s
 
 ⚠️ This action is irrevocable and no refunds can be issued on the credits used.
 
-## Function Explanation
-
-You can also use the plugin to generate a function comment that can be useful for explaining what the function is doing.
-
-Select the function you are interested in, and from the decompiler view select `Explain This Function` from the right-click menu.
-
-![explain_function](./assets/img/10.png)
-
 # Troubleshooting
 
 - Only IDA v8.0 or later is supported with Python 3.9 and higher.
