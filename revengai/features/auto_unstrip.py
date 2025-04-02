@@ -79,10 +79,10 @@ class AutoUnstrip:
 
         return function_ids
 
-    def _get_all_auto_unstrip_matches(
+    def _get_all_auto_unstrip_rename_matches(
         self, max_workers=1, distance=0.09999999999999998
     ):
-
+        results = []
         with ThreadPoolExecutor(
             max_workers=max_workers, thread_name_prefix="reai-batch"
         ) as executor:
@@ -148,3 +148,10 @@ class AutoUnstrip:
                             )
 
                             symbol["function_addr"] = func_addr
+
+                            results.append(
+                                {"target_func_addr": func_addr, "new_name_str": nnfn}
+                            )
+
+        # TODO: for addr.. rename with new symbol..
+        return results
