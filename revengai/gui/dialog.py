@@ -202,11 +202,11 @@ class UploadBinaryForm(BaseForm):
 
         Form.__init__(
             self,
-            r"""BUTTON YES* Analyse
-RevEng.AI: Upload Binary for Analysis
+            r"""BUTTON YES* Upload
+RevEng.AI: Upload Binary
 
 {FormChangeCb}
-Choose your options for binary analysis
+Please provide the following information to upload the binary:
 
 <#Debugging information for uploaded binary#~D~ebug Info or PDB\::{iDebugFile}>
 <#Add custom tags to your file#~C~ustom Tags (format\: tag,tag)\:      :{iTags}>
