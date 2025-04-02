@@ -1280,8 +1280,22 @@ def ai_decompile(state: RevEngState) -> None:
                 print(f"Error: {e}")
             inthread(bg_task, start_addr, handle_ai_decomp)
 
+
 def auto_unstrip(state: RevEngState) -> None:
-    pass
+    fpath = idc.get_input_file_path()
+    if is_condition_met(state, fpath) and idaapi.ASKBTN_YES == idaapi.ask_buttons(
+        "Auto Unstrip",
+        "Cancel",
+        "",
+        idaapi.ASKBTN_YES,
+        "Auto Unstrip Binary\n\n"
+        "Using official RevEngAI sources, function names will be"
+        " recovered based on a low similarity threshold and"
+        " limited to available debug symbols.\n\n"
+        "Functions will be renamed automatically for easier analysis.",
+    ):
+        pass
+
 
 def generate_summaries(state: RevEngState, function_id: int = 0) -> None:
     fpath = idc.get_input_file_path()
