@@ -9,10 +9,9 @@ from PyQt5.QtGui import QCursor
 from PyQt5.QtWidgets import QMenu
 from idaapi import hide_wait_box, show_wait_box, user_cancelled
 from idautils import Functions
+from requests import HTTPError, RequestException
 from reait.api import RE_nearest_symbols_batch
-from requests import Response, HTTPError, RequestException
-
-from revengai.api import RE_collection_search
+from reait.api import RE_collections_search
 from revengai.features import BaseDialog
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
@@ -95,16 +94,19 @@ class AutoAnalysisDialog(BaseDialog):
         for func_ea in Functions():
             start_addr = idc.get_func_attr(func_ea, idc.FUNCATTR_START)
             if IDAUtils.is_in_valid_segment(start_addr):
-                self._functions.append(
-                    {
-                        "name": IDAUtils.get_demangled_func_name(func_ea),
-                        "start_addr": (start_addr - self.base_addr),
-                        "end_addr": (
+                # add only if the function name starts with sub_
+                name = IDAUtils.get_demangled_func_name(func_ea)
+                if name.startswith("sub_"):
+                    self._functions.append(
+                        {
+                            "name": name,
+                            "start_addr": (start_addr - self.base_addr),
+                            "end_addr": (
                                 idc.get_func_attr(func_ea, idc.FUNCATTR_END)
                                 - self.base_addr
-                        ),
-                    }
-                )
+                            ),
+                        }
+                    )
 
         self.ui.progressBar.setProperty(
             "maximum", 2 + (len(self._functions) << 1))
@@ -224,14 +226,44 @@ class AutoAnalysisDialog(BaseDialog):
                         if inmain(user_cancelled):
                             raise CancelledError("Analyse binary cancelled")
 
-                        return RE_nearest_symbols_batch(
+                        res: dict = RE_nearest_symbols_batch(
                             function_ids=chunk,
                             distance=distance,
                             collections=collections,
                             nns=1,
-                        ).json()["function_matches"]
-                    except Exception as ex:
-                        return ex
+                            debug_enabled=inmain(self.ui.checkBox.isChecked)
+                        ).json()
+
+                        function_ids = ", ".join(map(str, chunk))
+
+                        logger.info(
+                            f"Completed batch for functions {function_ids}"
+                        )
+
+                        matches = res.get("function_matches", [])
+
+                        if not matches:
+                            logger.warning(
+                                f"Batch for functions {function_ids} returned"
+                                " no results"
+                            )
+
+                            return []
+
+                        logger.info(
+                            f"Batch for functions {function_ids} returned "
+                            f"{len(matches)} results"
+                        )
+
+                        return matches
+
+                    except HTTPError as e:
+                        logger.error(
+                            "Fetching a chunk of auto analysis failed."
+                            " Reason: %s",
+                            e,
+                        )
+                        return None
 
                 # Start the ANN batch operations and mark each future with its
                 # chunk
@@ -382,7 +414,8 @@ class AutoAnalysisDialog(BaseDialog):
 
             resultsData.sort(key=lambda tup: tup[0])
 
-            self._analysis[Analysis.TOTAL.value] = len(resultsData)
+            # This is dumb we already populated it with the number of functions
+            # self._analysis[Analysis.TOTAL.value] = len(resultsData)
 
             inmain(inmain(self.ui.resultsTable.model).fill_table, resultsData)
         except HTTPError as e:
@@ -459,11 +492,23 @@ class AutoAnalysisDialog(BaseDialog):
 
             inmain(self.ui.fetchButton.setEnabled, False)
 
-            res: Response = RE_collection_search(search)
+            logger.info(
+                "Searching for collections with '%s'", search or "N/A"
+            )
+
+            res: dict = RE_collections_search(
+                partial_collection_name=search,
+                page=1,
+                page_size=1024,
+            ).json()
+
+            result_collections = res.get("data", {}).get("results", [])
+
+            logger.info(f"Found {len(result_collections)} collections")
 
             collections = []
 
-            for collection in res.json()["collections"]:
+            for collection in result_collections:
                 if isinstance(collection, str):
                     collections.append(
                         (
@@ -478,7 +523,7 @@ class AutoAnalysisDialog(BaseDialog):
                     collections.append(
                         (
                             IconItem(
-                                collection["name"],
+                                collection["collection_name"],
                                 (
                                     "lock.png"
                                     if collection["scope"] == "PRIVATE"
@@ -487,7 +532,7 @@ class AutoAnalysisDialog(BaseDialog):
                             ),
                             CheckableItem(
                                 checked=self.ui.layoutFilter.is_present(
-                                    collection["name"]
+                                    collection["collection_name"]
                                 )
                             ),
                         )
@@ -504,12 +549,13 @@ class AutoAnalysisDialog(BaseDialog):
                 round(inmain(self.ui.collectionsTable.width) * 0.9),
             )
         except HTTPError as e:
-            logger.error("Getting collections failed. Reason: %s", e)
-
-            Dialog.showError(
-                "Analyse Binary",
-                f"Analyse Binary Error: {e.response.json()['error']}"
-            )
+            if e.response.status_code != 400:
+                message = e.json().get("error", "Unknown error")
+                logger.error(f"Getting collections failed. Reason: {message}")
+                Dialog.showError(
+                    "Auto Analysis",
+                    f"Auto Analysis Error: {message}"
+                )
         except RequestException as e:
             logger.error("An unexpected error has occurred. %s", e)
         finally:
