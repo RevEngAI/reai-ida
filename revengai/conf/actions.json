@@ -24,6 +24,12 @@
     "shortcut": "Ctrl+Shift+A"
   },
   {
+    "id": "reai:auto_unstrip",
+    "name": "Auto Unstrip",
+    "callback": "auto_unstrip",
+    "shortcut": "Ctrl+Shift+K"
+  },
+  {
     "id": "reai:functions",
     "name": "Functions",
     "callback": "list_reaiplugin_function",

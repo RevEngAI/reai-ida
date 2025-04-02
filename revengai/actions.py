@@ -432,6 +432,7 @@ def push_function_names(state: RevEngState) -> None:
 
         inthread(bg_task)
 
+
 def download_logs(state: RevEngState) -> None:
     fpath = idc.get_input_file_path()
 
@@ -1221,6 +1222,8 @@ def ai_decompile(state: RevEngState) -> None:
                 print(f"Error: {e}")
             inthread(bg_task, start_addr, handle_ai_decomp)
 
+def auto_unstrip(state: RevEngState) -> None:
+    pass
 
 def generate_summaries(state: RevEngState, function_id: int = 0) -> None:
     fpath = idc.get_input_file_path()
