@@ -109,17 +109,50 @@ class RevEngPlugin(plugin_t):
         self.initialized = False
 
 
+def is_dependency_installed(package_name):
+    """
+    Check if a Python package is installed.
+    Works for Python 3.10 - 3.12
+    
+    Args:
+        package_name (str): Name of the package to check
+        
+    Returns:
+        bool: True if package is installed, False otherwise
+    """
+    try:
+        spec = importlib.util.find_spec(package_name)
+        return spec is not None
+    except (ImportError, AttributeError):
+        return False
+
+def check_dependencies(required_packages):
+    """
+    Check if all required packages are installed.
+    
+    Args:
+        required_packages (list): List of package names to check
+        
+    Returns:
+        tuple: (bool, list) - (all packages installed, missing packages)
+    """
+    missing_packages = []
+    
+    for package in required_packages:
+        if not is_dependency_installed(package):
+            missing_packages.append(package)
+    
+    return len(missing_packages) == 0, missing_packages
+
+
 # The PLUGIN_ENTRY method is what IDA calls when scriptable plugins are loaded.
 # It needs to return a plugin of type idaapi.plugin_t.
 def PLUGIN_ENTRY():
     requested_libraries = ["reait", "libbs"]
 
-    have_all_libraries = all(
-        importlib.find_loader(lib) is not None for lib in
-        requested_libraries
-    )
+    all_installed, missing_libraries = check_dependencies(requested_libraries)
 
-    if have_all_libraries:
+    if all_installed:
         # Workaround to suppress warnings about SSL certificates
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         return RevEngPlugin()
@@ -127,6 +160,13 @@ def PLUGIN_ENTRY():
         msg(
             "[!] RevEng.AI Toolkit requires the dependencies to be "
             "installed.\n"
+            "    Missing libraries: %s\n"
+            "    Please install them using the following command:\n"
+            "    pip install %s\n"
+            % (
+                ", ".join(missing_libraries),
+                " ".join(requested_libraries),
+            )
         )
 
     execute_ui_requests(
