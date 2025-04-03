@@ -1,4 +1,5 @@
 import logging
+import sys
 
 from idc import (
     get_inf_attr,
@@ -112,6 +113,12 @@ class RevEngPlugin(plugin_t):
 # The PLUGIN_ENTRY method is what IDA calls when scriptable plugins are loaded.
 # It needs to return a plugin of type idaapi.plugin_t.
 def PLUGIN_ENTRY():
+    required_version = (3, 10)
+    if sys.version_info < required_version:
+        msg(f"[!] RevEng.AI Toolkit requires Python {required_version[0]}.
+            {required_version[1]} or higher.\n")
+        return
+    
     requested_libraries = ["reait", "libbs"]
 
     have_all_libraries = all(
