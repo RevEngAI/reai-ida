@@ -15,7 +15,6 @@ from subprocess import run, SubprocessError
 from threading import Timer
 from concurrent.futures import ThreadPoolExecutor
 
-from requests import get, HTTPError, Response, RequestException
 from os.path import basename, isfile
 from datetime import date, datetime, timedelta
 
@@ -46,7 +45,6 @@ from reait.api import (
     RE_poll_ai_decompilation,
     RE_begin_ai_decompilation,
 )
-from requests import get, HTTPError, Response, RequestException
 
 from revengai import __version__
 from revengai.api import (
@@ -58,6 +56,7 @@ from revengai.api import (
 from revengai.features.auto_analyze import AutoAnalysisDialog
 from revengai.features.function_similarity import FunctionSimilarityDialog
 from revengai.features.sync_functions import SyncFunctionsDialog
+from revengai.features.auto_unstrip import AutoUnstrip
 from revengai.gui.dialog import (
     Dialog,
     StatusForm,
@@ -69,6 +68,8 @@ from revengai.manager import RevEngState
 from revengai.misc.qtutils import inthread, inmain
 from revengai.misc.utils import IDAUtils
 from revengai.wizard.wizard import RevEngSetupWizard
+
+from requests import get, HTTPError, Response, RequestException
 
 logger = logging.getLogger("REAI")
 
@@ -973,8 +974,7 @@ def apply_function_data_types(state: RevEngState) -> None:
             logger.info("Getting the list of functions to apply data types")
 
             res: dict = RE_analyze_functions(
-                fpath,
-                state.config.get("binary_id", 0)
+                fpath, state.config.get("binary_id", 0)
             ).json()
 
             success = res.get("success", False)
@@ -990,17 +990,12 @@ def apply_function_data_types(state: RevEngState) -> None:
             function_ids = []
             functions = res.get("functions", [])
 
-            logger.info(
-                f"Found {len(functions)} functions to apply data types"
-            )
+            logger.info(f"Found {len(functions)} functions to apply data types")
 
             for function in res.get("functions", []):
                 function_ids.append(function["function_id"])
 
-            res: Response = RE_list_data_types(
-                analysis_id,
-                function_ids
-            ).json()
+            res: Response = RE_list_data_types(analysis_id, function_ids).json()
 
             status = res.get("status", False)
 
@@ -1026,10 +1021,8 @@ def apply_function_data_types(state: RevEngState) -> None:
             if total_count > 0:
                 items = res.get("data", {}).get("items", [])
                 for item in items:
-                    function_types = item.get(
-                        "data_types", {}).get("func_types", None)
-                    func_deps = item.get(
-                        "data_types", {}).get("func_deps", [])
+                    function_types = item.get("data_types", {}).get("func_types", None)
+                    func_deps = item.get("data_types", {}).get("func_deps", [])
                     function_id = item.get("function_id", 0)
 
                     if function_types and len(func_deps) > 0:
@@ -1038,21 +1031,16 @@ def apply_function_data_types(state: RevEngState) -> None:
                         # TODO: like Function(**function_types) maybe
                         # TODO: creating an utility function is the best
                         # TODO: approach
-                        deps_types = [x for x in map(
-                            lambda x: json.dumps(x),
-                            func_deps
-                        )]
+                        deps_types = [
+                            x for x in map(lambda x: json.dumps(x), func_deps)
+                        ]
 
-                        deps = load_many_artifacts(
-                            deps_types,
-                            fmt=ArtifactFormat.JSON
-                        )
+                        deps = load_many_artifacts(deps_types, fmt=ArtifactFormat.JSON)
 
                         logger.info(
-                            f"Loaded {len(deps_types)} for function "
-                            f"{function_id}"
+                            f"Loaded {len(deps_types)} for function " f"{function_id}"
                         )
-                        
+
                         deps_res = apply_types(deci, deps)
                         if deps_res is not None:
                             logger.error(
@@ -1093,8 +1081,7 @@ def apply_function_data_types(state: RevEngState) -> None:
                             return
                         else:
                             logger.info(
-                                "Applied data types for function id "
-                                f"{function_id}"
+                                "Applied data types for function id " f"{function_id}"
                             )
 
                 logger.info("Function data types application completed")
@@ -1294,7 +1281,26 @@ def auto_unstrip(state: RevEngState) -> None:
         " limited to available debug symbols.\n\n"
         "Functions will be renamed automatically for easier analysis.",
     ):
-        pass
+        unstrip = AutoUnstrip(state)
+
+        def bg_task() -> None:
+            try:
+                inmain(
+                    idaapi.show_wait_box,
+                    "HIDECANCEL\nAuto unstripping binary…",
+                )
+
+                unstrip._get_all_auto_unstrip_rename_matches()
+            except HTTPError as e:
+                logger.error(
+                    "Unable to auto unstrip binary: %s", e.response.json().get("error")
+                )
+            finally:
+                inmain(idaapi.hide_wait_box)
+
+        inthread(
+            bg_task,
+        )
 
 
 def generate_summaries(state: RevEngState, function_id: int = 0) -> None:
@@ -1313,6 +1319,7 @@ def generate_summaries(state: RevEngState, function_id: int = 0) -> None:
         )
 
     if is_condition_met(state, fpath) and idaapi.ASKBTN_YES == ask_btn():
+
         def bg_task(func_ea: int, func_id: int = 0) -> None:
             func_name = inmain(IDAUtils.get_demangled_func_name, func_ea)
 

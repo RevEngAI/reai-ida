@@ -24,7 +24,8 @@ class AutoUnstrip:
         self.state = state
         self.base_addr = get_imagebase()
         self.analysed_functions = {}
-        self.functions = self._get_all_functions()
+        self._functions = self._get_all_functions()
+        self.path = idc.get_input_file_path()
 
         self._get_analysed_functions()
         self.function_ids = self._get_sync_analysed_ids_local()
@@ -54,7 +55,7 @@ class AutoUnstrip:
             )
 
             for function in res.json()["functions"]:
-                self.analyzed_functions[function["function_vaddr"]] = function[
+                self.analysed_functions[function["function_vaddr"]] = function[
                     "function_id"
                 ]
         except HTTPError as e:
@@ -72,7 +73,7 @@ class AutoUnstrip:
         for idx, func in enumerate(self._functions):
             idx += 1
 
-            function_id = self.analyzed_functions.get(func["start_addr"], None)
+            function_id = self.analysed_functions.get(func["start_addr"], None)
 
             if function_id:
                 function_ids.append(function_id)
@@ -94,8 +95,8 @@ class AutoUnstrip:
                         distance=distance,
                         debug_enabled=True,
                     ).json()["function_matches"]
-                except Exception as ex:
-                    return ex
+                except Exception as e:
+                    return e
 
             futures = {
                 executor.submit(worker, chunk): chunk
@@ -141,17 +142,22 @@ class AutoUnstrip:
 
                         nnfn = symbol["nearest_neighbor_function_name"]
                         if nnfn != symbol["org_func_name"]:
-                            logger.info(
-                                "Found similar function '%s' with a confidence level of '%s",
-                                nnfn,
-                                str(symbol["confidence"]),
-                            )
-
                             symbol["function_addr"] = func_addr
 
                             results.append(
                                 {"target_func_addr": func_addr, "new_name_str": nnfn}
                             )
-
-        # TODO: for addr.. rename with new symbol..
         return results
+
+    def unstrip(self) -> int:
+        matches = self._get_all_auto_unstrip_rename_matches()
+        self._apply_all(matches)
+
+        return len(matches)
+
+    def _apply_all(self, result: list) -> None:
+        for res in result:
+            addr = res["target_func_addr"] + self.base_addr
+            new_name = res["new_name_str"]
+            idc.set_name(addr, new_name)
+            idc.set_func_flags(addr, idc.FUNC_LIB)
