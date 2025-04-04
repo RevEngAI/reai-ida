@@ -1232,7 +1232,10 @@ def ai_decompile(state: RevEngState) -> None:
                 c_code = c_code.replace(key, value.get("string", key))
 
             for key, value in inverse_function_map.items():
-                c_code = c_code.replace(key, value.get("name", key))
+                val = value.get("name", key)
+                if val.startswith("<EXTERNAL>::"):
+                    val = val.replace("<EXTERNAL>::", "")
+                c_code = c_code.replace(key, val)
 
             logger.info("Update UI with decompiled code")
             idaapi.execute_sync(lambda: callback(c_code), idaapi.MFF_FAST)
