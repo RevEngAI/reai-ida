@@ -218,7 +218,10 @@ class AutoAnalysisDialog(BaseDialog):
                 collections = inmain(self._selected_collections)
                 distance = 1.0 - (
                         int(inmain(self.ui.confidenceSlider.property, "value"))
-                        / int(inmain(self.ui.confidenceSlider.property, "maximum"))
+                        / int(inmain(
+                            self.ui.confidenceSlider.property,
+                            "maximum"
+                        ))
                 )
 
                 def worker(chunk: list[int]) -> any:
@@ -329,8 +332,7 @@ class AutoAnalysisDialog(BaseDialog):
                                                     function["name"]
                                                     for function in
                                                     self._functions
-                                                    if func_addr
-                                                       == function["start_addr"]
+                                                    if func_addr == function["start_addr"]
                                                 ),
                                                 "Unknown",
                                             ),
@@ -669,46 +671,6 @@ class AutoAnalysisDialog(BaseDialog):
                     f"Can't rename {original_name}. Name {matched_name} "
                     "already exists."
                 )
-            
-
-            # if IDAUtils.set_name(
-            #         symbol["function_addr"] + self.base_addr,
-            #         symbol["nearest_neighbor_function_name"],
-            # ):
-            #     inthread(
-            #         self._function_rename,
-            #         symbol["function_addr"],
-            #         symbol["nearest_neighbor_function_name"],
-            #     )
-
-            #     logger.info(
-            #         "Renowned %s in %s with confidence of '%s",
-            #         symbol["org_func_name"],
-            #         symbol["nearest_neighbor_function_name"],
-            #         symbol["confidence"],
-            #     )
-            # else:
-            #     logger.warning(
-            #         "Symbol name %s already exists",
-            #         symbol["nearest_neighbor_function_name"],
-            #     )
-
-            #     if batches is not None:
-            #         nnfn = symbol['nearest_neighbor_function_name']
-            #         batches.append(
-            #             "\n     • "
-            #             + sub(
-            #                 r"^(.{10}).*\s+➡\s+(.{10}).*$",
-            #                 r"\g<1>…  ➡  \g<2>…",
-            #                 f"{symbol['org_func_name']}  ➡  {nnfn}",
-            #             )
-            #         )
-            #     else:
-            #         idc.warning(
-            #             f"Can't rename {symbol['org_func_name']}. Name"
-            #             f" {symbol['nearest_neighbor_function_name']} already "
-            #             "exists."
-            #         )
 
     def _selected_collections(self) -> list[str]:
         return [
