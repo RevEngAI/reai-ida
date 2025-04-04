@@ -114,7 +114,8 @@ class BaseDialog(QDialog):
             supported_types = [Function, GlobalVariable, Enum, Struct, Typedef]
 
             if not any(isinstance(artifact, t) for t in supported_types):
-                return f"Unsupported artifact type: {artifact.__class__.__name__}"
+                return "Unsupported artifact type: " \
+                       f"{artifact.__class__.__name__}"
 
             if isinstance(artifact, Function):
                 deci.functions[artifact.addr] = artifact
@@ -128,14 +129,17 @@ class BaseDialog(QDialog):
                 deci.typedefs[artifact.name] = artifact
 
             return None
-        
-        def apply_types(deci: DecompilerInterface, artifacts: list) -> None | str:
+
+        def apply_types(
+                deci: DecompilerInterface,
+                artifacts: list
+        ) -> None | str:
             for artifact in artifacts:
                 error = apply_type(deci, artifact)
                 if error is not None:
                     return error
             return None
-        
+
         def _load_many_artifacts_from_list(artifacts: list[dict]) -> list:
             _artifacts = []
             for artifact in artifacts:
@@ -143,7 +147,7 @@ class BaseDialog(QDialog):
                 if art is not None:
                     _artifacts.append(art)
             return _artifacts
-    
+
         try:
             # first step is to get the analysis id for the function
             res: dict = RE_analysis_lookup(matched_function_bid).json()
@@ -155,9 +159,12 @@ class BaseDialog(QDialog):
                     matched_func_id,
                 )
                 return
-            
+
             # second step is to start the generation of the datatypes
-            res = RE_generate_data_types(matched_analysis_id, [matched_func_id]).json()
+            res = RE_generate_data_types(
+                matched_analysis_id,
+                [matched_func_id]
+            ).json()
             status = res.get("status", False)
 
             if status:
@@ -170,7 +177,7 @@ class BaseDialog(QDialog):
                     "Failed to start the generation of functions data types"
                 )
                 return
-            
+
             # try list the datatypes
 
             res: dict = RE_list_data_types(
@@ -192,7 +199,7 @@ class BaseDialog(QDialog):
             if not deci:
                 logger.error("Libbs: Unable to find a decompiler")
                 return
-            
+
             total_count = res.get("data", {}).get("total_count", 0)
 
             if total_count > 0:
@@ -214,7 +221,7 @@ class BaseDialog(QDialog):
                             f"Loaded {len(func_deps)} for function "
                             f"{function_id}"
                         )
-                        
+
                         deps_res = apply_types(deci, deps)
                         if deps_res is not None:
                             logger.error(
@@ -258,14 +265,16 @@ class BaseDialog(QDialog):
             )
 
             logger.error(
-                f"Error while importing data types for functionId {matched_func_id}: {error}"
+                "Error while importing data types for functionId "
+                f"{matched_func_id}: {error}"
             )
 
             inmain(idaapi.warning, error)
 
         except ValueError as e:
             logger.error(
-                f"Error while importing data types for functionId {matched_func_id}: {e}"
+                "Error while importing data types for functionId "
+                f"{matched_func_id}: {e}"
             )
 
             inmain(idaapi.warning, str(e))

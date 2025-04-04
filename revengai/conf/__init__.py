@@ -17,6 +17,7 @@ import logging
 
 logger = logging.getLogger("REAI")
 
+
 class RevEngConfiguration(object):
     _logdir = "reai_logs"
 
@@ -115,7 +116,6 @@ class RevEngConfiguration(object):
             inthread(RE_health)
             self.config["host"] = re_conf["host"]
             RevEngConfiguration.MODELS = []
-            
 
     @property
     def config(self) -> dict:
