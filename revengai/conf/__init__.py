@@ -13,7 +13,9 @@ from revengai.api import RE_models
 from revengai.conf.database import RevEngDatabase
 from revengai.log.log import configure_loggers
 from revengai.misc.qtutils import inthread
+import logging
 
+logger = logging.getLogger("REAI")
 
 class RevEngConfiguration(object):
     _logdir = "reai_logs"
@@ -67,6 +69,8 @@ class RevEngConfiguration(object):
     def restore(self) -> None:
         fpath = join(self._dir, self._filename)
 
+        logger.info("Loading configuration from %s", fpath)
+
         if isfile(fpath) and access(fpath, R_OK):
             with open(fpath) as fd:
                 self._config = loads(fd.read())
@@ -110,9 +114,8 @@ class RevEngConfiguration(object):
         else:
             inthread(RE_health)
             self.config["host"] = re_conf["host"]
-            RevEngConfiguration.MODELS = [
-                re_conf["model"],
-            ]
+            RevEngConfiguration.MODELS = []
+            
 
     @property
     def config(self) -> dict:
