@@ -84,7 +84,7 @@ class RevEngPlugin(plugin_t):
         self.run()
         return PLUGIN_KEEP
 
-    def run(self, _= None) -> bool:
+    def run(self, _=None) -> bool:
         if self.initialized:
             self.term()
 
@@ -94,7 +94,7 @@ class RevEngPlugin(plugin_t):
         self.state.start_plugin()
         # NOTE: the second call actually invokes the creation of the GUI
         self.state.start_plugin()
-        
+
         self.initialized = True
         return True
 
@@ -113,10 +113,10 @@ def is_dependency_installed(package_name):
     """
     Check if a Python package is installed.
     Works for Python 3.10 - 3.12
-    
+
     Args:
         package_name (str): Name of the package to check
-        
+
     Returns:
         bool: True if package is installed, False otherwise
     """
@@ -126,22 +126,23 @@ def is_dependency_installed(package_name):
     except (ImportError, AttributeError):
         return False
 
+
 def check_dependencies(required_packages):
     """
     Check if all required packages are installed.
-    
+
     Args:
         required_packages (list): List of package names to check
-        
+
     Returns:
         tuple: (bool, list) - (all packages installed, missing packages)
     """
     missing_packages = []
-    
+
     for package in required_packages:
         if not is_dependency_installed(package):
             missing_packages.append(package)
-    
+
     return len(missing_packages) == 0, missing_packages
 
 
