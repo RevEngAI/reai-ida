@@ -621,44 +621,94 @@ class AutoAnalysisDialog(BaseDialog):
         ):
             symbol = selected[2].data
 
+            function_addr = symbol["function_addr"] + self.base_addr
+            original_name = symbol["org_func_name"]
+            original_id = symbol["origin_function_id"]
+            matched_name = symbol["nearest_neighbor_function_name"]
+            confidence = symbol["confidence"]
+            nnfid = symbol["nearest_neighbor_id"]
+            nnbid = symbol["nearest_neighbor_binary_id"]
+            nn_is_debug = symbol["nearest_neighbor_debug"]
+
             if IDAUtils.set_name(
-                    symbol["function_addr"] + self.base_addr,
-                    symbol["nearest_neighbor_function_name"],
+                    function_addr,
+                    matched_name,
             ):
+                # perform the renaming on our platform too
                 inthread(
                     self._function_rename,
-                    symbol["function_addr"],
-                    symbol["nearest_neighbor_function_name"],
+                    function_addr,
+                    matched_name,
+                    original_id,
                 )
+
+                if nn_is_debug:
+                    # import datatypes from the nearest neighbor binary
+                    inthread(
+                        self._function_import_symbol_datatypes,
+                        nnbid,
+                        nnfid,
+                        function_addr,
+                    )
 
                 logger.info(
                     "Renowned %s in %s with confidence of '%s",
-                    symbol["org_func_name"],
-                    symbol["nearest_neighbor_function_name"],
-                    symbol["confidence"],
+                    original_name,
+                    matched_name,
+                    confidence,
                 )
             else:
                 logger.warning(
-                    "Symbol name %s already exists",
-                    symbol["nearest_neighbor_function_name"],
+                    "Unable to rename %s in %s. Name %s already exists.",
+                    original_name,
+                    matched_name,
+                    matched_name,
                 )
 
-                if batches is not None:
-                    nnfn = symbol['nearest_neighbor_function_name']
-                    batches.append(
-                        "\n     • "
-                        + sub(
-                            r"^(.{10}).*\s+➡\s+(.{10}).*$",
-                            r"\g<1>…  ➡  \g<2>…",
-                            f"{symbol['org_func_name']}  ➡  {nnfn}",
-                        )
-                    )
-                else:
-                    idc.warning(
-                        f"Can't rename {symbol['org_func_name']}. Name"
-                        f" {symbol['nearest_neighbor_function_name']} already "
-                        "exists."
-                    )
+                idc.warning(
+                    f"Can't rename {original_name}. Name {matched_name} "
+                    "already exists."
+                )
+            
+
+            # if IDAUtils.set_name(
+            #         symbol["function_addr"] + self.base_addr,
+            #         symbol["nearest_neighbor_function_name"],
+            # ):
+            #     inthread(
+            #         self._function_rename,
+            #         symbol["function_addr"],
+            #         symbol["nearest_neighbor_function_name"],
+            #     )
+
+            #     logger.info(
+            #         "Renowned %s in %s with confidence of '%s",
+            #         symbol["org_func_name"],
+            #         symbol["nearest_neighbor_function_name"],
+            #         symbol["confidence"],
+            #     )
+            # else:
+            #     logger.warning(
+            #         "Symbol name %s already exists",
+            #         symbol["nearest_neighbor_function_name"],
+            #     )
+
+            #     if batches is not None:
+            #         nnfn = symbol['nearest_neighbor_function_name']
+            #         batches.append(
+            #             "\n     • "
+            #             + sub(
+            #                 r"^(.{10}).*\s+➡\s+(.{10}).*$",
+            #                 r"\g<1>…  ➡  \g<2>…",
+            #                 f"{symbol['org_func_name']}  ➡  {nnfn}",
+            #             )
+            #         )
+            #     else:
+            #         idc.warning(
+            #             f"Can't rename {symbol['org_func_name']}. Name"
+            #             f" {symbol['nearest_neighbor_function_name']} already "
+            #             "exists."
+            #         )
 
     def _selected_collections(self) -> list[str]:
         return [
