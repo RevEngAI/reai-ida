@@ -1259,7 +1259,7 @@ def ai_decompile(state: RevEngState) -> None:
             for _ in range(5):
                 # wait for the decompilation to complete
                 logger.info("Waiting for AI decompliation to start/complete")
-                sleep(3)
+                sleep(1)
 
                 # poll again the status
                 res = RE_poll_ai_decompilation(
@@ -1276,7 +1276,7 @@ def ai_decompile(state: RevEngState) -> None:
                 else:
                     logger.info(f"Polling AI decompilation: {poll_status}")
 
-                if uninitialised_count == 2:
+                if uninitialised_count == 5:
                     return error_and_close_view(
                         callback,
                         "AI Decompilation is taking longer than expected."
