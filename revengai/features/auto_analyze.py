@@ -728,27 +728,34 @@ class AutoAnalysisDialog(BaseDialog):
         self._search_collection(self.ui.collectionsFilter.text().lower())
 
     def _state_change(self, index: QModelIndex):
-        item = self.ui.collectionsTable.model().get_data(index.row())
+        row = index.row()
+        item = self.ui.collectionsTable.model().get_data(row)
+
+        item_name = item[1].text if isinstance(
+            item[1], SimpleItem) else item[1]
 
         if item[0].checkState == Qt.Checked:
             self.ui.layoutFilter.add_card(
-                item[1].text if isinstance(item[1], SimpleItem) else item[1]
+                item_name,
+                row
             )
         else:
             self.ui.layoutFilter.remove_card(
-                item[1].text if isinstance(item[1], SimpleItem) else item[1]
+                row
             )
 
-    def _callback(self, text: str) -> None:
-        for row_item in self.ui.collectionsTable.model().get_datas():
-            if isinstance(row_item[0], CheckableItem) and (
-                    isinstance(row_item[1], str)
-                    and row_item[1] == text
-                    or isinstance(row_item[1], SimpleItem)
-                    and row_item[1].text == text
-            ):
-                row_item[0].checkState = Qt.Unchecked
+    def _callback(self, row: int) -> None:
+        # for row_item in self.ui.collectionsTable.model().get_datas():
+        #     if isinstance(row_item[0], CheckableItem) and (
+        #             isinstance(row_item[1], str)
+        #             and row_item[1] == text
+        #             or isinstance(row_item[1], SimpleItem)
+        #             and row_item[1].text == text
+        #     ):
+        #         row_item[0].checkState = Qt.Unchecked
 
+        row_element = self.ui.collectionsTable.model().get_data(row)
+        row_element[0].checkState = Qt.Unchecked
         self.ui.collectionsTable.model().layoutChanged.emit()
 
     # Yield successive n-sized
