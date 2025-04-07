@@ -4,11 +4,14 @@ from PyQt5.QtCore import QPoint
 from PyQt5.QtCore import QRect
 from PyQt5.QtCore import QSize
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QCheckBox
 from PyQt5.QtWidgets import QLayout
 from PyQt5.QtWidgets import QLayoutItem
 from PyQt5.QtWidgets import QSizePolicy
 from PyQt5.QtWidgets import QWidget
+from revengai.gui.custom_card import QRevEngCard
+import logging
+
+logger = logging.getLogger("REAI")
 
 
 class CustomFlowLayout(QLayout):
@@ -27,7 +30,7 @@ class CustomFlowLayout(QLayout):
 
         self.callback = None
 
-        self._items: list[QLayoutItem] = []
+        self._items: dict[int, QLayoutItem] = {}
         self.__pending_positions: dict[QWidget, int] = {}
 
     def __del__(self):
@@ -36,13 +39,20 @@ class CustomFlowLayout(QLayout):
             item = self.takeAt(0)
 
     def addItem(self, a0: QLayoutItem) -> None:
-        try:
-            position = self.__pending_positions[a0.widget()]
-            self._items.insert(position, a0)
+        # try:
+        #     position = self.__pending_positions[a0.widget()]
+        #     self._items.insert(position, a0)
 
-            del self.__pending_positions[a0.widget()]
-        except KeyError:
-            self._items.append(a0)
+        #     del self.__pending_positions[a0.widget()]
+        # except KeyError:
+        #     self._items.append(a0)
+        widget = a0.widget()
+        if isinstance(widget, QRevEngCard):
+            data = widget.custom_data
+            logger.info(f"addItem: custom data -> {data}")
+            self._items[data["row"]] = a0
+        else:
+            logger.warning("CustomFlowLayout: addItem: not a QRevEngCard")
 
     def addWidget(
             self,
@@ -68,7 +78,8 @@ class CustomFlowLayout(QLayout):
 
     def itemAt(self, index: int) -> Optional[QLayoutItem]:
         if 0 <= index < len(self._items):
-            return self._items[index]
+            keys = list(self._items.keys())
+            return self._items[keys[index]]
         return None
 
     def hasHeightForWidth(self) -> bool:
@@ -80,7 +91,7 @@ class CustomFlowLayout(QLayout):
     def minimumSize(self) -> QSize:
         size = QSize()
 
-        for item in self._items:
+        for item in self._items.values():
             size = size.expandedTo(item.minimumSize())
 
         margin, _, _, _ = self.getContentsMargins()
@@ -89,13 +100,20 @@ class CustomFlowLayout(QLayout):
         return size
 
     def removeItem(self, a0: QLayoutItem) -> None:
-        self.removeWidget(a0.widget())
+        logger.info("CustomFlowLayout: removeItem")
+        widget = a0.widget()
+        if widget and hasattr(widget, 'custom_data'):
+            target_row = widget.custom_data.get("row")
+            if target_row in self._items:
+                del self._items[target_row]
 
-    def removeWidget(self, w: QWidget) -> None:
-        w.deleteLater()
-
-        if self.callback:
-            self.callback(w.objectName())
+    def removeWidget(self, widget: QRevEngCard) -> None:
+        if widget is not None:
+            if self.callback and hasattr(widget, 'custom_data'):
+                data = widget.custom_data
+                self.callback(data["row"])
+            super().removeWidget(widget)
+            widget.deleteLater()
 
     def setGeometry(self, rect: QRect) -> None:
         super().setGeometry(rect)
@@ -105,8 +123,11 @@ class CustomFlowLayout(QLayout):
         return self.minimumSize()
 
     def takeAt(self, index: int) -> Optional[QLayoutItem]:
-        if 0 <= index < len(self._items):
-            return self._items.pop(index)
+        if 0 <= index < len(self._items.keys()):
+            keys = list(self._items.keys())
+            item = self._items[keys[index]]
+            del self._items[keys[index]]
+            return item
         return None
 
     def _doLayout(self, rect: QRect, testOnly: bool = False):
@@ -119,7 +140,7 @@ class CustomFlowLayout(QLayout):
         y = rect.y()
         line_height = 0
 
-        for item in self._items:
+        for item in self._items.values():
             wid = item.widget()
 
             space_x = self.spacing() + wid.style().layoutSpacing(
@@ -149,22 +170,12 @@ class CustomFlowLayout(QLayout):
         super().resizeEvent(event)
         self._doLayout(self.geometry())
 
-    def add_card(self, text: str) -> None:
-        if not self.is_present(text):
-            child: QWidget = QCheckBox(text)
-
-            child.setStyleSheet(
-                """
-                QCheckBox {
-                    min-width: 2em;
-                    border-radius: 3px;
-                    border: 2px solid gray;
-                    padding: 2px 2px 2px 2px;
-                    background-color: #737373;
-                }
-                """
-            )
-
+    def add_card(self, text: str, row: int) -> None:
+        if not self.is_present(row):
+            child: QRevEngCard = QRevEngCard(text)
+            child.custom_data = {
+                "row": row,
+            }
             child.setChecked(True)
             child.setObjectName(text)
             child.setLayoutDirection(Qt.RightToLeft)
@@ -172,13 +183,15 @@ class CustomFlowLayout(QLayout):
 
             self.addWidget(child)
 
-    def remove_card(self, text: str) -> None:
-        for item in self._items:
-            if item.widget().objectName() == text:
-                self.removeWidget(item.widget())
+    def remove_card(self, row: int) -> None:
+        # for (row, item) in self._items:
+        #     if item.widget().objectName() == text:
+        #         self.removeWidget(item.widget(), row)
+        logger.info(f"items: {self._items}")
+        self.removeWidget(self._items[row].widget())
 
-    def is_present(self, text: str) -> bool:
-        return any(item.widget().objectName() == text for item in self._items)
+    def is_present(self, row: int) -> bool:
+        return row in self._items
 
     def register_cb(self, fn):
         self.callback = fn
