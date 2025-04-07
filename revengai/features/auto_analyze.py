@@ -510,15 +510,6 @@ class AutoAnalysisDialog(BaseDialog):
                 "Searching for collections with '%s'", search or "N/A"
             )
 
-            """
-            header=[
-                    "Include",
-                    "Name",
-                    "Type",
-                    "Date"
-                    "Model Name"
-                ],
-            """
             res: dict = RE_collections_search(
                 search=search,
                 page=1,
@@ -532,11 +523,16 @@ class AutoAnalysisDialog(BaseDialog):
             collections = []
 
             for collection in result_collections:
+                data = {
+                    "item_name": collection["collection_name"],
+                    "item_id": collection["collection_id"],
+                }
+
                 collections.append(
                     (
                         CheckableItem(
                             checked=self.ui.layoutFilter.is_present(
-                                collection["collection_name"]
+                                data
                             )
                         ),
                         IconItem(
@@ -567,11 +563,15 @@ class AutoAnalysisDialog(BaseDialog):
             logger.info(f"Found {len(result_binaries)} binaries")
 
             for binary in result_binaries:
+                data = {
+                    "item_name": binary["binary_name"],
+                    "item_id": binary["binary_id"],
+                }
                 collections.append(
                     (
                         CheckableItem(
                             checked=self.ui.layoutFilter.is_present(
-                                binary["binary_name"]
+                                data
                             )
                         ),
                         IconItem(
@@ -718,11 +718,20 @@ class AutoAnalysisDialog(BaseDialog):
                     "already exists."
                 )
 
-    def _selected_collections(self) -> list[str]:
-        return [
-            self.ui.layoutFilter.itemAt(idx).widget().objectName()
-            for idx in range(self.ui.layoutFilter.count())
-        ]
+    def _selected_collections(self) -> dict:
+        collections = []
+        binaries = []
+        for idx in range(self.ui.layoutFilter.count()):
+            item = self.ui.layoutFilter.itemAt(idx).widget()
+            data = item.custom_data
+            if data["is_collection"]:
+                collections.append(data["item_id"])
+            else:
+                binaries.append(data["item_id"])
+        return {
+            "collections": collections,
+            "binaries": binaries,
+        }
 
     def _filter_collections(self):
         self._search_collection(self.ui.collectionsFilter.text().lower())
@@ -734,29 +743,30 @@ class AutoAnalysisDialog(BaseDialog):
         item_name = item[1].text if isinstance(
             item[1], SimpleItem) else item[1]
 
+        item_id = item[6]
+        is_collection = item[2] == "Collection"
+
+        data = {
+            "row": row,
+            "is_collection": is_collection,
+            "item_name": item_name,
+            "item_id": item_id,
+        }
+
         if item[0].checkState == Qt.Checked:
             self.ui.layoutFilter.add_card(
-                item_name,
-                row
+                data
             )
         else:
             self.ui.layoutFilter.remove_card(
-                row
+                data
             )
 
-    def _callback(self, row: int) -> None:
-        # for row_item in self.ui.collectionsTable.model().get_datas():
-        #     if isinstance(row_item[0], CheckableItem) and (
-        #             isinstance(row_item[1], str)
-        #             and row_item[1] == text
-        #             or isinstance(row_item[1], SimpleItem)
-        #             and row_item[1].text == text
-        #     ):
-        #         row_item[0].checkState = Qt.Unchecked
-
-        row_element = self.ui.collectionsTable.model().get_data(row)
-        row_element[0].checkState = Qt.Unchecked
-        self.ui.collectionsTable.model().layoutChanged.emit()
+    def _callback(self, data: dict) -> None:
+        row_element = self.ui.collectionsTable.model().get_data(data["row"])
+        if row_element[6] == data["item_id"]:
+            row_element[0].checkState = Qt.Unchecked
+            self.ui.collectionsTable.model().layoutChanged.emit()
 
     # Yield successive n-sized
     # chunks from data.

@@ -8,6 +8,7 @@ from idaapi import ASKBTN_YES, hide_wait_box, show_wait_box
 from requests import HTTPError, RequestException
 from reait.api import RE_nearest_symbols_batch
 from reait.api import RE_collections_search
+from reait.api import RE_binaries_search
 from revengai.features import BaseDialog
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
@@ -17,6 +18,7 @@ from revengai.models import CheckableItem, IconItem, SimpleItem
 from revengai.models.checkable_model import RevEngCheckableTableModel
 from revengai.models.table_model import RevEngTableModel
 from revengai.ui.function_similarity_panel import Ui_FunctionSimilarityPanel
+from datetime import datetime
 
 logger = logging.getLogger("REAI")
 
@@ -51,11 +53,16 @@ class FunctionSimilarityDialog(BaseDialog):
         self.ui.collectionsTable.setModel(
             RevEngCheckableTableModel(
                 data=[],
-                columns=[1],
+                columns=[0],
                 parent=self,
                 header=[
-                    "Collection Name",
-                    "Include",
+                    "",  # Include
+                    "Name",
+                    "Type",
+                    "Date",
+                    "Model Name",
+                    "Owner",
+                    "ID"
                 ],
             )
         )
@@ -124,7 +131,7 @@ class FunctionSimilarityDialog(BaseDialog):
             if function_id is None:
                 func_name = inmain(
                     IDAUtils.get_demangled_func_name, self.v_addr +
-                                                      self.base_addr
+                    self.base_addr
                 )
 
                 inmain(idc.warning, f"No matches found for {func_name}.")
@@ -244,13 +251,17 @@ class FunctionSimilarityDialog(BaseDialog):
                     )
 
     def _search_collection(self, search: str = None):
+        def parse_date(date: str) -> str:
+            parsed_date = datetime.strptime(date, "%Y-%m-%dT%H:%M:%S.%f")
+            return f"{parsed_date:%Y-%m-%d %H:%M:%S}"
+
         try:
             inmain(show_wait_box, "HIDECANCEL\nGetting RevEng.AI collections…")
 
             inmain(self.ui.fetchButton.setEnabled, False)
 
             res: dict = RE_collections_search(
-                partial_collection_name=search,
+                search=search,
                 page=1,
                 page_size=1024,
             ).json()
@@ -262,34 +273,59 @@ class FunctionSimilarityDialog(BaseDialog):
             collections = []
 
             for collection in result_collections:
-                if isinstance(collection, str):
-                    collections.append(
-                        (
-                            collection,
-                            CheckableItem(
-                                checked=self.ui.layoutFilter.is_present(
-                                    collection)
+                collections.append(
+                    (
+                        CheckableItem(
+                            checked=self.ui.layoutFilter.is_present(
+                                collection["collection_name"]
+                            )
+                        ),
+                        IconItem(
+                            collection["collection_name"],
+                            (
+                                "lock.png"
+                                if collection["scope"] == "PRIVATE"
+                                else "unlock.png"
                             ),
-                        )
+                        ),
+                        "Collection",
+                        parse_date(collection["last_updated_at"]),
+                        collection["model_name"],
+                        collection["owned_by"],
+                        collection["collection_id"]
                     )
-                else:
-                    collections.append(
-                        (
-                            IconItem(
-                                collection["collection_name"],
-                                (
-                                    "lock.png"
-                                    if collection["scope"] == "PRIVATE"
-                                    else "unlock.png"
-                                ),
-                            ),
-                            CheckableItem(
-                                checked=self.ui.layoutFilter.is_present(
-                                    collection["collection_name"]
-                                )
-                            ),
-                        )
+                )
+
+            # include binaries too
+            res: dict = RE_binaries_search(
+                search=search,
+                page=1,
+                page_size=1024,
+            ).json()
+
+            result_binaries = res.get("data", {}).get("results", [])
+
+            logger.info(f"Found {len(result_binaries)} binaries")
+
+            for binary in result_binaries:
+                collections.append(
+                    (
+                        CheckableItem(
+                            checked=self.ui.layoutFilter.is_present(
+                                binary["binary_name"]
+                            )
+                        ),
+                        IconItem(
+                            binary["binary_name"],
+                            "file.png",
+                        ),
+                        "Binary",
+                        parse_date(binary["created_at"]),
+                        binary["model_name"],
+                        binary["owned_by"],
+                        binary["binary_id"]
                     )
+                )
 
             inmain(
                 inmain(self.ui.collectionsTable.model).fill_table,
@@ -298,7 +334,7 @@ class FunctionSimilarityDialog(BaseDialog):
             inmain(
                 self.ui.collectionsTable.setColumnWidth,
                 0,
-                round(inmain(self.ui.collectionsTable.width) * 0.8),
+                round(inmain(self.ui.collectionsTable.width) * 0.1),
             )
         except HTTPError as e:
             if e.response.status_code != 400:
@@ -359,25 +395,23 @@ class FunctionSimilarityDialog(BaseDialog):
         self._search_collection(self.ui.collectionsFilter.text().lower())
 
     def _state_change(self, index: QModelIndex):
-        item = self.ui.collectionsTable.model().get_data(index.row())
+        row = index.row()
+        item = self.ui.collectionsTable.model().get_data(row)
 
-        if item[1].checkState == Qt.Checked:
+        item_name = item[1].text if isinstance(
+            item[1], SimpleItem) else item[1]
+
+        if item[0].checkState == Qt.Checked:
             self.ui.layoutFilter.add_card(
-                item[0].text if isinstance(item[0], SimpleItem) else item[0]
+                item_name,
+                row
             )
         else:
             self.ui.layoutFilter.remove_card(
-                item[0].text if isinstance(item[0], SimpleItem) else item[0]
+                row
             )
 
-    def _callback(self, text: str) -> None:
-        for row_item in self.ui.collectionsTable.model().get_datas():
-            if isinstance(row_item[1], CheckableItem) and (
-                    isinstance(row_item[0], str)
-                    and row_item[0] == text
-                    or isinstance(row_item[0], SimpleItem)
-                    and row_item[0].text == text
-            ):
-                row_item[1].checkState = Qt.Unchecked
-
+    def _callback(self, row: int) -> None:
+        row_element = self.ui.collectionsTable.model().get_data(row)
+        row_element[0].checkState = Qt.Unchecked
         self.ui.collectionsTable.model().layoutChanged.emit()
