@@ -12,6 +12,7 @@ from idautils import Functions
 from requests import HTTPError, RequestException
 from reait.api import RE_nearest_symbols_batch
 from reait.api import RE_collections_search
+from reait.api import RE_binaries_search
 from revengai.features import BaseDialog
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
@@ -20,6 +21,7 @@ from revengai.misc.utils import IDAUtils
 from revengai.models import CheckableItem, IconItem, SimpleItem
 from revengai.models.checkable_model import RevEngCheckableTableModel
 from revengai.ui.auto_analysis_panel import Ui_AutoAnalysisPanel
+from datetime import datetime
 
 logger = logging.getLogger("REAI")
 
@@ -42,16 +44,21 @@ class AutoAnalysisDialog(BaseDialog):
 
         self.ui.collectionsFilter.textChanged.connect(self._filter)
         self.ui.collectionsTable.horizontalHeader().setDefaultAlignment(
-            Qt.AlignLeft
+            Qt.AlignCenter
         )
         self.ui.collectionsTable.setModel(
             RevEngCheckableTableModel(
                 data=[],
-                columns=[1],
+                columns=[0],
                 parent=self,
                 header=[
-                    "Collection Name",
-                    "Include",
+                    "",  # Include
+                    "Name",
+                    "Type",
+                    "Date",
+                    "Model Name",
+                    "Owner",
+                    "ID"
                 ],
             )
         )
@@ -158,8 +165,8 @@ class AutoAnalysisDialog(BaseDialog):
             inmain(show_wait_box, "Getting results…")
 
             self._analysis = [
-                                 0,
-                             ] * len(Analysis)
+                0,
+            ] * len(Analysis)
 
             inmain(self.ui.fetchButton.setEnabled, False)
             inmain(self.ui.renameButton.setEnabled, False)
@@ -217,11 +224,11 @@ class AutoAnalysisDialog(BaseDialog):
             ) as executor:
                 collections = inmain(self._selected_collections)
                 distance = 1.0 - (
-                        int(inmain(self.ui.confidenceSlider.property, "value"))
-                        / int(inmain(
-                            self.ui.confidenceSlider.property,
-                            "maximum"
-                        ))
+                    int(inmain(self.ui.confidenceSlider.property, "value"))
+                    / int(inmain(
+                        self.ui.confidenceSlider.property,
+                        "maximum"
+                    ))
                 )
 
                 def worker(chunk: list[int]) -> any:
@@ -349,7 +356,7 @@ class AutoAnalysisDialog(BaseDialog):
                                         for func_addr, func_id in
                                         self.analyzed_functions.items()
                                         if symbol["origin_function_id"] ==
-                                           func_id
+                                        func_id
                                     ),
                                     None,
                                 )
@@ -370,7 +377,7 @@ class AutoAnalysisDialog(BaseDialog):
                                                 function["name"]
                                                 for function in self._functions
                                                 if func_addr ==
-                                                   function["start_addr"]
+                                                function["start_addr"]
                                             ),
                                             "Unknown",
                                         )
@@ -489,6 +496,11 @@ class AutoAnalysisDialog(BaseDialog):
             )
 
     def _search_collection(self, search: str = None) -> None:
+
+        def parse_date(date: str) -> str:
+            parsed_date = datetime.strptime(date, "%Y-%m-%dT%H:%M:%S.%f")
+            return f"{parsed_date:%Y-%m-%d %H:%M:%S}"
+
         try:
             inmain(show_wait_box, "HIDECANCEL\nGetting RevEng.AI collections…")
 
@@ -498,8 +510,17 @@ class AutoAnalysisDialog(BaseDialog):
                 "Searching for collections with '%s'", search or "N/A"
             )
 
+            """
+            header=[
+                    "Include",
+                    "Name",
+                    "Type",
+                    "Date"
+                    "Model Name"
+                ],
+            """
             res: dict = RE_collections_search(
-                partial_collection_name=search,
+                search=search,
                 page=1,
                 page_size=1024,
             ).json()
@@ -511,34 +532,59 @@ class AutoAnalysisDialog(BaseDialog):
             collections = []
 
             for collection in result_collections:
-                if isinstance(collection, str):
-                    collections.append(
-                        (
-                            collection,
-                            CheckableItem(
-                                checked=self.ui.layoutFilter.is_present(
-                                    collection)
+                collections.append(
+                    (
+                        CheckableItem(
+                            checked=self.ui.layoutFilter.is_present(
+                                collection["collection_name"]
+                            )
+                        ),
+                        IconItem(
+                            collection["collection_name"],
+                            (
+                                "lock.png"
+                                if collection["scope"] == "PRIVATE"
+                                else "unlock.png"
                             ),
-                        )
+                        ),
+                        "Collection",
+                        parse_date(collection["last_updated_at"]),
+                        collection["model_name"],
+                        collection["owned_by"],
+                        collection["collection_id"]
                     )
-                else:
-                    collections.append(
-                        (
-                            IconItem(
-                                collection["collection_name"],
-                                (
-                                    "lock.png"
-                                    if collection["scope"] == "PRIVATE"
-                                    else "unlock.png"
-                                ),
-                            ),
-                            CheckableItem(
-                                checked=self.ui.layoutFilter.is_present(
-                                    collection["collection_name"]
-                                )
-                            ),
-                        )
+                )
+
+            # include binaries too
+            res: dict = RE_binaries_search(
+                search=search,
+                page=1,
+                page_size=1024,
+            ).json()
+
+            result_binaries = res.get("data", {}).get("results", [])
+
+            logger.info(f"Found {len(result_binaries)} binaries")
+
+            for binary in result_binaries:
+                collections.append(
+                    (
+                        CheckableItem(
+                            checked=self.ui.layoutFilter.is_present(
+                                binary["binary_name"]
+                            )
+                        ),
+                        IconItem(
+                            binary["binary_name"],
+                            "file.png",
+                        ),
+                        "Binary",
+                        parse_date(binary["created_at"]),
+                        binary["model_name"],
+                        binary["owned_by"],
+                        binary["binary_id"]
                     )
+                )
 
             inmain(
                 inmain(self.ui.collectionsTable.model).fill_table,
@@ -548,7 +594,7 @@ class AutoAnalysisDialog(BaseDialog):
             inmain(
                 self.ui.collectionsTable.setColumnWidth,
                 0,
-                round(inmain(self.ui.collectionsTable.width) * 0.9),
+                round(inmain(self.ui.collectionsTable.width) * 0.1),
             )
         except HTTPError as e:
             if e.response.status_code != 400:
@@ -684,24 +730,24 @@ class AutoAnalysisDialog(BaseDialog):
     def _state_change(self, index: QModelIndex):
         item = self.ui.collectionsTable.model().get_data(index.row())
 
-        if item[1].checkState == Qt.Checked:
+        if item[0].checkState == Qt.Checked:
             self.ui.layoutFilter.add_card(
-                item[0].text if isinstance(item[0], SimpleItem) else item[0]
+                item[1].text if isinstance(item[1], SimpleItem) else item[1]
             )
         else:
             self.ui.layoutFilter.remove_card(
-                item[0].text if isinstance(item[0], SimpleItem) else item[0]
+                item[1].text if isinstance(item[1], SimpleItem) else item[1]
             )
 
     def _callback(self, text: str) -> None:
         for row_item in self.ui.collectionsTable.model().get_datas():
-            if isinstance(row_item[1], CheckableItem) and (
-                    isinstance(row_item[0], str)
-                    and row_item[0] == text
-                    or isinstance(row_item[0], SimpleItem)
-                    and row_item[0].text == text
+            if isinstance(row_item[0], CheckableItem) and (
+                    isinstance(row_item[1], str)
+                    and row_item[1] == text
+                    or isinstance(row_item[1], SimpleItem)
+                    and row_item[1].text == text
             ):
-                row_item[1].checkState = Qt.Unchecked
+                row_item[0].checkState = Qt.Unchecked
 
         self.ui.collectionsTable.model().layoutChanged.emit()
 
