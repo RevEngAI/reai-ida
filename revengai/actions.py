@@ -141,6 +141,13 @@ def upload_binary(state: RevEngState) -> None:
                             tags=tags,
                             symbols=symbols,
                             duplicate=state.project_cfg.get("duplicate_analysis"),
+                            dynamic_execution=False,
+                            
+                            # NOTE: disable all other analyses options
+                            skip_scraping=True,
+                            skip_sbom=True,
+                            skip_capabilities=True,
+                            advanced_analysis=False,
                         )
 
                         analysis = res.json()

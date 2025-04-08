@@ -27,6 +27,8 @@ class AutoUnstrip:
         self._functions = self._get_all_functions()
         self.path = idc.get_input_file_path()
 
+        self.auto_unstrip_distance = 0.09999999999999998
+
         self._get_analysed_functions()
         self.function_ids = self._get_sync_analysed_ids_local()
 
@@ -81,7 +83,7 @@ class AutoUnstrip:
         return function_ids
 
     def _get_all_auto_unstrip_rename_matches(
-        self, max_workers=1, distance=0.09999999999999998
+        self, max_workers=1
     ):
         results = []
         with ThreadPoolExecutor(
@@ -92,7 +94,7 @@ class AutoUnstrip:
                 try:
                     return RE_nearest_symbols_batch(
                         function_ids=chunk,
-                        distance=distance,
+                        distance=self.auto_unstrip_distance,
                         debug_enabled=True,
                     ).json()["function_matches"]
                 except Exception as e:
