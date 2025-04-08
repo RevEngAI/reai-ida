@@ -202,8 +202,8 @@ class UploadBinaryForm(BaseForm):
 
         Form.__init__(
             self,
-            r"""BUTTON YES* Upload
-RevEng.AI: Upload Binary
+            r"""BUTTON YES* Process
+RevEng.AI: Process Binary
 
 {FormChangeCb}
 Please provide the following information to upload the binary:

@@ -6,7 +6,7 @@ import logging
 from revengai.misc.utils import IDAUtils
 from idautils import Functions
 from idaapi import get_imagebase
-from revengai.misc.qtutils import inthread, inmain
+from revengai.misc.qtutils import inmain
 from revengai.manager import RevEngState
 
 
@@ -131,6 +131,7 @@ class AutoUnstrip:
                     )
 
                     if func_addr and "FUN_" not in func_name:
+                        print(symbol)
                         symbol["org_func_name"] = next(
                             (
                                 function["name"]
@@ -159,5 +160,5 @@ class AutoUnstrip:
         for res in result:
             addr = res["target_func_addr"] + self.base_addr
             new_name = res["new_name_str"]
-            idc.set_name(addr, new_name)
-            idc.set_func_flags(addr, idc.FUNC_LIB)
+            inmain(idc.set_name, addr, new_name)
+            inmain(idc.set_func_flags, addr, idc.FUNC_LIB)

@@ -75,7 +75,6 @@ logger = logging.getLogger("REAI")
 
 version = float(idaapi.get_kernel_version())
 if version < 9.0:
-
     def is_32bit() -> bool:
         info: idaapi.idainfo = idaapi.get_inf_structure()
         return info.is_32bit()
@@ -83,9 +82,7 @@ if version < 9.0:
     def is_64bit() -> bool:
         info: idaapi.idainfo = idaapi.get_inf_structure()
         return info.is_64bit()
-
 else:
-
     def is_32bit() -> bool:
         return idaapi.inf_is_32bit_exactly()
 
@@ -1281,7 +1278,7 @@ def auto_unstrip(state: RevEngState) -> None:
         " limited to available debug symbols.\n\n"
         "Functions will be renamed automatically for easier analysis.",
     ):
-        unstrip = AutoUnstrip(state)
+        auto_unstrip = AutoUnstrip(state)
 
         def bg_task() -> None:
             try:
@@ -1290,7 +1287,7 @@ def auto_unstrip(state: RevEngState) -> None:
                     "HIDECANCEL\nAuto unstripping binary…",
                 )
 
-                unstrip._get_all_auto_unstrip_rename_matches()
+                auto_unstrip.unstrip()
             except HTTPError as e:
                 logger.error(
                     "Unable to auto unstrip binary: %s", e.response.json().get("error")
