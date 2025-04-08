@@ -16,6 +16,31 @@ from pygments import highlight
 logger = logging.getLogger("REAI")
 
 
+def add_summary(code, summary, max_line_length=70) -> str:
+    # add summary to the code, summary must be split by newlines
+    # each newline starts with a comment symbol // we must split words,
+    # and add a space between them
+
+    summary_words = summary.split(' ')
+    summary_lines = []
+    line = "// "
+
+    while summary_words:
+        word = summary_words.pop(0)
+        if len(line) + len(word) > max_line_length:
+            summary_lines.append(line.rstrip())
+            line = "// " + word + " "
+        else:
+            line += word + " "
+
+    # Add the last line if there's anything in it
+    if line != "// ":
+        summary_lines.append(line.rstrip())
+
+    # Join all summary lines and append the original code
+    return '\n'.join(summary_lines) + '\n\n' + code
+
+
 def preprocess_code(code):
     """
     Preprocess code to fix broken strings across newlines and join adjacent
@@ -166,9 +191,6 @@ class TreeSitterCodeHighlighter:
         if not self.initialized:
             logger.error("Tree-sitter not initialized")
             return ""
-
-        # Preprocess the code
-        # code = preprocess_code(code)
 
         # Set language
         if language == 'c':
@@ -604,7 +626,7 @@ class AICodeViewer(idaapi.simplecustviewer_t):
         if self.current_code:
             self.set_code(self.current_code, self.language)
 
-    def set_code(self, code, language=None):
+    def set_code(self, code: str, summary: str, language=None):
         """
         Set and highlight the code to be displayed
 
@@ -613,6 +635,10 @@ class AICodeViewer(idaapi.simplecustviewer_t):
             language (str, optional): 'c', 'cpp', or None (use class setting)
         """
         self.ClearLines()
+
+        code = preprocess_code(code)  # Preprocess the code
+        code = add_summary(code, summary)  # Add summary to the code
+
         self.current_code = code  # Save for language switching
 
         # Use language setting if provided, otherwise use the class setting

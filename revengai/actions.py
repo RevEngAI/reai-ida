@@ -1206,7 +1206,8 @@ def ai_decompile(state: RevEngState) -> None:
 
             if not res.get("success", False):
                 return error_and_close_view(
-                    callback, "Unable to analyze functions for AI"
+                    callback,
+                    "Unable to analyze functions for AI"
                     " decompilation"
                 )
 
@@ -1233,7 +1234,8 @@ def ai_decompile(state: RevEngState) -> None:
             )
 
             res = RE_poll_ai_decompilation(
-                target_function["function_id"]
+                target_function["function_id"],
+                summarise=True,
             ).json()
 
             if not res.get("status", False):
@@ -1318,8 +1320,13 @@ def ai_decompile(state: RevEngState) -> None:
                     val = val[1:]
                 c_code = c_code.replace(key, val)
 
+            summary = decompilation_data.get("summary", "")
+            if summary is None:
+                summary = ""
+
             logger.info("Update UI with decompiled code")
-            idaapi.execute_sync(lambda: callback(c_code), idaapi.MFF_FAST)
+            idaapi.execute_sync(lambda: callback(
+                (c_code, summary)), idaapi.MFF_FAST)
         except HTTPError as e:
             error = e.response.json().get(
                 "error",
@@ -1330,7 +1337,12 @@ def ai_decompile(state: RevEngState) -> None:
     def handle_ai_decomp(decomp_data):
         if decomp_data is not None:
             try:
-                sv.set_code(str(decomp_data))
+                if isinstance(decomp_data, tuple):
+                    logger.info(
+                        f"Decompilation {decomp_data}"
+                    )
+                    c_code, summary = decomp_data
+                    sv.set_code(c_code, summary)
             except Exception as e:
                 import traceback as tb
                 logger.info(f"Error: {e} \n{tb.format_exc()}")
