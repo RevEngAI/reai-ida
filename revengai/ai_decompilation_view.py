@@ -168,7 +168,7 @@ class TreeSitterCodeHighlighter:
             return ""
 
         # Preprocess the code
-        code = preprocess_code(code)
+        # code = preprocess_code(code)
 
         # Set language
         if language == 'c':
@@ -221,7 +221,7 @@ class TreeSitterCodeHighlighter:
                 return
 
             # Map tree-sitter node types to IDA colors
-            ida_color = self._get_ida_color_for_node_type(node_type, node_text)
+            ida_color = self._get_ida_color_for_node_type(node_type)
 
             # Add this segment with its position information
             segments.append({

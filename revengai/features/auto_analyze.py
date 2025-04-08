@@ -222,7 +222,7 @@ class AutoAnalysisDialog(BaseDialog):
             with ThreadPoolExecutor(
                     max_workers=max_workers, thread_name_prefix="reai-batch"
             ) as executor:
-                collections = inmain(self._selected_collections)
+                filter_data = inmain(self._selected_collections)
                 distance = 1.0 - (
                     int(inmain(self.ui.confidenceSlider.property, "value"))
                     / int(inmain(
@@ -239,7 +239,8 @@ class AutoAnalysisDialog(BaseDialog):
                         res: dict = RE_nearest_symbols_batch(
                             function_ids=chunk,
                             distance=distance,
-                            collections=collections,
+                            collections=filter_data["collections"],
+                            binaries=filter_data["binaries"],
                             nns=1,
                             debug_enabled=inmain(self.ui.checkBox.isChecked)
                         ).json()
