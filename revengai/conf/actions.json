@@ -19,7 +19,7 @@
 	},
 	{
 		"id": "reai:auto_analyze",
-		"name": "Auto Analyse Binary",
+		"name": "Match Functions",
 		"callback": "auto_analyze",
 		"shortcut": "Ctrl+Shift+A"
 	},
@@ -31,7 +31,7 @@
 		"children": [
 			{
 				"id": "reai:rename",
-				"name": "Rename From Similar Functions",
+				"name": "Match Current Function",
 				"callback": "rename_function",
 				"shortcut": "Ctrl+Shift+R"
 			},
