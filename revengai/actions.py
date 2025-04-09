@@ -1021,6 +1021,7 @@ def apply_function_data_types(state: RevEngState) -> None:
                 return
 
             total_count = res.get("data", {}).get("total_count", 0)
+            successful_operations_count = 0
 
             if total_count > 0:
                 items = res.get("data", {}).get("items", [])
@@ -1046,7 +1047,7 @@ def apply_function_data_types(state: RevEngState) -> None:
                     function_id = item.get("function_id")
                     if function_id is None:
                         continue
-                    
+
                     if not isinstance(function_id, (int, str)):
                         continue
 
@@ -1061,6 +1062,7 @@ def apply_function_data_types(state: RevEngState) -> None:
                         ]
 
                         deps = load_many_artifacts(deps_types, fmt=ArtifactFormat.JSON)
+                        successful_operations_count += len(deps)
 
                         logger.info(
                             f"Loaded {len(deps_types)} for function " f"{function_id}"
@@ -1109,10 +1111,11 @@ def apply_function_data_types(state: RevEngState) -> None:
                                 "Applied data types for function id " f"{function_id}"
                             )
 
-                logger.info("Function data types application completed")
+            if successful_operations_count > 0:
+                Dialog.showInfo("Successfully Applied Data Types", f"Applied {successful_operations_count} data types")
             else:
                 logger.warning("No function data types to apply")
-                Dialog.showInfo(
+                Dialog.showError(
                     "Function Types",
                     "No function data types to apply. Please try again.",
                 )
