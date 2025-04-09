@@ -1024,10 +1024,31 @@ def apply_function_data_types(state: RevEngState) -> None:
 
             if total_count > 0:
                 items = res.get("data", {}).get("items", [])
+                if not isinstance(items, list):
+                    return
+
                 for item in items:
-                    function_types = item.get("data_types", {}).get("func_types", None)
-                    func_deps = item.get("data_types", {}).get("func_deps", [])
-                    function_id = item.get("function_id", 0)
+                    if not isinstance(item, dict):
+                        continue
+
+                    data_types = item.get("data_types")
+                    if not isinstance(data_types, dict):
+                        continue
+
+                    function_types = data_types.get("function_types", {})
+                    if not isinstance(function_types, dict):
+                        function_types = {}
+
+                    func_deps = data_types.get("func_deps", [])
+                    if not isinstance(func_deps, list):
+                        func_deps = []
+
+                    function_id = item.get("function_id")
+                    if function_id is None:
+                        continue
+                    
+                    if not isinstance(function_id, (int, str)):
+                        continue
 
                     if function_types and len(func_deps) > 0:
                         # TODO: this might be redundant, check if I can
@@ -1291,7 +1312,7 @@ def auto_unstrip(state: RevEngState) -> None:
             try:
                 inmain(
                     idaapi.show_wait_box,
-                    "HIDECANCEL\nAuto unstripping binary…",
+                    "HIDECANCEL\nAuto Unstripping binary…",
                 )
 
                 matched = auto_unstrip.unstrip()
