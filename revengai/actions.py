@@ -1479,7 +1479,7 @@ def is_condition_met(state: RevEngState, fpath: str) -> bool:
     if not state.config.is_valid():
         setup_wizard(state)
     elif not fpath or not isfile(fpath):
-        idc.warning("No input file provided.")
+        idc.warning("The target file was not found on disk. Has it been moved or renamed?")
     else:
         return True
     return False
