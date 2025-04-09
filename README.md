@@ -54,7 +54,7 @@ Before we do any analysis we need to upload a file. Uploading a file is availabl
 
 ![upload_file](./assets/img/3.png)
 
-Select `Upload Binary`, it will automatically ask whether you want analysis to be done on the file. Currently the analysis does not support customisation but will in the future.
+Select `Process Binary`, it will automatically ask whether you want analysis to be done on the file. Currently the analysis does not support customisation but will in the future.
 
 ![analyse_file](./assets/img/11.png)
 
