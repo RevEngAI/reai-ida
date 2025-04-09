@@ -6,7 +6,7 @@ from os.path import dirname, join
 from typing import Generator
 
 import idaapi
-from PyQt5.QtCore import QRect, QTimer
+from PyQt5.QtCore import QRect
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QDialog, QDesktopWidget
 from idaapi import get_imagebase
@@ -14,23 +14,23 @@ from reait.api import (
     RE_analyze_functions,
     RE_functions_rename,
     RE_functions_rename_batch,
-    RE_analysis_lookup,
-    RE_generate_data_types,
-    RE_list_data_types,
+    # RE_analysis_lookup,
+    # RE_generate_data_types,
+    # RE_list_data_types,
 )
 from requests import HTTPError, Response, RequestException
 
-from libbs.api import DecompilerInterface
-from libbs.artifacts import load_many_artifacts
-from libbs.artifacts import _art_from_dict
-from libbs.artifacts import ArtifactFormat
-from libbs.artifacts import (
-    Function,
-    GlobalVariable,
-    Enum,
-    Struct,
-    Typedef,
-)
+# from libbs.api import DecompilerInterface
+# from libbs.artifacts import load_many_artifacts
+# from libbs.artifacts import _art_from_dict
+# from libbs.artifacts import ArtifactFormat
+# from libbs.artifacts import (
+#     Function,
+#     GlobalVariable,
+#     Enum,
+#     Struct,
+#     Typedef,
+# )
 from revengai.manager import RevEngState
 from revengai.misc.qtutils import inthread, inmain
 
@@ -54,16 +54,113 @@ class BaseDialog(QDialog):
 
         self.base_addr = get_imagebase()
 
-        self.typing_timer = QTimer(self)
-        self.typing_timer.setSingleShot(
-            True
-        )  # Ensure the timer will fire only once after it was started
-        self.typing_timer.timeout.connect(self._filter_collections)
+        # self.typing_timer = QTimer(self)
+        # self.typing_timer.setSingleShot(
+        #     True
+        # )  # Ensure the timer will fire only once after it was started
+        # self.typing_timer.timeout.connect(self._filter_collections)
 
         self.setModal(True)
         self.setWindowIcon(
             QIcon(join(dirname(__file__), "..", "resources", "favicon.png"))
         )
+
+    def _parse_search_query(self, query):
+        """
+        Parse a search query with special selectors.
+
+        Args:
+            query (str): The search query string to parse
+
+        Returns:
+            dict: A dictionary containing parsed query components
+
+        Raises:
+            ValueError: If multiple non-tag selectors or a selector with raw
+                        query are used
+        """
+        # Initialize the result dictionary with default empty values
+        result = {
+            'query': None,
+            'sha_256_hash': None,
+            'tags': [],
+            'binary_name': None,
+            'collection_name': None,
+            'function_name': None,
+            'model_name': None
+        }
+
+        # List of possible selectors (excluding 'tag')
+        single_selectors = [
+            'sha_256_hash',
+            'binary_name',
+            'collection_name',
+            'function_name',
+            'model_name'
+        ]
+
+        # Parse selector-based queries
+        def extract_selector_value(query, selector):
+            """Helper function to extract selector value"""
+            selector_pattern = f"{selector}:"
+            selector_match = query.find(selector_pattern)
+
+            if selector_match != -1:
+                # Extract the value after the selector
+                start = selector_match + len(selector_pattern)
+                end = query.find(' ', start)
+
+                # If no space found, take till the end of string
+                if end == -1:
+                    end = len(query)
+
+                # Extract the value and the full selector part
+                value = query[start:end].strip()
+                full_selector_part = query[selector_match:end].strip()
+
+                return value, full_selector_part
+
+            return None, None
+
+        # Process tags first (can be multiple)
+        def process_tags(query):
+            tags = []
+            while True:
+                tag_value, tag_part = extract_selector_value(query, 'tag')
+                if not tag_value:
+                    break
+                tags.append(tag_value)
+                query = query.replace(tag_part, '').strip()
+            return tags, query
+
+        # Process tags
+        result['tags'], query = process_tags(query)
+
+        # Process other single selectors
+        for selector in single_selectors:
+            value, selector_part = extract_selector_value(query, selector)
+
+            if value:
+                # Check if this selector was already set
+                if result[selector] is not None:
+                    raise ValueError(
+                        f"Only one {selector} selector can be used.")
+
+                result[selector] = value
+                query = query.replace(selector_part, '').strip()
+
+        # Validation checks for additional text
+        query = query.strip()
+        if query:
+            # If query is not empty after removing selectors
+            if any(result[selector] is not None for selector in
+                   single_selectors):
+                raise ValueError(
+                    "Selector cannot be used with additional text.")
+            # If no other selectors, treat as raw query
+            result['query'] = query
+
+        return result
 
     def showEvent(self, event):
         super(BaseDialog, self).showEvent(event)
@@ -104,180 +201,186 @@ class BaseDialog(QDialog):
                 ),
             )
 
-    def _function_import_symbol_datatypes(
-            self,
-            matched_function_bid: int = 0,
-            matched_func_id: int = 0,
-            function_addr: int = 0
-    ) -> None:
-        def apply_type(deci: DecompilerInterface, artifact) -> None | str:
-            supported_types = [Function, GlobalVariable, Enum, Struct, Typedef]
+    # def _function_import_symbol_datatypes(
+    #         self,
+    #         matched_function_bid: int = 0,
+    #         matched_func_id: int = 0,
+    #         function_addr: int = 0
+    # ) -> None:
+    #     def apply_type(deci: DecompilerInterface, artifact) -> None | str:
+    #         supported_types = [
+    #               Function,
+    #               GlobalVariable,
+    #               Enum,
+    #               Struct,
+    #               Typedef
+    #         ]
 
-            if not any(isinstance(artifact, t) for t in supported_types):
-                return "Unsupported artifact type: " \
-                       f"{artifact.__class__.__name__}"
+    #         if not any(isinstance(artifact, t) for t in supported_types):
+    #             return "Unsupported artifact type: " \
+    #                    f"{artifact.__class__.__name__}"
 
-            if isinstance(artifact, Function):
-                deci.functions[artifact.addr] = artifact
-            elif isinstance(artifact, GlobalVariable):
-                deci.global_vars[artifact.addr] = artifact
-            elif isinstance(artifact, Enum):
-                deci.enums[artifact.name] = artifact
-            elif isinstance(artifact, Struct):
-                deci.structs[artifact.name] = artifact
-            elif isinstance(artifact, Typedef):
-                deci.typedefs[artifact.name] = artifact
+    #         if isinstance(artifact, Function):
+    #             deci.functions[artifact.addr] = artifact
+    #         elif isinstance(artifact, GlobalVariable):
+    #             deci.global_vars[artifact.addr] = artifact
+    #         elif isinstance(artifact, Enum):
+    #             deci.enums[artifact.name] = artifact
+    #         elif isinstance(artifact, Struct):
+    #             deci.structs[artifact.name] = artifact
+    #         elif isinstance(artifact, Typedef):
+    #             deci.typedefs[artifact.name] = artifact
 
-            return None
+    #         return None
 
-        def apply_types(
-                deci: DecompilerInterface,
-                artifacts: list
-        ) -> None | str:
-            for artifact in artifacts:
-                error = apply_type(deci, artifact)
-                if error is not None:
-                    return error
-            return None
+    #     def apply_types(
+    #             deci: DecompilerInterface,
+    #             artifacts: list
+    #     ) -> None | str:
+    #         for artifact in artifacts:
+    #             error = apply_type(deci, artifact)
+    #             if error is not None:
+    #                 return error
+    #         return None
 
-        def _load_many_artifacts_from_list(artifacts: list[dict]) -> list:
-            _artifacts = []
-            for artifact in artifacts:
-                art = _art_from_dict(artifact)
-                if art is not None:
-                    _artifacts.append(art)
-            return _artifacts
+    #     def _load_many_artifacts_from_list(artifacts: list[dict]) -> list:
+    #         _artifacts = []
+    #         for artifact in artifacts:
+    #             art = _art_from_dict(artifact)
+    #             if art is not None:
+    #                 _artifacts.append(art)
+    #         return _artifacts
 
-        try:
-            # first step is to get the analysis id for the function
-            res: dict = RE_analysis_lookup(matched_function_bid).json()
-            matched_analysis_id = res.get("analysis_id", 0)
+    #     try:
+    #         # first step is to get the analysis id for the function
+    #         res: dict = RE_analysis_lookup(matched_function_bid).json()
+    #         matched_analysis_id = res.get("analysis_id", 0)
 
-            if matched_analysis_id == 0:
-                logger.error(
-                    "Failed to get analysis id for functionId %d.",
-                    matched_func_id,
-                )
-                return
+    #         if matched_analysis_id == 0:
+    #             logger.error(
+    #                 "Failed to get analysis id for functionId %d.",
+    #                 matched_func_id,
+    #             )
+    #             return
 
-            # second step is to start the generation of the datatypes
-            res = RE_generate_data_types(
-                matched_analysis_id,
-                [matched_func_id]
-            ).json()
-            status = res.get("status", False)
+    #         # second step is to start the generation of the datatypes
+    #         res = RE_generate_data_types(
+    #             matched_analysis_id,
+    #             [matched_func_id]
+    #         ).json()
+    #         status = res.get("status", False)
 
-            if status:
-                logger.info(
-                    "Successfully started the generation of functions"
-                    " data types"
-                )
-            else:
-                logger.error(
-                    "Failed to start the generation of functions data types"
-                )
-                return
+    #         if status:
+    #             logger.info(
+    #                 "Successfully started the generation of functions"
+    #                 " data types"
+    #             )
+    #         else:
+    #             logger.error(
+    #                 "Failed to start the generation of functions data types"
+    #             )
+    #             return
 
-            # try list the datatypes
+    #         # try list the datatypes
 
-            res: dict = RE_list_data_types(
-                matched_analysis_id,
-                [matched_func_id]
-            ).json()
+    #         res: dict = RE_list_data_types(
+    #             matched_analysis_id,
+    #             [matched_func_id]
+    #         ).json()
 
-            status = res.get("status", False)
+    #         status = res.get("status", False)
 
-            if not status:
-                logger.error("Error getting function data types")
-                return
+    #         if not status:
+    #             logger.error("Error getting function data types")
+    #             return
 
-            # TODO: remove this
-            logger.info(f"Let's stop here at the moment... {res}")
-            return
+    #         # TODO: remove this
+    #         logger.info(f"Let's stop here at the moment... {res}")
+    #         return
 
-            deci = DecompilerInterface.discover(force_decompiler="ida")
-            if not deci:
-                logger.error("Libbs: Unable to find a decompiler")
-                return
+    #         deci = DecompilerInterface.discover(force_decompiler="ida")
+    #         if not deci:
+    #             logger.error("Libbs: Unable to find a decompiler")
+    #             return
 
-            total_count = res.get("data", {}).get("total_count", 0)
+    #         total_count = res.get("data", {}).get("total_count", 0)
 
-            if total_count > 0:
-                items = res.get("data", {}).get("items", [])
-                for item in items:
-                    function_types = item.get(
-                        "data_types", {}).get("func_types", None)
-                    func_deps = item.get(
-                        "data_types", {}).get("func_deps", [])
-                    function_id = item.get("function_id", 0)
+    #         if total_count > 0:
+    #             items = res.get("data", {}).get("items", [])
+    #             for item in items:
+    #                 function_types = item.get(
+    #                     "data_types", {}).get("func_types", None)
+    #                 func_deps = item.get(
+    #                     "data_types", {}).get("func_deps", [])
+    #                 function_id = item.get("function_id", 0)
 
-                    if function_types and len(func_deps) > 0:
+    #                 if function_types and len(func_deps) > 0:
 
-                        deps = _load_many_artifacts_from_list(
-                            func_deps,
-                        )
+    #                     deps = _load_many_artifacts_from_list(
+    #                         func_deps,
+    #                     )
 
-                        logger.info(
-                            f"Loaded {len(func_deps)} for function "
-                            f"{function_id}"
-                        )
+    #                     logger.info(
+    #                         f"Loaded {len(func_deps)} for function "
+    #                         f"{function_id}"
+    #                     )
 
-                        deps_res = apply_types(deci, deps)
-                        if deps_res is not None:
-                            logger.error(
-                                "Error applying data type dependencies for "
-                                f"function {function_id}: {deps_res}"
-                            )
-                            return
-                        else:
-                            logger.info(
-                                "Applied data type dependencies for function "
-                                f"id {function_id}"
-                            )
+    #                     deps_res = apply_types(deci, deps)
+    #                     if deps_res is not None:
+    #                         logger.error(
+    #                             "Error applying data type dependencies for "
+    #                             f"function {function_id}: {deps_res}"
+    #                         )
+    #                         return
+    #                     else:
+    #                         logger.info(
+    #                             "Applied data type dependencies for function"
+    #                             f" id {function_id}"
+    #                         )
 
-                    if function_types:
-                        func: Function = _art_from_dict(function_types)
-                        # repalce function address with the one we need to
-                        # apply the data type to
-                        func.addr = function_addr
-                        func_res = apply_type(deci, func)
-                        if func_res is not None:
-                            logger.error(
-                                "Error applying function data type for "
-                                f"function id {function_id}: {func_res}"
-                            )
-                            return
-                        else:
-                            logger.info(
-                                "Applied data types for function id "
-                                f"{function_id}"
-                            )
+    #                 if function_types:
+    #                     func: Function = _art_from_dict(function_types)
+    #                     # repalce function address with the one we need to
+    #                     # apply the data type to
+    #                     func.addr = function_addr
+    #                     func_res = apply_type(deci, func)
+    #                     if func_res is not None:
+    #                         logger.error(
+    #                             "Error applying function data type for "
+    #                             f"function id {function_id}: {func_res}"
+    #                         )
+    #                         return
+    #                     else:
+    #                         logger.info(
+    #                             "Applied data types for function id "
+    #                             f"{function_id}"
+    #                         )
 
-                logger.info("Function data types application completed")
-            else:
-                logger.warning("No function data types to apply")
+    #             logger.info("Function data types application completed")
+    #         else:
+    #             logger.warning("No function data types to apply")
 
-        except HTTPError as e:
-            error = e.response.json().get(
-                "error",
-                f"An unexpected error occurred. Sorry for the "
-                f"inconvenience. {e.response.status_code}",
-            )
+    #     except HTTPError as e:
+    #         error = e.response.json().get(
+    #             "error",
+    #             f"An unexpected error occurred. Sorry for the "
+    #             f"inconvenience. {e.response.status_code}",
+    #         )
 
-            logger.error(
-                "Error while importing data types for functionId "
-                f"{matched_func_id}: {error}"
-            )
+    #         logger.error(
+    #             "Error while importing data types for functionId "
+    #             f"{matched_func_id}: {error}"
+    #         )
 
-            inmain(idaapi.warning, error)
+    #         inmain(idaapi.warning, error)
 
-        except ValueError as e:
-            logger.error(
-                "Error while importing data types for functionId "
-                f"{matched_func_id}: {e}"
-            )
+    #     except ValueError as e:
+    #         logger.error(
+    #             "Error while importing data types for functionId "
+    #             f"{matched_func_id}: {e}"
+    #         )
 
-            inmain(idaapi.warning, str(e))
+    #         inmain(idaapi.warning, str(e))
 
     def _function_rename(
             self, func_addr: int, new_func_name: str, func_id: int = 0
