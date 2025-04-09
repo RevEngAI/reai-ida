@@ -919,6 +919,8 @@ def generate_function_data_types(state: RevEngState) -> None:
                             "Successfully started the generation of functions"
                             " data types",
                         )
+                    else:
+                        Dialog.showInfo("Function Types", "Failed to generate function data types")
 
                 except HTTPError as e:
                     resp = e.response.json()
@@ -994,7 +996,7 @@ def apply_function_data_types(state: RevEngState) -> None:
             function_ids = []
             functions = res.get("functions", [])
 
-            logger.info(f"Found {len(functions)} functions to apply data types")
+            logger.info(f"Found {len(functions)} functions to apply possible data types")
 
             for function in res.get("functions", []):
                 function_ids.append(function["function_id"])
