@@ -82,9 +82,7 @@ class AutoUnstrip:
 
         return function_ids
 
-    def _get_all_auto_unstrip_rename_matches(
-        self, max_workers=1
-    ):
+    def _get_all_auto_unstrip_rename_matches(self, max_workers=1):
         results = []
         with ThreadPoolExecutor(
             max_workers=max_workers, thread_name_prefix="reai-batch"

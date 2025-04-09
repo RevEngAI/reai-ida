@@ -1294,7 +1294,20 @@ def auto_unstrip(state: RevEngState) -> None:
                     "HIDECANCEL\nAuto unstripping binary…",
                 )
 
-                auto_unstrip.unstrip()
+                matched = auto_unstrip.unstrip()
+                if matched > 0:
+                    Dialog.showInfo(
+                        "Auto Unstrip",
+                        "Auto Unstrip completed successfully!\n"
+                        f"A total of {matched} symbols were renamed."
+                    )
+                else:
+                    Dialog.showInfo(
+                        "Auto Unstrip",
+                        "Auto Unstrip completed, but no symbols were renamed.\n"
+                        "This may indicate that all symbols were already properly named or\n"
+                        "no matches were found during the process."
+                    )
             except HTTPError as e:
                 logger.error(
                     "Unable to auto unstrip binary: %s", e.response.json().get("error")

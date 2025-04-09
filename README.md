@@ -48,7 +48,7 @@ Fill in the API key and host information - the model drop-down will automaticall
 
 Once this is done you are now ready to use the plugin.
 
-## Uploading Files
+## Processing Binaries
 
 Before we do any analysis we need to upload a file. Uploading a file is available via the IDA Views of the code or from the pseudocode window by right-clicking.
 
