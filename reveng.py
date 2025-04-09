@@ -1,4 +1,5 @@
 import logging
+import sys
 
 from idc import (
     get_inf_attr,
@@ -59,8 +60,7 @@ class RevEngPlugin(plugin_t):
         self.state = RevEngState()
 
         if IDA_SDK_VERSION < 800:
-            logger.warning("%s support 8.X IDA => skipping...",
-                           self.wanted_name)
+            logger.warning("%s support 8.X IDA => skipping...", self.wanted_name)
             return PLUGIN_SKIP
         elif get_inf_attr(INF_APPTYPE) not in (
             APPT_LIBRARY,
@@ -84,7 +84,7 @@ class RevEngPlugin(plugin_t):
         self.run()
         return PLUGIN_KEEP
 
-    def run(self, _= None) -> bool:
+    def run(self, _=None) -> bool:
         if self.initialized:
             self.term()
 
@@ -94,7 +94,7 @@ class RevEngPlugin(plugin_t):
         self.state.start_plugin()
         # NOTE: the second call actually invokes the creation of the GUI
         self.state.start_plugin()
-        
+
         self.initialized = True
         return True
 
@@ -112,11 +112,17 @@ class RevEngPlugin(plugin_t):
 # The PLUGIN_ENTRY method is what IDA calls when scriptable plugins are loaded.
 # It needs to return a plugin of type idaapi.plugin_t.
 def PLUGIN_ENTRY():
+    required_version = (3, 10)
+    if sys.version_info < required_version:
+        msg(
+            f"[!] RevEng.AI Toolkit requires Python {required_version[0]}.{required_version[1]} or higher.\n"
+        )
+        return
+
     requested_libraries = ["reait", "libbs"]
 
     have_all_libraries = all(
-        importlib.find_loader(lib) is not None for lib in
-        requested_libraries
+        importlib.find_loader(lib) is not None for lib in requested_libraries
     )
 
     if have_all_libraries:
@@ -124,17 +130,12 @@ def PLUGIN_ENTRY():
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         return RevEngPlugin()
     else:
-        msg(
-            "[!] RevEng.AI Toolkit requires the dependencies to be "
-            "installed.\n"
-        )
+        msg("[!] RevEng.AI Toolkit requires the dependencies to be " "installed.\n")
 
     execute_ui_requests(
         (
             Requests.MsgBox(
-                RevEngPlugin.wanted_name,
-                "Unable to load all the required modules.",
-                -1
+                RevEngPlugin.wanted_name, "Unable to load all the required modules.", -1
             ),
         )
     )
