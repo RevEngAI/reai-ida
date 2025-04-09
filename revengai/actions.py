@@ -887,7 +887,7 @@ def generate_function_data_types(state: RevEngState) -> None:
                     logger.info(f"Generating data type for analysis ID: {analysis_id}")
 
                     function_ids = []
-                    logger.info("Getting the list of functions to generate data types")
+                    logger.info("Gathering a list of functions to generate data types on")
 
                     res: dict = RE_analyze_functions(
                         fpath, state.config.get("binary_id", 0)
@@ -914,6 +914,7 @@ def generate_function_data_types(state: RevEngState) -> None:
                             "Successfully started the generation of functions"
                             " data types"
                         )
+                        
                         Dialog.showInfo(
                             "Function Types",
                             "Successfully started the generation of functions"
@@ -926,7 +927,7 @@ def generate_function_data_types(state: RevEngState) -> None:
                     resp = e.response.json()
                     error = resp.get(
                         "error",
-                        "An unexpected error occurred. Sorry for the" " inconvenience.",
+                        "An unexpected error occurred. Sorry for the inconvenience.",
                     )
                     logger.error(f"Failed to generate function data types: {error}")
                     Dialog.showError(
