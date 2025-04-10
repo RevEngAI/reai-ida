@@ -23,7 +23,42 @@ from revengai.models.checkable_model import RevEngCheckableTableModel
 from revengai.ui.auto_analysis_panel_2 import Ui_AutoAnalysisPanel
 from datetime import datetime
 
+
+from libbs.api import DecompilerInterface
+from libbs.artifacts import _art_from_dict
+from libbs.artifacts import (
+    Function,
+    FunctionArgument,
+    GlobalVariable,
+    Enum,
+    Struct,
+    Typedef,
+)
+
+from reait.api import (
+    RE_analysis_lookup,
+    RE_generate_data_types,
+    RE_list_data_types,
+)
+
+import idaapi
+
 logger = logging.getLogger("REAI")
+
+
+def _wait_box_decorator(message: str = None):
+    def decorator(func):
+        def wrapper(self, *args, **kwargs):
+            try:
+                inmain(show_wait_box, message)
+                return func(self, *args, **kwargs)
+            except Exception as e:
+                logger.error(f"Error: {e}")
+            finally:
+                inmain(hide_wait_box)
+
+        return wrapper
+    return decorator
 
 
 class Analysis(IntEnum):
@@ -142,23 +177,348 @@ class AutoAnalysisDialog(BaseDialog):
         if (
                 selected
                 and self.ui.renameButton.isEnabled()
-                and isinstance(selected[2], CheckableItem)
+                and isinstance(selected[0], CheckableItem)
+                and selected[0].data is not None
         ):
             menu = QMenu()
-            renameAction = menu.addAction(self.ui.renameButton.text())
+            renameAction = menu.addAction("Rename Function")
             renameAction.triggered.connect(
                 lambda: self._rename_function(selected))
 
-            func_id = selected[2].data["nearest_neighbor_id"]
+            func_id = selected[0].data["nearest_neighbor_id"]
             breakdownAction = menu.addAction("View Function Breakdown")
             breakdownAction.triggered.connect(
                 lambda: self._function_breakdown(func_id))
+
+            func_addr = selected[0].data["function_addr"] + self.base_addr
+            matched_func_id = selected[0].data["nearest_neighbor_id"]
+            matched_bin_id = selected[0].data["nearest_neighbor_binary_id"]
+            fetchDataTypesAction = menu.addAction("Fetch Data Types")
+            fetchDataTypesAction.triggered.connect(
+                lambda: self._function_get_datatypes(
+                    # row
+                    selected,
+                    # selected function addr
+                    func_addr,
+                    # matched function id
+                    matched_func_id,
+                    # matched bin id
+                    matched_bin_id
+                )
+            )
 
             # summariesAction = menu.addAction("Generate AI Summaries")
             # summariesAction.triggered.connect(
             # lambda: self._generate_summaries(func_id))
 
             menu.exec_(QCursor.pos())
+
+    @_wait_box_decorator(
+        "HIDECANCEL\nGetting data types for function…"
+    )
+    def _function_get_datatypes(
+            self,
+            selected: int,
+            function_addr: int = 0,
+            matched_func_id: int = 0,
+            matched_function_bid: int = 0,
+    ) -> None:
+        def signature_arguments(signature: Function) -> list[str]:
+            args = []
+            for arg in signature.header.args:
+                arg: FunctionArgument = arg
+                args.append(
+                    f"{arg.type} {arg.name}"
+                )
+            return args
+
+        def signature_to_str(signature: Function) -> str:
+            # convert the signature to a string representation
+            return f"{signature.type} {signature.name}({', '.join(
+                signature_arguments(signature)
+            )})"
+
+        def apply_signature(signature: Function):
+            # set the selected row of the table and modify the function
+            # signature column to show the new signature
+            model = self.ui.resultsTable.model()
+            index = model.index(selected, 3)
+            model.setData(index, SimpleItem(
+                text=signature_to_str(signature),
+                data=signature
+            ), Qt.DisplayRole)
+
+        try:
+            inmain(show_wait_box, "HIDECANCEL\nGetting function data types…")
+            # first step is to get the analysis id for the function
+            res: dict = RE_analysis_lookup(matched_function_bid).json()
+            matched_analysis_id = res.get("analysis_id", 0)
+
+            if matched_analysis_id == 0:
+                logger.error(
+                    "Failed to get analysis id for functionId %d.",
+                    matched_func_id,
+                )
+                return
+
+            # second step is to start the generation of the datatypes
+            res = RE_generate_data_types(
+                matched_analysis_id,
+                [matched_func_id]
+            ).json()
+
+            status = res.get("status", False)
+
+            if status:
+                logger.info(
+                    "Successfully started the generation of functions"
+                    " data types"
+                )
+            else:
+                logger.error(
+                    "Failed to start the generation of functions data types"
+                )
+                return
+
+            # try list the datatypes
+
+            res: dict = RE_list_data_types(
+                matched_analysis_id,
+                [matched_func_id]
+            ).json()
+
+            status = res.get("status", False)
+
+            if not status:
+                logger.error("Error getting function data types")
+                return
+
+            # TODO: remove this
+            logger.info(f"Let's stop here at the moment... {res}")
+
+            deci = DecompilerInterface.discover(force_decompiler="ida")
+            if not deci:
+                logger.error("Libbs: Unable to find a decompiler")
+                return
+
+            total_count = res.get("data", {}).get("total_count", 0)
+
+            if total_count > 0:
+                items = res.get("data", {}).get("items", [])
+                if len(items) == 0:
+                    logger.warning(
+                        "No function data types to apply"
+                    )
+                    return
+                function_types = items[0].get(
+                    "data_types",
+                    {}
+                ).get("func_types", None)
+
+                if not function_types:
+                    logger.warning(
+                        "No function data types to apply"
+                    )
+                    return
+                func: Function = _art_from_dict(function_types)
+                apply_signature(func)
+            else:
+                logger.warning("No function data types to apply")
+
+        except HTTPError as e:
+            error = e.response.json().get(
+                "error",
+                f"An unexpected error occurred. Sorry for the "
+                f"inconvenience. {e.response.status_code}",
+            )
+
+            logger.error(
+                "Error while importing data types for functionId "
+                f"{matched_func_id}: {error}"
+            )
+
+            inmain(idaapi.warning, error)
+
+    def _function_import_symbol_datatypes(
+        self,
+        selected: int,
+        function_addr: int = 0,
+        matched_func_id: int = 0,
+        matched_function_bid: int = 0,
+    ) -> None:
+        def apply_type(deci: DecompilerInterface, artifact) -> None | str:
+            supported_types = [
+                Function,
+                GlobalVariable,
+                Enum,
+                Struct,
+                Typedef
+            ]
+
+            if not any(isinstance(artifact, t) for t in supported_types):
+                return "Unsupported artifact type: "\
+                    f"{artifact.__class__.__name__}"
+
+            if isinstance(artifact, Function):
+                deci.functions[artifact.addr] = artifact
+            elif isinstance(artifact, GlobalVariable):
+                deci.global_vars[artifact.addr] = artifact
+            elif isinstance(artifact, Enum):
+                deci.enums[artifact.name] = artifact
+            elif isinstance(artifact, Struct):
+                deci.structs[artifact.name] = artifact
+            elif isinstance(artifact, Typedef):
+                deci.typedefs[artifact.name] = artifact
+
+            return None
+
+        def apply_types(
+                deci: DecompilerInterface,
+                artifacts: list
+        ) -> None | str:
+            for artifact in artifacts:
+                error = apply_type(deci, artifact)
+                if error is not None:
+                    return error
+            return None
+
+        def _load_many_artifacts_from_list(artifacts: list[dict]) -> list:
+            _artifacts = []
+            for artifact in artifacts:
+                art = _art_from_dict(artifact)
+                if art is not None:
+                    _artifacts.append(art)
+            return _artifacts
+
+        try:
+            # first step is to get the analysis id for the function
+            res: dict = RE_analysis_lookup(matched_function_bid).json()
+            matched_analysis_id = res.get("analysis_id", 0)
+
+            if matched_analysis_id == 0:
+                logger.error(
+                    "Failed to get analysis id for functionId %d.",
+                    matched_func_id,
+                )
+                return
+
+            # second step is to start the generation of the datatypes
+            res = RE_generate_data_types(
+                matched_analysis_id,
+                [matched_func_id]
+            ).json()
+            status = res.get("status", False)
+
+            if status:
+                logger.info(
+                    "Successfully started the generation of functions"
+                    " data types"
+                )
+            else:
+                logger.error(
+                    "Failed to start the generation of functions data types"
+                )
+                return
+
+            # try list the datatypes
+
+            res: dict = RE_list_data_types(
+                matched_analysis_id,
+                [matched_func_id]
+            ).json()
+
+            status = res.get("status", False)
+
+            if not status:
+                logger.error("Error getting function data types")
+                return
+
+            # TODO: remove this
+            logger.info(f"Let's stop here at the moment... {res}")
+
+            deci = DecompilerInterface.discover(force_decompiler="ida")
+            if not deci:
+                logger.error("Libbs: Unable to find a decompiler")
+                return
+
+            total_count = res.get("data", {}).get("total_count", 0)
+
+            if total_count > 0:
+                items = res.get("data", {}).get("items", [])
+                for item in items:
+                    function_types = item.get(
+                        "data_types", {}).get("func_types", None)
+                    func_deps = item.get(
+                        "data_types", {}).get("func_deps", [])
+                    function_id = item.get("function_id", 0)
+
+                    if function_types and len(func_deps) > 0:
+
+                        deps = _load_many_artifacts_from_list(
+                            func_deps,
+                        )
+
+                        logger.info(
+                            f"Loaded {len(func_deps)} for function "
+                            f"{function_id}"
+                        )
+
+                        deps_res = apply_types(deci, deps)
+                        if deps_res is not None:
+                            logger.error(
+                                "Error applying data type dependencies for "
+                                f"function {function_id}: {deps_res}"
+                            )
+                            return
+                        else:
+                            logger.info(
+                                "Applied data type dependencies for function"
+                                f" id {function_id}"
+                            )
+
+                    if function_types:
+                        func: Function = _art_from_dict(function_types)
+                        # repalce function address with the one we need to
+                        # apply the data type to
+                        func.addr = function_addr
+                        func_res = apply_type(deci, func)
+                        if func_res is not None:
+                            logger.error(
+                                "Error applying function data type for "
+                                f"function id {function_id}: {func_res}"
+                            )
+                            return
+                        else:
+                            logger.info(
+                                "Applied data types for function id "
+                                f"{function_id}"
+                            )
+
+                logger.info("Function data types application completed")
+            else:
+                logger.warning("No function data types to apply")
+
+        except HTTPError as e:
+            error = e.response.json().get(
+                "error",
+                f"An unexpected error occurred. Sorry for the "
+                f"inconvenience. {e.response.status_code}",
+            )
+
+            logger.error(
+                "Error while importing data types for functionId "
+                f"{matched_func_id}: {error}"
+            )
+
+            inmain(idaapi.warning, error)
+
+        except ValueError as e:
+            logger.error(
+                "Error while importing data types for functionId "
+                f"{matched_func_id}: {e}"
+            )
+
+            inmain(idaapi.warning, str(e))
 
     def _start_analysis(self) -> None:
         inthread(self._auto_analysis)
