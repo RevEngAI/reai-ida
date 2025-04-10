@@ -1539,7 +1539,8 @@ def update(_) -> None:
         f = UpdateForm(
             "Good, you are already using the latest stable version!"
             if version_stable == __version__
-            else f"Kindly download the latest stable version {version_stable}."
+            else f"Kindly download the latest stable version {version_stable}.",
+            version=version_stable
         )
 
         f.Show()

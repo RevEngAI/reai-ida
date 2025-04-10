@@ -261,12 +261,13 @@ Find more info at https://reveng.ai/
 
 
 class UpdateForm(BaseForm):
-    def __init__(self, message: str):
+    def __init__(self, message: str, version: str):
+        self.version = version
         self.invert = False
 
         Form.__init__(
             self,
-            r"""BUTTON YES* Open RevEng.AI Website
+            r"""BUTTON YES* Open GitHub Release Page
 RevEng.AI: Check for Update
 
 {FormChangeCb}
@@ -284,5 +285,5 @@ Your RevEng.AI IDA plugin is v%s.
 
     def OnFormChange(self, fid):
         if fid == -2:
-            open_url("https://github.com/RevEngAI/reai-ida/releases")
+            open_url(f"https://github.com/RevEngAI/reai-ida/releases/v{self.version}")
         return super().OnFormChange(fid)
