@@ -271,7 +271,7 @@ class UpdateForm(BaseForm):
 RevEng.AI: Check for Update
 
 {FormChangeCb}
-Your RevEng.AI IDA plugin is v%s.
+Your current RevEngAI IDA plugin version is v%s.
 %s
 """
             % (

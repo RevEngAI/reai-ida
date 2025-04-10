@@ -1537,9 +1537,9 @@ def update(_) -> None:
         version_stable = j["tag_name"].lstrip("v")
 
         f = UpdateForm(
-            "Good, you are already using the latest stable version!"
+            "You're already using the latest stable version!"
             if version_stable == __version__
-            else f"Kindly download the latest stable version {version_stable}.",
+            else f"The latest stable version is {version_stable}. Please update to stay current.",
             version=version_stable
         )
 
