@@ -1524,12 +1524,17 @@ def about(_) -> None:
 def update(_) -> None:
     try:
         res: Response = get(
-            "https://github.com/RevEngAI/reai-ida/releases/latest", timeout=30
+            "https://api.github.com/repos/revengai/reai-ida/releases/latest", 
+            timeout=30,
         )
 
         res.raise_for_status()
 
-        version_stable = res.url.split("/")[-1]
+        j = res.json()
+        if 'tag_name' not in j:
+            raise ValueError("Invalid response from GitHub API")
+        
+        version_stable = j["tag_name"].lstrip("v")
 
         f = UpdateForm(
             "Good, you are already using the latest stable version!"
