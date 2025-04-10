@@ -283,6 +283,6 @@ Your RevEng.AI IDA plugin is v%s.
         )
 
     def OnFormChange(self, fid):
-        if fid == -2:  # Goto homepage
-            open_url("https://reveng.ai/#plugins")
+        if fid == -2:
+            open_url("https://github.com/RevEngAI/reai-ida/releases")
         return super().OnFormChange(fid)
