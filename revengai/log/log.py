@@ -1,9 +1,7 @@
-# -*- coding: utf-8 -*-
+from logging.config import fileConfig
 from os import makedirs
 from pathlib import Path
 from shutil import rmtree
-from logging.config import fileConfig
-
 
 LOG_CONFIG_FILENAME = "log.ini"
 LOG_FILENAME = "reai.log"
@@ -19,4 +17,7 @@ def configure_loggers(log_dir: str) -> None:
     log_main_file: Path = Path(log_dir) / LOG_FILENAME
     log_conf_file: Path = Path(__file__).resolve().parent / LOG_CONFIG_FILENAME
 
-    fileConfig(fname=log_conf_file.as_posix(), defaults={"default_log_filename": log_main_file.as_posix()})
+    fileConfig(
+        fname=log_conf_file.as_posix(),
+        defaults={"default_log_filename": log_main_file.as_posix()},
+    )

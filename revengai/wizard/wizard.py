@@ -1,21 +1,27 @@
-# -*- coding: utf-8 -*-
 import abc
 import logging
-from platform import system
 from os.path import dirname, join
+from platform import system
 
 import idaapi
 from PyQt5.QtCore import QRect
 from PyQt5.QtGui import QPixmap
+from PyQt5.QtWidgets import (
+    QWizardPage,
+    QFormLayout,
+    QLineEdit,
+    QLabel,
+    QWizard,
+    QComboBox,
+    QLayout,
+    QDesktopWidget,
+)
 from reait.api import RE_authentication
 from requests import HTTPError, RequestException
-
-from PyQt5.QtWidgets import QWizardPage, QFormLayout, QLineEdit, QLabel, QWizard, QComboBox, QLayout, QDesktopWidget
 
 from revengai.api import RE_models
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
-
 
 logger = logging.getLogger("REAI")
 
@@ -29,22 +35,33 @@ class RevEngSetupWizard(QWizard):
         self.addPage(UserCredentialsPage(self.state))
         self.addPage(UserAvailableModelsPage(self.state))
 
-        self.setWindowTitle("RevEng.AI Toolkit: Setup Wizard")
-        self.setOptions(QWizard.CancelButtonOnLeft | QWizard.NoBackButtonOnStartPage)
-        self.setWizardStyle(QWizard.MacStyle if system() == 'Darwin' else QWizard.ModernStyle)
-        self.setPixmap(QWizard.BackgroundPixmap if system() == 'Darwin' else QWizard.WatermarkPixmap,
-                       QPixmap(join(dirname(__file__), "..", "resources", "logo.png")))
+        self.setWindowTitle("RevEng.AI: Setup Wizard")
+        self.setOptions(QWizard.CancelButtonOnLeft |
+                        QWizard.NoBackButtonOnStartPage)
+        self.setWizardStyle(
+            QWizard.MacStyle if system() == "Darwin" else QWizard.ModernStyle
+        )
+        self.setPixmap(
+            (
+                QWizard.BackgroundPixmap
+                if system() == "Darwin"
+                else QWizard.WatermarkPixmap
+            ),
+            QPixmap(join(dirname(__file__), "..", "resources", "logo.png")),
+        )
 
         self.button(QWizard.FinishButton).clicked.connect(self._save)
 
     def showEvent(self, event):
         super(QWizard, self).showEvent(event)
-        
+
         screen: QRect = QDesktopWidget().screenGeometry()
 
         # Center the dialog to screen
-        self.move(screen.width() // 2 - self.width() // 2,
-                  screen.height() // 2 - self.height() // 2)
+        self.move(
+            screen.width() // 2 - self.width() // 2,
+            screen.height() // 2 - self.height() // 2,
+        )
 
     def _save(self):
         self.state.config.save()
@@ -52,8 +69,8 @@ class RevEngSetupWizard(QWizard):
         # Refresh menu item actions
         try:
             self.state.gui.config_form.register_actions()
-        except Exception as e:
-            print ("Please choose one of the available models")
+        except Exception:
+            print("Please choose one of the available models")
 
 
 class BasePage(QWizardPage):
@@ -100,16 +117,24 @@ class UserCredentialsPage(BasePage):
 
                 response = RE_models().json()
 
-                self.state.config.set("models", [model["model_name"] for model in response["models"]])
+                self.state.config.set(
+                    "models", [model["model_name"]
+                               for model in response["models"]]
+                )
                 return True
             except HTTPError as e:
                 # Reset host and API key if an error occurs
                 self.state.config.set("host")
                 self.state.config.set("apikey")
 
-                logger.error("Unable to retrieve any of the available models. %s", e)
+                logger.error(
+                    "Unable to retrieve any of the available models. %s", e)
 
-                error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
+                error = e.response.json().get(
+                    "error",
+                    "An unexpected error occurred. Sorry for the"
+                    " inconvenience.",
+                )
                 Dialog.showError("Setup Wizard", error)
             except RequestException as e:
                 logger.error("An unexpected error has occurred. %s", e)
@@ -130,7 +155,13 @@ class UserCredentialsPage(BasePage):
 
         layout = QFormLayout(self)
 
-        layout.addWidget(QLabel("<span style=\"font-weight:bold\">Setup Account Information</span>"))
+        layout.addWidget(
+            QLabel(
+                '<span style="font-weight:bold">'
+                'Setup Account Information'
+                '</span>'
+            )
+        )
         layout.addRow(QLabel("Personal Key:"), self.api_key)
         layout.addRow(QLabel("Hostname:"), self.server_url)
 
@@ -155,7 +186,8 @@ class UserAvailableModelsPage(BasePage):
 
         layout = QFormLayout(self)
 
-        layout.addWidget(QLabel("<span style=\"font-weight:bold\">Set AI Model</span>"))
+        layout.addWidget(
+            QLabel('<span style="font-weight:bold">Set AI Model</span>'))
         layout.addRow(QLabel("Using Model:"), self.cbModel)
 
         return layout

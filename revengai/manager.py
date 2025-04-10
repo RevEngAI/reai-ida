@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from os.path import dirname, join
 
 from idaapi import load_custom_icon, free_custom_icon
@@ -14,8 +13,10 @@ class RevEngState(object):
         self.project_cfg = ProjectConfiguration()
 
     def start_plugin(self):
-        self.icon_id = load_custom_icon(file_name=join(dirname(__file__), "resources", "favicon.png"),
-                                        format="png")
+        self.icon_id = load_custom_icon(
+            file_name=join(dirname(__file__), "resources", "favicon.png"),
+            format="png"
+        )
 
         from revengai.ida_ui import RevEngGUI
 

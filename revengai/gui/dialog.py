@@ -1,22 +1,30 @@
-# -*- coding: utf-8 -*-
 import abc
 import logging
-
-from idc import get_input_file_path
-from idaapi import CH_CAN_DEL, CH_CAN_EDIT, CH_CAN_REFRESH, CH_MODAL, \
-    CH_NO_STATUS_BAR, CHCOL_DEC, CHCOL_PLAIN, CH_NO_FILTER, Choose, Form, MFF_FAST, execute_sync, open_url
-
-from PyQt5.QtWidgets import QMessageBox
-
 from itertools import filterfalse
 
+from PyQt5.QtWidgets import QMessageBox
+from idaapi import (
+    CH_CAN_DEL,
+    CH_CAN_EDIT,
+    CH_CAN_REFRESH,
+    CH_MODAL,
+    CH_NO_STATUS_BAR,
+    CHCOL_DEC,
+    CHCOL_PLAIN,
+    CH_NO_FILTER,
+    Choose,
+    Form,
+    MFF_FAST,
+    execute_sync,
+    open_url,
+)
+from idc import get_input_file_path
 from reait.api import RE_delete
 
 from revengai import __version__
 from revengai.gui import Requests
 from revengai.manager import RevEngState
 from revengai.misc.qtutils import inthread
-
 
 logger = logging.getLogger("REAI")
 
@@ -51,15 +59,38 @@ class BaseForm(Form):
 
 class StatusForm(BaseForm):
     class StatusFormChooser(Choose):
-        def __init__(self, title: str, state: RevEngState, items: list,
-                     flags: int = CH_CAN_DEL | CH_CAN_EDIT | CH_CAN_REFRESH | CH_MODAL | CH_NO_STATUS_BAR | CH_NO_FILTER):
-            Choose.__init__(self, title=title, flags=flags, embedded=True, icon=state.icon_id,
-                            popup_names=["", "Delete Analysis", "View Analysis Report", "Select as Current Analysis"],
-                            cols=[["Binary Name", 30 | CHCOL_PLAIN],
-                                  ["Analysis ID", 5 | CHCOL_DEC],
-                                  ["Status", 6 | CHCOL_PLAIN],
-                                  ["Submitted Date", 13 | CHCOL_PLAIN],
-                                  ["Model Name", 12 | CHCOL_PLAIN],])
+        def __init__(
+            self,
+            title: str,
+            state: RevEngState,
+            items: list,
+            flags: int = CH_CAN_DEL
+            | CH_CAN_EDIT
+            | CH_CAN_REFRESH
+            | CH_MODAL
+            | CH_NO_STATUS_BAR
+            | CH_NO_FILTER,
+        ):
+            Choose.__init__(
+                self,
+                title=title,
+                flags=flags,
+                embedded=True,
+                icon=state.icon_id,
+                popup_names=[
+                    "",
+                    "Delete Analysis",
+                    "View Analysis Report",
+                    "Select as Current Analysis",
+                ],
+                cols=[
+                    ["Binary Name", 30 | CHCOL_PLAIN],
+                    ["Analysis ID", 5 | CHCOL_DEC],
+                    ["Status", 6 | CHCOL_PLAIN],
+                    ["Submitted Date", 13 | CHCOL_PLAIN],
+                    ["Model Name", 12 | CHCOL_PLAIN],
+                ],
+            )
 
             self.state = state
             self.items = items
@@ -95,8 +126,11 @@ class StatusForm(BaseForm):
             pos = sel if isinstance(sel, int) else sel[0]
 
             if pos >= 0:
-                logger.info("Analysis Report ID %s | %s",
-                            self.OnGetLine(pos)[1], self.OnGetLine(pos)[0])
+                logger.info(
+                    "Analysis Report ID %s | %s",
+                    self.OnGetLine(pos)[1],
+                    self.OnGetLine(pos)[0],
+                )
 
                 url = f"{self.state.config.PORTAL}/analyses/"
 
@@ -130,24 +164,31 @@ class StatusForm(BaseForm):
                 if self.state.config.get("binary_id", 0) == binary_id:
                     self.state.config.init_current_analysis()
 
-            self.items = [*filterfalse(lambda i: i in (self.OnGetLine(j) for j in sel), self.items)]
+            self.items = [
+                *filterfalse(
+                    lambda i: i in (self.OnGetLine(j) for j in sel), self.items
+                )
+            ]
             return Choose.ALL_CHANGED, sel
 
     def __init__(self, state: RevEngState, items: list):
         self.invert = False
         self.EChooser = StatusForm.StatusFormChooser("", state, items)
 
-        Form.__init__(self,
-                      r"""BUTTON CANCEL NONE
-RevEng.AI Toolkit: Binary Analyses History
+        Form.__init__(
+            self,
+            r"""BUTTON CANCEL NONE
+RevEng.AI: Binary Analyses History
 
 {FormChangeCb}
 View and manage analyses of the current binary:
 <:{cEChooser}>
-""", {
-                          "FormChangeCb": Form.FormChangeCb(self.OnFormChange),
-                          "cEChooser": Form.EmbeddedChooserControl(self.EChooser),
-                      })
+""",
+            {
+                "FormChangeCb": Form.FormChangeCb(self.OnFormChange),
+                "cEChooser": Form.EmbeddedChooserControl(self.EChooser),
+            },
+        )
 
 
 class UploadBinaryForm(BaseForm):
@@ -159,68 +200,90 @@ class UploadBinaryForm(BaseForm):
         except ValueError:
             index = 0
 
-        Form.__init__(self,
-                      r"""BUTTON YES* Analyse
-RevEng.AI Toolkit: Upload Binary for Analysis
+        Form.__init__(
+            self,
+            r"""BUTTON YES* Process
+RevEng.AI: Process Binary
 
 {FormChangeCb}
-Choose your options for binary analysis
+Please provide the following information to upload the binary:
 
 <#Debugging information for uploaded binary#~D~ebug Info or PDB\::{iDebugFile}>
-<#Add custom tags to your file#~C~ustom Tags\:      :{iTags}>
+<#Add custom tags to your file#~C~ustom Tags (format\: tag,tag)\:      :{iTags}>
 <#Model that you want the file to be analysed by#AI ~M~odel\:         :{iModel}>
 
 Privacy:
     <#You are the only one able to access this file#Private to you:{rOptPrivate}>
     <#Everyone will be able to search against this file#Public access:{rOptPublic}>{iScope}>
-""", {
-                          "FormChangeCb": Form.FormChangeCb(self.OnFormChange),
-                          "iScope": Form.RadGroupControl(("rOptPrivate", "rOptPublic",)),
-                          "iDebugFile": Form.FileInput(swidth=40, open=True),
-                          "iTags": Form.StringInput(swidth=40, tp=Form.FT_ASCII),
-                          "iModel": Form.DropdownListControl(swidth=40, selval=index, items=state.config.MODELS)
-                      })
+""",
+            {
+                "FormChangeCb": Form.FormChangeCb(self.OnFormChange),
+                "iScope": Form.RadGroupControl(
+                    (
+                        "rOptPrivate",
+                        "rOptPublic",
+                    )
+                ),
+                "iDebugFile": Form.FileInput(swidth=40, open=True),
+                "iTags": Form.StringInput(swidth=40, tp=Form.FT_ASCII),
+                "iModel": Form.DropdownListControl(
+                    swidth=40, selval=index, items=state.config.MODELS
+                ),
+            },
+        )
 
 
 class AboutForm(BaseForm):
     def __init__(self):
         self.invert = False
 
-        Form.__init__(self,
-                      r"""BUTTON YES* Open RevEng.AI Website
-RevEng.AI Toolkit: About
+        Form.__init__(
+            self,
+            r"""BUTTON YES* Open RevEng.AI Website
+RevEng.AI: About
 
 {FormChangeCb}
-RevEng.AI Toolkit IDA plugin v%s.
+RevEng.AI IDA plugin v%s.
 
-RevEng.AI Toolkit is released under the GPL v2.
+RevEng.AI IDA Plugin is released under the GPL v2.
 Find more info at https://reveng.ai/
-""" % __version__, {
-                          "FormChangeCb": Form.FormChangeCb(self.OnFormChange),
-                      })
+"""
+            % __version__,
+            {
+                "FormChangeCb": Form.FormChangeCb(self.OnFormChange),
+            },
+        )
 
     def OnFormChange(self, fid):
-        if fid == -2:   # Goto homepage
+        if fid == -2:  # Goto homepage
             open_url("https://reveng.ai/")
         return super().OnFormChange(fid)
 
 
 class UpdateForm(BaseForm):
-    def __init__(self, message: str):
+    def __init__(self, message: str, version: str):
+        self.version = version
         self.invert = False
 
-        Form.__init__(self,
-                      r"""BUTTON YES* Open RevEng.AI Website
-RevEng.AI Toolkit: Check for Update
+        Form.__init__(
+            self,
+            r"""BUTTON YES* Open GitHub Release Page
+RevEng.AI: Check for Update
 
 {FormChangeCb}
-Your RevEng.AI Toolkit IDA plugin is v%s.
+Your current RevEngAI IDA plugin version is v%s.
 %s
-""" % (__version__, message,), {
-                          "FormChangeCb": Form.FormChangeCb(self.OnFormChange),
-                      })
+"""
+            % (
+                __version__,
+                message,
+            ),
+            {
+                "FormChangeCb": Form.FormChangeCb(self.OnFormChange),
+            },
+        )
 
     def OnFormChange(self, fid):
-        if fid == -2:  # Goto homepage
-            open_url("https://reveng.ai/#plugins")
+        if fid == -2:
+            open_url(f"https://github.com/RevEngAI/reai-ida/releases/v{self.version}")
         return super().OnFormChange(fid)

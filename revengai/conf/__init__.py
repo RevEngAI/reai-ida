@@ -1,12 +1,13 @@
-# -*- coding: utf-8 -*-
 from json import loads, dumps
 from os import access, makedirs, R_OK
 from os.path import dirname, join, isfile
 
-from requests import RequestException
-from idaapi import get_user_idadir, retrieve_input_file_sha256, get_input_file_path, msg
-
+from idaapi import get_input_file_path
+from idaapi import get_user_idadir
+from idaapi import msg
+from idaapi import retrieve_input_file_sha256
 from reait.api import re_conf, RE_health, RE_settings
+from requests import RequestException
 
 from revengai.api import RE_models
 from revengai.conf.database import RevEngDatabase
@@ -20,12 +21,12 @@ class RevEngConfiguration(object):
     _filename = ".reai.cfg"
     _dir = join(get_user_idadir(), "plugins")
 
-    auto_start = True   # Enable RevEng.AI plugin automatically
+    auto_start = True  # Enable RevEng.AI plugin automatically
 
-    LIMIT = 10 * 1024**2  # File size limit to upload 10MB
-    PORTAL = "https://portal.reveng.ai"   # RevEng.AI Web portal
-    OPTIONS = {}    # File options currently supported by RevEng.AI for analysis
-    MODELS = []     # List of models that are currently being used for analysis
+    LIMIT = 10 * 1024 ** 2  # File size limit to upload 10MB
+    PORTAL = "https://portal.reveng.ai"  # RevEng.AI Web portal
+    OPTIONS = {}  # File options currently supported by RevEng.AI for analysis
+    MODELS = []  # List of models that are currently being used for analysis
 
     def __init__(self):
         makedirs(RevEngConfiguration._dir, mode=0o755, exist_ok=True)
@@ -49,7 +50,10 @@ class RevEngConfiguration(object):
         else:
             self.config[name] = value
 
-            if name in ("host", "apikey",):
+            if name in (
+                    "host",
+                    "apikey",
+            ):
                 re_conf[name] = value
 
     def save(self) -> None:
@@ -77,16 +81,28 @@ class RevEngConfiguration(object):
                             response = RE_models().json()
 
                             if response["success"]:
-                                RevEngConfiguration.MODELS = [model["model_name"] for model in response["models"]]
+                                RevEngConfiguration.MODELS = [
+                                    model["model_name"] for model in
+                                    response["models"]
+                                ]
 
                             response = RE_settings().json()
 
                             if response["success"]:
-                                for option in ("isa_options", "file_options", "platform_options",):
-                                    RevEngConfiguration.OPTIONS[option] = response.get(option, None)
+                                for option in (
+                                        "isa_options",
+                                        "file_options",
+                                        "platform_options",
+                                ):
+                                    opt = response.get(option, None)
+                                    RevEngConfiguration.OPTIONS[option] = opt
 
-                                RevEngConfiguration.PORTAL = response.get("portal", RevEngConfiguration.PORTAL)
-                                RevEngConfiguration.LIMIT = response.get("max_file_size", RevEngConfiguration.LIMIT)
+                                RevEngConfiguration.PORTAL = response.get(
+                                    "portal", RevEngConfiguration.PORTAL
+                                )
+                                RevEngConfiguration.LIMIT = response.get(
+                                    "max_file_size", RevEngConfiguration.LIMIT
+                                )
                     except RequestException:
                         pass
 
@@ -94,14 +110,22 @@ class RevEngConfiguration(object):
         else:
             inthread(RE_health)
             self.config["host"] = re_conf["host"]
-            RevEngConfiguration.MODELS = [re_conf["model"],]
+            RevEngConfiguration.MODELS = [
+                re_conf["model"],
+            ]
 
     @property
     def config(self) -> dict:
         return self._config
 
     def is_valid(self) -> bool:
-        return all(self.get(name) is not None for name in ("apikey", "host",))
+        return all(
+            self.get(name) is not None
+            for name in (
+                "apikey",
+                "host",
+            )
+        )
 
     @property
     def database(self) -> RevEngDatabase:
@@ -111,9 +135,13 @@ class RevEngConfiguration(object):
         sha_256_hash: bytes = retrieve_input_file_sha256()
 
         if sha_256_hash:
-            self.set("binary_id", self.database.get_last_analysis(sha_256_hash.hex()))
+            self.set("binary_id", self.database.get_last_analysis(
+                sha_256_hash.hex()))
 
-            msg(f"[+] Selecting current analysis ID {self.get('binary_id')} for binary hash: {sha_256_hash.hex()}\n")
+            msg(
+                f"[+] Selecting current analysis ID {self.get('binary_id')}"
+                f" for binary hash: {sha_256_hash.hex()}\n"
+            )
 
 
 class ProjectConfiguration(object):

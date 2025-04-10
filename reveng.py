@@ -1,30 +1,34 @@
-# -*- coding: utf-8 -*-
 import logging
+import sys
 
-from idc import get_inf_attr, APPT_LIBRARY, APPT_PROGRAM, INF_APPTYPE, INF_FILETYPE, \
-    FT_ELF, FT_PE, FT_MACHO, FT_EXE, FT_BIN
-from idaapi import execute_ui_requests, plugin_t, IDA_SDK_VERSION, PLUGIN_SKIP, PLUGIN_OK, PLUGIN_KEEP, PLUGIN_HIDE
+from idc import (
+    get_inf_attr,
+    APPT_LIBRARY,
+    APPT_PROGRAM,
+    INF_APPTYPE,
+    INF_FILETYPE,
+    FT_ELF,
+    FT_PE,
+    FT_MACHO,
+    FT_EXE,
+    FT_BIN,
+)
 
+from idaapi import (
+    execute_ui_requests,
+    plugin_t,
+    IDA_SDK_VERSION,
+    PLUGIN_SKIP,
+    PLUGIN_KEEP,
+    PLUGIN_HIDE,
+    PLUGIN_UNL,
+)
+
+from revengai.manager import RevEngState
+import urllib3
 from revengai.gui import Requests
-
-# Third-Party Python Modules
-required_modules_loaded = True
-try:
-    import reait.api
-
-    from revengai.manager import RevEngState
-
-    from requests.packages.urllib3 import disable_warnings
-    from requests.packages.urllib3.exceptions import InsecureRequestWarning
-
-    # Workaround to suppress warnings about SSL certificates
-    disable_warnings(InsecureRequestWarning)
-except ImportError:
-    required_modules_loaded &= False
-
-    from idc import msg
-
-    msg("[!] RevEng.AI Toolkit requires the Python module called 'reait'.\n")
+import importlib
+from idc import msg
 
 
 logger = logging.getLogger("REAI")
@@ -35,52 +39,64 @@ class RevEngPlugin(plugin_t):
     Define the plugin class itself which is returned by the PLUGIN_ENTRY method
     that scriptable plugins use to be recognized within IDA
     """
+
     # Variables required by IDA
-    # Use the HIDE to avoid the entry in Edit/Plugins since this plugin's run() method has no functionality.
+    # Use the HIDE to avoid the entry in Edit/Plugins since this plugin's run()
+    # method has no functionality.
     flags = 0 if IDA_SDK_VERSION > 810 else PLUGIN_HIDE
     wanted_hotkey = ""
-    wanted_name = "RevEng.AI Toolkit"
+    wanted_name = "RevEngAI"
     help = f"Configure IDA plugin for {wanted_name}"
     comment = f"AI-assisted reverse engineering from {wanted_name}"
 
     def __init__(self):
         super(RevEngPlugin, self).__init__()
 
-        self.initialized = False
-        self.state = RevEngState()
-
     def init(self) -> int:
         """
         Called when the plugin is initialised.
         """
+        self.initialized = False
+        self.state = RevEngState()
+
         if IDA_SDK_VERSION < 800:
             logger.warning("%s support 8.X IDA => skipping...", self.wanted_name)
             return PLUGIN_SKIP
-        elif get_inf_attr(INF_APPTYPE) not in (APPT_LIBRARY, APPT_PROGRAM,) and \
-                get_inf_attr(INF_FILETYPE) not in (FT_BIN, FT_PE, FT_ELF, FT_EXE, FT_MACHO,):
-            logger.warning("%s supports PE, ELF, RAW, EXE, DLL and Mach-O file types => skipping...", self.wanted_name)
-            return PLUGIN_SKIP
+        elif get_inf_attr(INF_APPTYPE) not in (
+            APPT_LIBRARY,
+            APPT_PROGRAM,
+        ) and get_inf_attr(INF_FILETYPE) not in (
+            FT_BIN,
+            FT_PE,
+            FT_ELF,
+            FT_EXE,
+            FT_MACHO,
+        ):
+            logger.warning(
+                "%s supports PE, ELF, RAW, EXE, DLL and Mach-O file types =>"
+                " skipping...",
+                self.wanted_name,
+            )
+            return PLUGIN_UNL
 
         logger.info("%s plugin starts", self.wanted_name)
 
         self.run()
         return PLUGIN_KEEP
 
-    def reload_plugin(self) -> bool:
+    def run(self, _=None) -> bool:
         if self.initialized:
             self.term()
 
-        logger.info("Reloading %s...", self.wanted_name)
+        logger.info("Starting %s..", self.wanted_name)
 
+        # NOTE: the first call initialises the GUI components
         self.state.start_plugin()
+        # NOTE: the second call actually invokes the creation of the GUI
+        self.state.start_plugin()
+
         self.initialized = True
         return True
-
-    def run(self, _=None) -> bool:
-        """
-        Called when the plugin is invoked.
-        """
-        return self.reload_plugin()
 
     def term(self) -> None:
         """
@@ -96,10 +112,31 @@ class RevEngPlugin(plugin_t):
 # The PLUGIN_ENTRY method is what IDA calls when scriptable plugins are loaded.
 # It needs to return a plugin of type idaapi.plugin_t.
 def PLUGIN_ENTRY():
-    global required_modules_loaded
+    required_version = (3, 10)
+    if sys.version_info < required_version:
+        msg(
+            f"[!] RevEng.AI Toolkit requires Python {required_version[0]}.{required_version[1]} or higher.\n"
+        )
+        return
 
-    if required_modules_loaded:
+    requested_libraries = ["reait", "libbs"]
+
+    have_all_libraries = all(
+        importlib.find_loader(lib) is not None for lib in requested_libraries
+    )
+
+    if have_all_libraries:
+        # Workaround to suppress warnings about SSL certificates
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         return RevEngPlugin()
+    else:
+        msg("[!] RevEng.AI Toolkit requires the dependencies to be " "installed.\n")
 
-    execute_ui_requests((Requests.MsgBox(RevEngPlugin.wanted_name, "Unable to load all the required modules.", -1),))
+    execute_ui_requests(
+        (
+            Requests.MsgBox(
+                RevEngPlugin.wanted_name, "Unable to load all the required modules.", -1
+            ),
+        )
+    )
     return None

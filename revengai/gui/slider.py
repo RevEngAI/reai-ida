@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
-from PyQt5.QtWidgets import QSlider, QToolTip
+from PyQt5.QtWidgets import QSlider
+from PyQt5.QtWidgets import QToolTip
 
 
 class Slider(QSlider):

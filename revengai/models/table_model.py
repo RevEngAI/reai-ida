@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from typing import Any, Optional
 
 from PyQt5.QtCore import QAbstractTableModel, Qt

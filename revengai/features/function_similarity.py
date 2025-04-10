@@ -1,28 +1,22 @@
-# -*- coding: utf-8 -*-
 import logging
 
 import idc
-from PyQt5.QtWidgets import QMenu
-from idaapi import ASKBTN_YES, hide_wait_box, show_wait_box
-
 from PyQt5.QtCore import Qt, QModelIndex
 from PyQt5.QtGui import QIntValidator, QCursor
-
-from requests import Response, HTTPError, RequestException
-
+from PyQt5.QtWidgets import QMenu
+from idaapi import ASKBTN_YES, hide_wait_box, show_wait_box
+from requests import HTTPError, RequestException
 from reait.api import RE_nearest_symbols_batch
-
-from revengai.api import RE_collection_search
+from reait.api import RE_collections_search
 from revengai.features import BaseDialog
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
-from revengai.misc.utils import IDAUtils
 from revengai.misc.qtutils import inthread, inmain
+from revengai.misc.utils import IDAUtils
 from revengai.models import CheckableItem, IconItem, SimpleItem
 from revengai.models.checkable_model import RevEngCheckableTableModel
 from revengai.models.table_model import RevEngTableModel
 from revengai.ui.function_similarity_panel import Ui_FunctionSimilarityPanel
-
 
 logger = logging.getLogger("REAI")
 
@@ -37,7 +31,9 @@ class FunctionSimilarityDialog(BaseDialog):
             self.v_addr = start_addr - self.base_addr
         else:
             logger.error("Pointer location not in valid function")
-            Dialog.showError("Find Similar Functions", "Cursor position not in a function.")
+            Dialog.showError(
+                "Find Similar Functions", "Cursor position not in a function."
+            )
 
         self.ui = Ui_FunctionSimilarityPanel()
         self.ui.setupUi(self)
@@ -49,17 +45,41 @@ class FunctionSimilarityDialog(BaseDialog):
         self.ui.layoutFilter.register_cb(self._callback)
 
         self.ui.collectionsFilter.textChanged.connect(self._filter)
-        self.ui.collectionsTable.horizontalHeader().setDefaultAlignment(Qt.AlignLeft)
-        self.ui.collectionsTable.setModel(RevEngCheckableTableModel(data=[], columns=[1], parent=self,
-                                                                    header=["Collection Name", "Include",]))
+        self.ui.collectionsTable.horizontalHeader().setDefaultAlignment(
+            Qt.AlignLeft
+        )
+        self.ui.collectionsTable.setModel(
+            RevEngCheckableTableModel(
+                data=[],
+                columns=[1],
+                parent=self,
+                header=[
+                    "Collection Name",
+                    "Include",
+                ],
+            )
+        )
 
-        self.ui.collectionsTable.model().dataChanged.connect(self._state_change)
+        self.ui.collectionsTable.model().dataChanged.connect(
+            self._state_change
+        )
+        self.ui.resultsTable.horizontalHeader().setDefaultAlignment(
+            Qt.AlignLeft
+        )
+        self.ui.resultsTable.setModel(
+            RevEngTableModel(
+                data=[],
+                parent=self,
+                header=[
+                    "Function Name",
+                    "Confidence",
+                    "Source File",
+                ],
+            )
+        )
 
-        self.ui.resultsTable.horizontalHeader().setDefaultAlignment(Qt.AlignLeft)
-        self.ui.resultsTable.setModel(RevEngTableModel(data=[], parent=self,
-                                                       header=["Function Name", "Confidence", "Source File",]))
-
-        self.ui.resultsTable.customContextMenuRequested.connect(self._table_menu)
+        self.ui.resultsTable.customContextMenuRequested.connect(
+            self._table_menu)
 
         self.ui.confidenceSlider.valueChanged.connect(self._confidence)
 
@@ -79,9 +99,11 @@ class FunctionSimilarityDialog(BaseDialog):
 
     def _fetch(self):
         if self.v_addr != idc.BADADDR:
-            inthread(self._load,
-                     self._selected_collections(),
-                     (100 - int(self.ui.confidenceSlider.property("value"))) / 100)
+            inthread(
+                self._load,
+                self._selected_collections(),
+                (100 - int(self.ui.confidenceSlider.property("value"))) / 100,
+            )
 
     def _load(self, collections: list[str], distance: float = 0.1):
         try:
@@ -93,13 +115,17 @@ class FunctionSimilarityDialog(BaseDialog):
             inmain(self.ui.progressBar.setProperty, "value", 25)
             inmain(show_wait_box, "HIDECANCEL\nGetting results…")
 
-            if not self.analyzed_functions or len(self.analyzed_functions) == 0:
+            if not self.analyzed_functions or \
+                    len(self.analyzed_functions) == 0:
                 self._get_analyze_functions()
 
             function_id = self.analyzed_functions.get(self.v_addr, None)
 
             if function_id is None:
-                func_name = inmain(IDAUtils.get_demangled_func_name, self.v_addr + self.base_addr)
+                func_name = inmain(
+                    IDAUtils.get_demangled_func_name, self.v_addr +
+                                                      self.base_addr
+                )
 
                 inmain(idc.warning, f"No matches found for {func_name}.")
                 logger.error("No similar functions found for: %s", func_name)
@@ -109,28 +135,50 @@ class FunctionSimilarityDialog(BaseDialog):
 
             nb_results = inmain(self.ui.lineEdit.text)
 
-            res = RE_nearest_symbols_batch(function_ids=[function_id,],
-                                           nns=int(nb_results) if nb_results else 1,
-                                           distance=distance, collections=collections,
-                                           debug_enabled=inmain(self.ui.checkBox.isChecked))
+            res = RE_nearest_symbols_batch(
+                function_ids=[
+                    function_id,
+                ],
+                nns=int(nb_results) if nb_results else 1,
+                distance=distance,
+                collections=collections,
+                debug_enabled=inmain(self.ui.checkBox.isChecked),
+            )
 
             inmain(self.ui.progressBar.setProperty, "value", 75)
 
             data = []
             for function in res.json()["function_matches"]:
-                data.append((SimpleItem(function["nearest_neighbor_function_name"], function),
-                             f"{float(str(function['confidence'])[:6]) * 100:#.02f}%",
-                             function["nearest_neighbor_binary_name"],))
+                data.append(
+                    (
+                        SimpleItem(
+                            function["nearest_neighbor_function_name"],
+                            function
+                        ),
+                        f"{float(str(function['confidence'])[:6]) * 100:#.02f}"
+                        "%",
+                        function["nearest_neighbor_binary_name"],
+                    )
+                )
 
             inmain(model.fill_table, data)
             inmain(self.ui.renameButton.setEnabled, len(data) > 0)
 
             if len(data) == 0:
-                inmain(idc.warning, "No matches found. Try a different confidence value.")
-                logger.error("No similar functions found for: %s with confidence: %d",
-                             inmain(IDAUtils.get_demangled_func_name, inmain(idc.here)), (1 - distance) * 100)
+                inmain(
+                    idc.warning,
+                    "No matches found. Try a different confidence value."
+                )
+                logger.error(
+                    "No similar functions found for: %s with confidence: %d",
+                    inmain(IDAUtils.get_demangled_func_name, inmain(idc.here)),
+                    (1 - distance) * 100,
+                )
         except HTTPError as e:
-            error = e.response.json().get("error", "An unexpected error occurred. Sorry for the inconvenience.")
+            error = e.response.json().get(
+                "error", "An unexpected error occurred. Sorry for the "
+                         "inconvenience."
+            )
             Dialog.showError("Function Renaming", error)
         except RequestException as e:
             logger.error("An unexpected error has occurred. %s", e)
@@ -142,35 +190,58 @@ class FunctionSimilarityDialog(BaseDialog):
 
             width: int = inmain(self.ui.resultsTable.width)
 
-            inmain(self.ui.resultsTable.setColumnWidth, 0, round(width * .38))
-            inmain(self.ui.resultsTable.setColumnWidth, 1, round(width * .12))
-            inmain(self.ui.resultsTable.setColumnWidth, 2, round(width * .5))
+            inmain(self.ui.resultsTable.setColumnWidth, 0, round(width * 0.38))
+            inmain(self.ui.resultsTable.setColumnWidth, 1, round(width * 0.12))
+            inmain(self.ui.resultsTable.setColumnWidth, 2, round(width * 0.5))
 
     def _rename_symbol(self):
         if not self.ui.resultsTable.selectedIndexes():
-            Dialog.showInfo("Function Renaming", "Select one of the listed functions that you wish to use.")
+            Dialog.showInfo(
+                "Function Renaming",
+                "Select one of the listed functions that you wish to use.",
+            )
             return
 
-        rows = sorted(set(index.row() for index in self.ui.resultsTable.selectedIndexes()))
+        rows = sorted(
+            set(index.row()
+                for index in self.ui.resultsTable.selectedIndexes())
+        )
         selected = self.ui.resultsTable.model().get_data(rows[0])
 
         if selected and isinstance(selected[0], SimpleItem):
-            if not IDAUtils.set_name(self.v_addr + self.base_addr, selected[0].text):
-                Dialog.showError("Rename Function Error", f"Function {selected[0].text} already exists.")
+            if not IDAUtils.set_name(
+                    self.v_addr + self.base_addr,
+                    selected[0].text
+            ):
+                Dialog.showError(
+                    "Rename Function Error",
+                    f"Function {selected[0].text} already exists.",
+                )
             else:
                 inthread(self._function_rename, self.v_addr, selected[0].text)
 
-                logger.info("Renowned %s in %s with confidence of '%s",
-                            IDAUtils.get_demangled_func_name(idc.here()),
-                            selected[0].text, selected[0].data["confidence"])
+                logger.info(
+                    "Renowned %s in %s with confidence of '%s",
+                    IDAUtils.get_demangled_func_name(idc.here()),
+                    selected[0].text,
+                    selected[0].data["confidence"],
+                )
 
-                if self.state.project_cfg.get("func_type") and \
-                        ASKBTN_YES == idc.ask_yn(ASKBTN_YES,
-                                                 "HIDECANCEL\nWould you also like to update the function declaration?"):
+                if self.state.project_cfg.get("func_type") \
+                        and ASKBTN_YES == idc.ask_yn(
+                    ASKBTN_YES,
+                    "HIDECANCEL\nWould you also like to update the "
+                    "function "
+                    "declaration?",
+                ):
                     # Prevent circular import
                     from revengai.actions import function_signature
 
-                    function_signature(self.state, self.v_addr + self.base_addr, self._get_function_id(self.v_addr))
+                    function_signature(
+                        self.state,
+                        self.v_addr + self.base_addr,
+                        self._get_function_id(self.v_addr),
+                    )
 
     def _search_collection(self, search: str = None):
         try:
@@ -178,26 +249,65 @@ class FunctionSimilarityDialog(BaseDialog):
 
             inmain(self.ui.fetchButton.setEnabled, False)
 
-            res: Response = RE_collection_search(search)
+            res: dict = RE_collections_search(
+                partial_collection_name=search,
+                page=1,
+                page_size=1024,
+            ).json()
+
+            result_collections = res.get("data", {}).get("results", [])
+
+            logger.info(f"Found {len(result_collections)} collections")
 
             collections = []
 
-            for collection in res.json()["collections"]:
+            for collection in result_collections:
                 if isinstance(collection, str):
-                    collections.append((collection,
-                                        CheckableItem(checked=self.ui.layoutFilter.is_present(collection)),))
+                    collections.append(
+                        (
+                            collection,
+                            CheckableItem(
+                                checked=self.ui.layoutFilter.is_present(
+                                    collection)
+                            ),
+                        )
+                    )
                 else:
-                    collections.append((IconItem(collection["name"],
-                                                 "lock.png" if collection["scope"] == "PRIVATE" else
-                                                 "unlock.png"),
-                                        CheckableItem(checked=self.ui.layoutFilter.is_present(collection["name"])),))
+                    collections.append(
+                        (
+                            IconItem(
+                                collection["collection_name"],
+                                (
+                                    "lock.png"
+                                    if collection["scope"] == "PRIVATE"
+                                    else "unlock.png"
+                                ),
+                            ),
+                            CheckableItem(
+                                checked=self.ui.layoutFilter.is_present(
+                                    collection["collection_name"]
+                                )
+                            ),
+                        )
+                    )
 
-            inmain(inmain(self.ui.collectionsTable.model).fill_table, collections)
-            inmain(self.ui.collectionsTable.setColumnWidth, 0, round(inmain(self.ui.collectionsTable.width) * .8))
+            inmain(
+                inmain(self.ui.collectionsTable.model).fill_table,
+                collections
+            )
+            inmain(
+                self.ui.collectionsTable.setColumnWidth,
+                0,
+                round(inmain(self.ui.collectionsTable.width) * 0.8),
+            )
         except HTTPError as e:
-            logger.error("Getting collections failed. Reason: %s", e)
-
-            Dialog.showError("Function Rename", f"Function Rename Error: {e.response.json().get('error', 'unknown')}")
+            if e.response.status_code != 400:
+                message = e.json().get("error", "Unknown error")
+                logger.error(f"Getting collections failed. Reason: {message}")
+                Dialog.showError(
+                    "Auto Analysis",
+                    f"Auto Analysis Error: {message}"
+                )
         except RequestException as e:
             logger.error("An unexpected error has occurred. %s", e)
         finally:
@@ -206,28 +316,41 @@ class FunctionSimilarityDialog(BaseDialog):
             inmain(self.ui.fetchButton.setFocus)
 
     def _table_menu(self) -> None:
-        rows = sorted(set(index.row() for index in self.ui.resultsTable.selectedIndexes()))
+        rows = sorted(
+            set(index.row()
+                for index in self.ui.resultsTable.selectedIndexes())
+        )
         selected = self.ui.resultsTable.model().get_data(rows[0])
 
-        if selected and self.ui.renameButton.isEnabled() and isinstance(selected[0], SimpleItem):
+        if (
+                selected
+                and self.ui.renameButton.isEnabled()
+                and isinstance(selected[0], SimpleItem)
+        ):
             menu = QMenu()
             renameAction = menu.addAction(self.ui.renameButton.text())
             renameAction.triggered.connect(self._rename_symbol)
 
             func_id = selected[0].data["nearest_neighbor_id"]
             breakdownAction = menu.addAction("View Function Breakdown")
-            breakdownAction.triggered.connect(lambda: self._function_breakdown(func_id))
+            breakdownAction.triggered.connect(
+                lambda: self._function_breakdown(func_id))
 
             # summariesAction = menu.addAction("Generate AI Summaries")
-            # summariesAction.triggered.connect(lambda: self._generate_summaries(func_id))
+            # summariesAction.triggered.connect(
+            # lambda: self._generate_summaries(func_id))
 
             menu.exec_(QCursor.pos())
 
     def _selected_collections(self) -> list[str]:
-        return [self.ui.layoutFilter.itemAt(idx).widget().objectName() for idx in range(self.ui.layoutFilter.count())]
+        return [
+            self.ui.layoutFilter.itemAt(idx).widget().objectName()
+            for idx in range(self.ui.layoutFilter.count())
+        ]
 
     def _filter(self, _) -> None:
-        self.typing_timer.start(self.searchDelay)     # Starts the countdown to call the filtering method
+        # Starts the countdown to call the filtering method
+        self.typing_timer.start(self.searchDelay)
 
     def _confidence(self, value: int) -> None:
         self.ui.description.setText(f"Confidence: {value:#02d}")
@@ -239,15 +362,22 @@ class FunctionSimilarityDialog(BaseDialog):
         item = self.ui.collectionsTable.model().get_data(index.row())
 
         if item[1].checkState == Qt.Checked:
-            self.ui.layoutFilter.add_card(item[0].text if isinstance(item[0], SimpleItem) else item[0])
+            self.ui.layoutFilter.add_card(
+                item[0].text if isinstance(item[0], SimpleItem) else item[0]
+            )
         else:
-            self.ui.layoutFilter.remove_card(item[0].text if isinstance(item[0], SimpleItem) else item[0])
+            self.ui.layoutFilter.remove_card(
+                item[0].text if isinstance(item[0], SimpleItem) else item[0]
+            )
 
     def _callback(self, text: str) -> None:
         for row_item in self.ui.collectionsTable.model().get_datas():
-            if isinstance(row_item[1], CheckableItem) and \
-                    (isinstance(row_item[0], str) and row_item[0] == text or
-                     isinstance(row_item[0], SimpleItem) and row_item[0].text == text):
+            if isinstance(row_item[1], CheckableItem) and (
+                    isinstance(row_item[0], str)
+                    and row_item[0] == text
+                    or isinstance(row_item[0], SimpleItem)
+                    and row_item[0].text == text
+            ):
                 row_item[1].checkState = Qt.Unchecked
 
         self.ui.collectionsTable.model().layoutChanged.emit()

@@ -1,12 +1,23 @@
-# -*- coding: utf-8 -*-
 from typing import Optional
 
-from PyQt5.QtCore import Qt, QRect, QSize, QPoint
-from PyQt5.QtWidgets import QLayout, QLayoutItem, QWidget, QSizePolicy, QCheckBox
+from PyQt5.QtCore import QPoint
+from PyQt5.QtCore import QRect
+from PyQt5.QtCore import QSize
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QCheckBox
+from PyQt5.QtWidgets import QLayout
+from PyQt5.QtWidgets import QLayoutItem
+from PyQt5.QtWidgets import QSizePolicy
+from PyQt5.QtWidgets import QWidget
 
 
 class CustomFlowLayout(QLayout):
-    def __init__(self, parent: QWidget = None, margin: int = 0, spacing: int = -1):
+    def __init__(
+            self,
+            parent: QWidget = None,
+            margin: int = 0,
+            spacing: int = -1
+    ):
         super().__init__(parent)
 
         if parent is not None:
@@ -33,7 +44,12 @@ class CustomFlowLayout(QLayout):
         except KeyError:
             self._items.append(a0)
 
-    def addWidget(self, w: QWidget, position: int = None, align: Qt.AlignmentFlag = Qt.AlignLeft) -> None:
+    def addWidget(
+            self,
+            w: QWidget,
+            position: int = None,
+            align: Qt.AlignmentFlag = Qt.AlignLeft
+    ) -> None:
         if position is not None:
             self.__pending_positions[w] = position
 
@@ -96,7 +112,8 @@ class CustomFlowLayout(QLayout):
     def _doLayout(self, rect: QRect, testOnly: bool = False):
         """
         This does the layout. Don't ask me how.
-        Source: https://github.com/baoboa/pyqt5/blob/master/examples/layouts/flowlayout.py
+        Source:
+        https://github.com/baoboa/pyqt5/blob/master/examples/layouts/flowlayout.py
         """
         x = rect.x()
         y = rect.y()
@@ -105,13 +122,13 @@ class CustomFlowLayout(QLayout):
         for item in self._items:
             wid = item.widget()
 
-            space_x = self.spacing() + wid.style().layoutSpacing(QSizePolicy.Label,
-                                                                 QSizePolicy.Label,
-                                                                 Qt.Horizontal)
+            space_x = self.spacing() + wid.style().layoutSpacing(
+                QSizePolicy.Label, QSizePolicy.Label, Qt.Horizontal
+            )
 
-            space_y = self.spacing() + wid.style().layoutSpacing(QSizePolicy.Label,
-                                                                 QSizePolicy.Label,
-                                                                 Qt.Vertical)
+            space_y = self.spacing() + wid.style().layoutSpacing(
+                QSizePolicy.Label, QSizePolicy.Label, Qt.Vertical
+            )
 
             next_x = x + item.sizeHint().width() + space_x
             if next_x - space_x > rect.right() and line_height > 0:
@@ -136,7 +153,8 @@ class CustomFlowLayout(QLayout):
         if not self.is_present(text):
             child: QWidget = QCheckBox(text)
 
-            child.setStyleSheet("""
+            child.setStyleSheet(
+                """
                 QCheckBox {
                     min-width: 2em;
                     border-radius: 3px;
@@ -144,7 +162,8 @@ class CustomFlowLayout(QLayout):
                     padding: 2px 2px 2px 2px;
                     background-color: #737373;
                 }
-            """)
+                """
+            )
 
             child.setChecked(True)
             child.setObjectName(text)
