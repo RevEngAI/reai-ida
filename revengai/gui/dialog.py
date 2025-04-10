@@ -243,7 +243,8 @@ class AboutForm(BaseForm):
 RevEng.AI: About
 
 {FormChangeCb}
-RevEng.AI IDA plugin v%s.
+RevEng.AI IDA plugin v%s. 
+AI powered Binary Analysis platform for Reverse Engineering and Malware Analysis
 
 RevEng.AI IDA Plugin is released under the GPL v2.
 Find more info at https://reveng.ai/
@@ -255,7 +256,7 @@ Find more info at https://reveng.ai/
         )
 
     def OnFormChange(self, fid):
-        if fid == -2:  # Goto homepage
+        if fid == -2:
             open_url("https://reveng.ai/")
         return super().OnFormChange(fid)
 
