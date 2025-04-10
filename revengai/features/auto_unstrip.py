@@ -166,7 +166,7 @@ class AutoUnstrip:
         for res in result:
             addr = self.base_addr + res["target_func_addr"]
             new_name = res["new_name_str"]
-            logger.debug(
+            logger.info(
                 "Renaming function at 0x%X to %s",
                 addr,
                 new_name,

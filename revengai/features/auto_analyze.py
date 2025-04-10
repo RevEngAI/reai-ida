@@ -414,7 +414,6 @@ class AutoAnalysisDialog(BaseDialog):
 
             resultsData.sort(key=lambda tup: tup[0])
 
-            # This is dumb we already populated it with the number of functions
             # self._analysis[Analysis.TOTAL.value] = len(resultsData)
 
             inmain(inmain(self.ui.resultsTable.model).fill_table, resultsData)
