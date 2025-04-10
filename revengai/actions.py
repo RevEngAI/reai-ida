@@ -887,7 +887,7 @@ def generate_function_data_types(state: RevEngState) -> None:
                     logger.info(f"Generating data type for analysis ID: {analysis_id}")
 
                     function_ids = []
-                    logger.info("Getting the list of functions to generate data types")
+                    logger.info("Gathering a list of functions to generate data types on")
 
                     res: dict = RE_analyze_functions(
                         fpath, state.config.get("binary_id", 0)
@@ -914,17 +914,20 @@ def generate_function_data_types(state: RevEngState) -> None:
                             "Successfully started the generation of functions"
                             " data types"
                         )
+                        
                         Dialog.showInfo(
                             "Function Types",
                             "Successfully started the generation of functions"
                             " data types",
                         )
+                    else:
+                        Dialog.showInfo("Function Types", "Failed to generate function data types")
 
                 except HTTPError as e:
                     resp = e.response.json()
                     error = resp.get(
                         "error",
-                        "An unexpected error occurred. Sorry for the" " inconvenience.",
+                        "An unexpected error occurred. Sorry for the inconvenience.",
                     )
                     logger.error(f"Failed to generate function data types: {error}")
                     Dialog.showError(
@@ -994,7 +997,7 @@ def apply_function_data_types(state: RevEngState) -> None:
             function_ids = []
             functions = res.get("functions", [])
 
-            logger.info(f"Found {len(functions)} functions to apply data types")
+            logger.info(f"Found {len(functions)} functions to apply possible data types")
 
             for function in res.get("functions", []):
                 function_ids.append(function["function_id"])
@@ -1477,7 +1480,7 @@ def is_condition_met(state: RevEngState, fpath: str) -> bool:
     if not state.config.is_valid():
         setup_wizard(state)
     elif not fpath or not isfile(fpath):
-        idc.warning("No input file provided.")
+        idc.warning("The target file was not found on disk. Has it been moved or renamed?")
     else:
         return True
     return False
@@ -1521,17 +1524,23 @@ def about(_) -> None:
 def update(_) -> None:
     try:
         res: Response = get(
-            "https://github.com/RevEngAI/reai-ida/releases/latest", timeout=30
+            "https://api.github.com/repos/revengai/reai-ida/releases/latest", 
+            timeout=30,
         )
 
         res.raise_for_status()
 
-        version_stable = res.url.split("/")[-1]
+        j = res.json()
+        if 'tag_name' not in j:
+            raise ValueError("Invalid response from GitHub API")
+        
+        version_stable = j["tag_name"].lstrip("v")
 
         f = UpdateForm(
-            "Good, you are already using the latest stable version!"
+            "You're already using the latest stable version!"
             if version_stable == __version__
-            else f"Kindly download the latest stable version {version_stable}."
+            else f"The latest stable version is {version_stable}. Please update to stay current.",
+            version=version_stable
         )
 
         f.Show()

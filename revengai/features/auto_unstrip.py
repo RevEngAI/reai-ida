@@ -22,12 +22,13 @@ def _divide_chunks(data: list, n: int = 50) -> list:
 class AutoUnstrip:
     def __init__(self, state: RevEngState):
         self.state = state
-        self.base_addr = get_imagebase()
-        self.analysed_functions = {}
-        self._functions = self._get_all_functions()
-        self.path = idc.get_input_file_path()
 
         self.auto_unstrip_distance = 0.09999999999999998
+        self.base_addr = get_imagebase()
+        self.path = idc.get_input_file_path()
+
+        self._analysed_functions = {}
+        self._functions = self._get_all_functions()
 
         self._get_analysed_functions()
         self.function_ids = self._get_sync_analysed_ids_local()
@@ -57,7 +58,7 @@ class AutoUnstrip:
             )
 
             for function in res.json()["functions"]:
-                self.analysed_functions[function["function_vaddr"]] = function[
+                self._analysed_functions[function["function_vaddr"]] = function[
                     "function_id"
                 ]
         except HTTPError as e:
@@ -65,7 +66,7 @@ class AutoUnstrip:
                 "Error getting analysed functions: %s",
                 e.response.json().get(
                     "error",
-                    "An unexpected error occurred. Sorry for the " "inconvenience.",
+                    "An unexpected error occurred. Sorry for the inconvenience",
                 ),
             )
 
@@ -75,7 +76,7 @@ class AutoUnstrip:
         for idx, func in enumerate(self._functions):
             idx += 1
 
-            function_id = self.analysed_functions.get(func["start_addr"], None)
+            function_id = self._analysed_functions.get(func["start_addr"], None)
 
             if function_id:
                 function_ids.append(function_id)
@@ -90,11 +91,17 @@ class AutoUnstrip:
 
             def worker(chunk: list[int]) -> any:
                 try:
-                    return RE_nearest_symbols_batch(
+                    ret = RE_nearest_symbols_batch(
                         function_ids=chunk,
                         distance=self.auto_unstrip_distance,
                         debug_enabled=True,
-                    ).json()["function_matches"]
+                    )
+
+                    j = ret.json()
+                    if 'function_matches' not in j:
+                        raise ValueError
+                    
+                    return j['function_matches']
                 except Exception as e:
                     return e
 
@@ -105,7 +112,7 @@ class AutoUnstrip:
                 )
             }
 
-            for future, chunk in futures.items():
+            for future, _ in futures.items():
                 res = future.result() if not future.cancelled() else None
                 if not res:
                     continue
@@ -114,7 +121,7 @@ class AutoUnstrip:
                     func_addr = next(
                         (
                             func_addr
-                            for func_addr, func_id in self.analysed_functions.items()
+                            for func_addr, func_id in self._analysed_functions.items()
                             if symbol["origin_function_id"] == func_id
                         ),
                         None,
@@ -131,7 +138,6 @@ class AutoUnstrip:
                     )
 
                     if func_addr and "FUN_" not in func_name:
-                        print(symbol)
                         symbol["org_func_name"] = next(
                             (
                                 function["name"]
@@ -158,7 +164,13 @@ class AutoUnstrip:
 
     def _apply_all(self, result: list) -> None:
         for res in result:
-            addr = res["target_func_addr"] + self.base_addr
+            addr = self.base_addr + res["target_func_addr"]
             new_name = res["new_name_str"]
+            logger.info(
+                "Renaming function at 0x%X to %s",
+                addr,
+                new_name,
+            )
+
             inmain(idc.set_name, addr, new_name)
             inmain(idc.set_func_flags, addr, idc.FUNC_LIB)
