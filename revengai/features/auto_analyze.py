@@ -9,7 +9,7 @@ from PyQt5.QtGui import QCursor
 from PyQt5.QtWidgets import QMenu
 from idaapi import hide_wait_box, show_wait_box, user_cancelled
 from idautils import Functions
-from requests import HTTPError, RequestException
+from requests import HTTPError, RequestException, Response
 from reait.api import RE_nearest_symbols_batch
 from reait.api import RE_collections_search
 from reait.api import RE_binaries_search
@@ -39,9 +39,11 @@ from reait.api import (
     RE_analysis_lookup,
     RE_generate_data_types,
     RE_list_data_types,
+    RE_poll_data_types
 )
 
 import idaapi
+import time
 
 logger = logging.getLogger("REAI")
 
@@ -53,7 +55,8 @@ def _wait_box_decorator(message: str = None):
                 inmain(show_wait_box, message)
                 return func(self, *args, **kwargs)
             except Exception as e:
-                logger.error(f"Error: {e}")
+                import traceback as tb
+                logger.error(f"Error: {e} \n{tb.format_exc()}")
             finally:
                 inmain(hide_wait_box)
 
@@ -197,7 +200,21 @@ class AutoAnalysisDialog(BaseDialog):
             fetchDataTypesAction.triggered.connect(
                 lambda: self._function_get_datatypes(
                     # row
-                    selected,
+                    rows[0],
+                    # selected function addr
+                    func_addr,
+                    # matched function id
+                    matched_func_id,
+                    # matched bin id
+                    matched_bin_id
+                )
+            )
+
+            applyDataTypesAction = menu.addAction("Apply Data Types")
+            applyDataTypesAction.triggered.connect(
+                lambda: self._function_import_symbol_datatypes(
+                    # row
+                    rows[0],
                     # selected function addr
                     func_addr,
                     # matched function id
@@ -218,38 +235,45 @@ class AutoAnalysisDialog(BaseDialog):
     )
     def _function_get_datatypes(
             self,
-            selected: int,
+            row: int,
             function_addr: int = 0,
             matched_func_id: int = 0,
             matched_function_bid: int = 0,
     ) -> None:
-        def signature_arguments(signature: Function) -> list[str]:
+        def function_arguments(fnc: Function) -> list[str]:
             args = []
-            for arg in signature.header.args:
-                arg: FunctionArgument = arg
+            for k in fnc.header.args:
+                arg: FunctionArgument = fnc.header.args[k]
                 args.append(
                     f"{arg.type} {arg.name}"
                 )
             return args
 
-        def signature_to_str(signature: Function) -> str:
+        def function_to_str(fnc: Function) -> str:
             # convert the signature to a string representation
-            return f"{signature.type} {signature.name}({', '.join(
-                signature_arguments(signature)
+            return f"{fnc.type} {fnc.name}({', '.join(
+                function_arguments(fnc)
             )})"
 
-        def apply_signature(signature: Function):
+        def apply_signature(fnc: Function, deps: list):
             # set the selected row of the table and modify the function
             # signature column to show the new signature
             model = self.ui.resultsTable.model()
-            index = model.index(selected, 3)
+            index = model.index(row, 3)
+            signature = function_to_str(fnc)
+            logger.info(
+                f"Function signature: {signature}"
+            )
             model.setData(index, SimpleItem(
-                text=signature_to_str(signature),
-                data=signature
+                text=signature,
+                data={
+                    "function": fnc,
+                    "deps": deps,
+                }
             ), Qt.DisplayRole)
+            model.dataChanged.emit(index, index)
 
         try:
-            inmain(show_wait_box, "HIDECANCEL\nGetting function data types…")
             # first step is to get the analysis id for the function
             res: dict = RE_analysis_lookup(matched_function_bid).json()
             matched_analysis_id = res.get("analysis_id", 0)
@@ -261,13 +285,40 @@ class AutoAnalysisDialog(BaseDialog):
                 )
                 return
 
-            # second step is to start the generation of the datatypes
-            res = RE_generate_data_types(
-                matched_analysis_id,
-                [matched_func_id]
-            ).json()
+            should_request_generation = False
 
-            status = res.get("status", False)
+            try:
+                # poll for data type completition
+                res: Response = RE_poll_data_types(
+                    matched_analysis_id,
+                    matched_func_id
+                )
+            except HTTPError as e:
+                if e.response.status_code == 404:
+                    # only request generation if we don't yet have a task for
+                    # that function
+                    should_request_generation = True
+
+            if should_request_generation:
+                try:
+                    # second step is to start the generation of the datatypes
+                    res = RE_generate_data_types(
+                        matched_analysis_id,
+                        [matched_func_id]
+                    ).json()
+                    status = res.get("status", False)
+                except HTTPError as e:
+                    if e.response.status_code == 409:
+                        logger.info(
+                            "Data types generation already started for"
+                            " functionId %d.",
+                            matched_func_id,
+                        )
+                        status = True
+                    else:
+                        raise e
+            else:
+                status = True
 
             if status:
                 logger.info(
@@ -280,73 +331,93 @@ class AutoAnalysisDialog(BaseDialog):
                 )
                 return
 
-            # try list the datatypes
+            logger.info(
+                "Polling for data types to be generated... AID:"
+                f" {matched_analysis_id} FID: {matched_func_id}"
+            )
 
-            res: dict = RE_list_data_types(
+            # poll for data type completition
+            res: dict = RE_poll_data_types(
                 matched_analysis_id,
-                [matched_func_id]
+                matched_func_id
             ).json()
 
-            status = res.get("status", False)
+            completed = res.get("data", {}).get("completed", False)
+            status = res.get("data", {}).get("status", "")
 
-            if not status:
-                logger.error("Error getting function data types")
-                return
+            count = 0
 
-            # TODO: remove this
-            logger.info(f"Let's stop here at the moment... {res}")
-
-            deci = DecompilerInterface.discover(force_decompiler="ida")
-            if not deci:
-                logger.error("Libbs: Unable to find a decompiler")
-                return
-
-            total_count = res.get("data", {}).get("total_count", 0)
-
-            if total_count > 0:
-                items = res.get("data", {}).get("items", [])
-                if len(items) == 0:
-                    logger.warning(
-                        "No function data types to apply"
+            while not completed and status != "completed":
+                count += 1
+                # sleep 1 seconds before polling again
+                time.sleep(1)
+                logger.info("Waiting for data types to be generated...")
+                res = RE_poll_data_types(
+                    matched_analysis_id,
+                    matched_func_id
+                ).json()
+                completed = res.get("data", {}).get("completed", False)
+                status = res.get("data", {}).get("status", "")
+                if count >= 3 and not completed:
+                    logger.error(
+                        "Failed to generate data types for functionId %d (timeout).",
+                        matched_func_id,
                     )
                     return
-                function_types = items[0].get(
-                    "data_types",
-                    {}
-                ).get("func_types", None)
 
-                if not function_types:
-                    logger.warning(
-                        "No function data types to apply"
-                    )
-                    return
-                func: Function = _art_from_dict(function_types)
-                apply_signature(func)
-            else:
-                logger.warning("No function data types to apply")
+            logger.info(
+                "Data types generation completed."
+            )
+
+            data_types = res.get(
+                "data",
+                {}
+            ).get(
+                "data_types",
+                None
+            )
+
+            if data_types is None:
+                logger.error(
+                    "Failed to get function data types for functionId %d.",
+                    matched_func_id,
+                )
+                return
+
+            func_types = data_types.get("func_types", None)
+            func_deps = data_types.get("func_deps", None)
+
+            fnc: Function = _art_from_dict(func_types)
+
+            apply_signature(fnc, func_deps)
 
         except HTTPError as e:
-            error = e.response.json().get(
-                "error",
-                f"An unexpected error occurred. Sorry for the "
-                f"inconvenience. {e.response.status_code}",
+            errors = e.response.json().get(
+                "errors",
+                [{
+                    "message": f"An unexpected error occurred. Sorry for the "
+                    f"inconvenience. {e.response.status_code}"
+                }],
             )
 
             logger.error(
-                "Error while importing data types for functionId "
-                f"{matched_func_id}: {error}"
+                "Error while importing data types for the specified function:"
+                f"{errors[0]["message"]}"
             )
 
-            inmain(idaapi.warning, error)
+            inmain(idaapi.warning, errors[0]["message"])
 
+    @_wait_box_decorator(
+        "HIDECANCEL\nApplying data types to function…"
+    )
     def _function_import_symbol_datatypes(
         self,
-        selected: int,
+        row: int,
         function_addr: int = 0,
         matched_func_id: int = 0,
         matched_function_bid: int = 0,
     ) -> None:
-        def apply_type(deci: DecompilerInterface, artifact) -> None | str:
+        def apply_type(deci: DecompilerInterface, artifact, soft_skip=False) -> None | str:
             supported_types = [
                 Function,
                 GlobalVariable,
@@ -359,16 +430,24 @@ class AutoAnalysisDialog(BaseDialog):
                 return "Unsupported artifact type: "\
                     f"{artifact.__class__.__name__}"
 
-            if isinstance(artifact, Function):
-                deci.functions[artifact.addr] = artifact
-            elif isinstance(artifact, GlobalVariable):
-                deci.global_vars[artifact.addr] = artifact
-            elif isinstance(artifact, Enum):
-                deci.enums[artifact.name] = artifact
-            elif isinstance(artifact, Struct):
-                deci.structs[artifact.name] = artifact
-            elif isinstance(artifact, Typedef):
-                deci.typedefs[artifact.name] = artifact
+            try:
+
+                if isinstance(artifact, Function):
+                    deci.functions[artifact.addr] = artifact
+                elif isinstance(artifact, GlobalVariable):
+                    deci.global_vars[artifact.addr] = artifact
+                elif isinstance(artifact, Enum):
+                    deci.enums[artifact.name] = artifact
+                elif isinstance(artifact, Struct):
+                    deci.structs[artifact.name] = artifact
+                elif isinstance(artifact, Typedef):
+                    deci.typedefs[artifact.name] = artifact
+            except Exception as e:
+                logger.error(f"Error while applying artifact '{artifact.name}'"
+                             f" of type {artifact.__class__.__name__}: {e}")
+                if not soft_skip:
+                    return f"Error while applying artifact '{artifact.name}'"\
+                        f" of type {artifact.__class__.__name__}: {e}"
 
             return None
 
@@ -377,7 +456,7 @@ class AutoAnalysisDialog(BaseDialog):
                 artifacts: list
         ) -> None | str:
             for artifact in artifacts:
-                error = apply_type(deci, artifact)
+                error = apply_type(deci, artifact, soft_skip=True)
                 if error is not None:
                     return error
             return None
@@ -390,135 +469,65 @@ class AutoAnalysisDialog(BaseDialog):
                     _artifacts.append(art)
             return _artifacts
 
+        deci = DecompilerInterface.discover(force_decompiler="ida")
+        if not deci:
+            logger.error("Libbs: Unable to find a decompiler")
+            return
+
         try:
-            # first step is to get the analysis id for the function
-            res: dict = RE_analysis_lookup(matched_function_bid).json()
-            matched_analysis_id = res.get("analysis_id", 0)
+            model = self.ui.resultsTable.model()
+            index = model.index(row, 3)
+            data = model.getModelData(index)
+            logger.info(
+                f"Data: {data}"
+            )
+            if isinstance(data, SimpleItem):
+                # get the function signature from the table
+                function: Function = data.data.get("function")
+                deps = data.data.get("deps")
 
-            if matched_analysis_id == 0:
-                logger.error(
-                    "Failed to get analysis id for functionId %d.",
-                    matched_func_id,
-                )
-                return
+                function.addr = function_addr
 
-            # second step is to start the generation of the datatypes
-            res = RE_generate_data_types(
-                matched_analysis_id,
-                [matched_func_id]
-            ).json()
-            status = res.get("status", False)
+                # fisrt apply the dependencies
+                res = apply_types(deci, _load_many_artifacts_from_list(deps))
+                if res is not None:
+                    logger.error(
+                        f"Failed to apply function dependencies: {res}")
+                    idaapi.warning(
+                        f"Failed to apply function dependencies: {res}"
+                    )
+                    return
 
-            if status:
+                # then apply the function signature
+                res = apply_type(deci, function)
+                if res is not None:
+                    logger.error(f"Failed to apply function signature: {res}")
+                    idaapi.warning(
+                        f"Failed to apply function signature: {res}"
+                    )
+                    return
+
+                # show success message
                 logger.info(
-                    "Successfully started the generation of functions"
-                    " data types"
+                    "Successfully applied function signature and dependencies"
+                )
+                idaapi.info(
+                    "Successfully applied function signature and dependencies"
                 )
             else:
-                logger.error(
-                    "Failed to start the generation of functions data types"
+                logger.warning(
+                    "Failed to get function signature from the table."
                 )
-                return
-
-            # try list the datatypes
-
-            res: dict = RE_list_data_types(
-                matched_analysis_id,
-                [matched_func_id]
-            ).json()
-
-            status = res.get("status", False)
-
-            if not status:
-                logger.error("Error getting function data types")
-                return
-
-            # TODO: remove this
-            logger.info(f"Let's stop here at the moment... {res}")
-
-            deci = DecompilerInterface.discover(force_decompiler="ida")
-            if not deci:
-                logger.error("Libbs: Unable to find a decompiler")
-                return
-
-            total_count = res.get("data", {}).get("total_count", 0)
-
-            if total_count > 0:
-                items = res.get("data", {}).get("items", [])
-                for item in items:
-                    function_types = item.get(
-                        "data_types", {}).get("func_types", None)
-                    func_deps = item.get(
-                        "data_types", {}).get("func_deps", [])
-                    function_id = item.get("function_id", 0)
-
-                    if function_types and len(func_deps) > 0:
-
-                        deps = _load_many_artifacts_from_list(
-                            func_deps,
-                        )
-
-                        logger.info(
-                            f"Loaded {len(func_deps)} for function "
-                            f"{function_id}"
-                        )
-
-                        deps_res = apply_types(deci, deps)
-                        if deps_res is not None:
-                            logger.error(
-                                "Error applying data type dependencies for "
-                                f"function {function_id}: {deps_res}"
-                            )
-                            return
-                        else:
-                            logger.info(
-                                "Applied data type dependencies for function"
-                                f" id {function_id}"
-                            )
-
-                    if function_types:
-                        func: Function = _art_from_dict(function_types)
-                        # repalce function address with the one we need to
-                        # apply the data type to
-                        func.addr = function_addr
-                        func_res = apply_type(deci, func)
-                        if func_res is not None:
-                            logger.error(
-                                "Error applying function data type for "
-                                f"function id {function_id}: {func_res}"
-                            )
-                            return
-                        else:
-                            logger.info(
-                                "Applied data types for function id "
-                                f"{function_id}"
-                            )
-
-                logger.info("Function data types application completed")
-            else:
-                logger.warning("No function data types to apply")
-
-        except HTTPError as e:
-            error = e.response.json().get(
-                "error",
-                f"An unexpected error occurred. Sorry for the "
-                f"inconvenience. {e.response.status_code}",
+                idaapi.warning(
+                    "Failed to get function signature from the table.\n"
+                    "Make sure to fetch the data types first."
+                )
+        except Exception as e:
+            import traceback as tb
+            logger.error(f"Error: {e} \n{tb.format_exc()}")
+            idaapi.warning(
+                f"Error: {e}"
             )
-
-            logger.error(
-                "Error while importing data types for functionId "
-                f"{matched_func_id}: {error}"
-            )
-
-            inmain(idaapi.warning, error)
-
-        except ValueError as e:
-            logger.error(
-                "Error while importing data types for functionId "
-                f"{matched_func_id}: {e}"
-            )
-
-            inmain(idaapi.warning, str(e))
 
     def _start_analysis(self) -> None:
         inthread(self._auto_analysis)
