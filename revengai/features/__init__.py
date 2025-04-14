@@ -14,25 +14,12 @@ from reait.api import (
     RE_analyze_functions,
     RE_functions_rename,
     RE_functions_rename_batch,
-    # RE_analysis_lookup,
-    # RE_generate_data_types,
-    # RE_list_data_types,
 )
 from requests import HTTPError, Response, RequestException
 
-# from libbs.api import DecompilerInterface
-# from libbs.artifacts import load_many_artifacts
-# from libbs.artifacts import _art_from_dict
-# from libbs.artifacts import ArtifactFormat
-# from libbs.artifacts import (
-#     Function,
-#     GlobalVariable,
-#     Enum,
-#     Struct,
-#     Typedef,
-# )
 from revengai.manager import RevEngState
 from revengai.misc.qtutils import inthread, inmain
+
 
 logger = logging.getLogger("REAI")
 
@@ -447,6 +434,12 @@ class BaseDialog(QDialog):
                         )
                 except Exception as e:
                     logger.error("Exception raised: %s", e)
+
+            inmain(
+                idaapi.info,
+                "Completed batch renaming of functions. "
+                "Check the log for details."
+            )
 
     def _function_breakdown(self, func_id: int) -> None:
         # Prevent circular import

@@ -38,7 +38,7 @@ from libbs.artifacts import (
 from reait.api import (
     RE_analysis_lookup,
     RE_generate_data_types,
-    RE_list_data_types,
+    # RE_list_data_types,
     RE_poll_data_types
 )
 
@@ -201,8 +201,6 @@ class AutoAnalysisDialog(BaseDialog):
                 lambda: self._function_get_datatypes(
                     # row
                     rows[0],
-                    # selected function addr
-                    func_addr,
                     # matched function id
                     matched_func_id,
                     # matched bin id
@@ -217,10 +215,6 @@ class AutoAnalysisDialog(BaseDialog):
                     rows[0],
                     # selected function addr
                     func_addr,
-                    # matched function id
-                    matched_func_id,
-                    # matched bin id
-                    matched_bin_id
                 )
             )
 
@@ -236,7 +230,6 @@ class AutoAnalysisDialog(BaseDialog):
     def _function_get_datatypes(
             self,
             row: int,
-            function_addr: int = 0,
             matched_func_id: int = 0,
             matched_function_bid: int = 0,
     ) -> None:
@@ -414,8 +407,6 @@ class AutoAnalysisDialog(BaseDialog):
         self,
         row: int,
         function_addr: int = 0,
-        matched_func_id: int = 0,
-        matched_function_bid: int = 0,
     ) -> None:
         def apply_type(deci: DecompilerInterface, artifact, soft_skip=False) -> None | str:
             supported_types = [
@@ -481,7 +472,7 @@ class AutoAnalysisDialog(BaseDialog):
             logger.info(
                 f"Data: {data}"
             )
-            if isinstance(data, SimpleItem):
+            if isinstance(data, SimpleItem) and data.data is not None:
                 # get the function signature from the table
                 function: Function = data.data.get("function")
                 deps = data.data.get("deps")
@@ -913,10 +904,12 @@ class AutoAnalysisDialog(BaseDialog):
             self.ui.description.setVisible(True)
             self.ui.renameButton.setEnabled(False)
             self.ui.fetchDataTypesButton.setEnabled(False)
+            self.ui.confidenceSlider.show()
             self.ui.description.setText(
                 f"Confidence: {self.ui.confidenceSlider.sliderPosition():#02d}"
             )
         else:
+            self.ui.confidenceSlider.hide()
             self.ui.description.setVisible(
                 self._analysis[Analysis.TOTAL.value] > 0)
             self.ui.renameButton.setEnabled(
