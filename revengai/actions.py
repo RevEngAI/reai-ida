@@ -104,6 +104,9 @@ def upload_binary(state: RevEngState) -> None:
             tags: list = None,
             scope: str = "PRIVATE",
             debug_fpath: str = None,
+            platform: str = None,
+            isa: str = None,
+            file: str = None
         ) -> None:
             file_size = inmain(idaapi.retrieve_input_file_size)
 
@@ -148,6 +151,11 @@ def upload_binary(state: RevEngState) -> None:
                             skip_sbom=True,
                             skip_capabilities=True,
                             advanced_analysis=False,
+
+                            # NOTE: additions in new form
+                            platform=platform,
+                            isa_options=isa,
+                            file_options=file,
                         )
 
                         analysis = res.json()
@@ -218,6 +226,9 @@ def upload_binary(state: RevEngState) -> None:
                 f.iTags.value.split(","),
                 "PUBLIC" if f.iScope.value else "PRIVATE",
                 f.iDebugFile.value,
+                f.iPlatform.value,
+                f.iISA.value,
+                f.iFile.value,
             )
 
         f.Free()
@@ -1138,11 +1149,16 @@ def apply_function_data_types(state: RevEngState) -> None:
 
 
 def ai_decompile(state: RevEngState) -> None:
+    def is_not_elf() -> bool:
+        filetype = inmain(idaapi.get_file_type_name())
+        return not ("ELF" in filetype)
+    
     def error_and_close_view(cb: callable, error: str) -> None:
         Dialog.showError(
             "Error during AI decompilation",
             f"Unable to continue with AI decompilation: {error}",
         )
+
         logger.error(f"Error during AI decompilation: {error}")
         idaapi.execute_sync(lambda: cb(None), idaapi.MFF_FAST)
         return None
@@ -1154,6 +1170,11 @@ def ai_decompile(state: RevEngState) -> None:
         return errors[0].get("message", "An unexpected error occurred.")
 
     def bg_task(start_addr: int, callback) -> None:
+        if is_not_elf():
+            return error_and_close_view(
+                callback, "AI decompilation is only available for ELF files"
+            )
+        
         try:
             logger.info("Analyzing functions for AI decompilation")
             res: dict = RE_analyze_functions(

@@ -202,20 +202,26 @@ class UploadBinaryForm(BaseForm):
 
         Form.__init__(
             self,
-            r"""BUTTON YES* Process
-RevEng.AI: Process Binary
+            """BUTTON YES* Process
+        RevEng.AI: Process Binary
 
-{FormChangeCb}
-Please provide the following information to upload the binary:
+        {FormChangeCb}
+        Please provide the following information to process the binary:
 
-<#Debugging information for uploaded binary#~D~ebug Info or PDB\::{iDebugFile}>
-<#Add custom tags to your file#~C~ustom Tags (format\: tag,tag)\:      :{iTags}>
-<#Model that you want the file to be analysed by#AI ~M~odel\:         :{iModel}>
+        Debug Info or PDB:     <#:{iDebugFile}#>
+        Custom Tags:           <#:{iTags}#>
 
-Privacy:
-    <#You are the only one able to access this file#Private to you:{rOptPrivate}>
-    <#Everyone will be able to search against this file#Public access:{rOptPublic}>{iScope}>
-""",
+        The following options are automatically detected:
+        
+        AI Model:              <#:{iModel}#>
+        Platform:              <#:{iPlatform}#>
+        ISA:                   <#:{iISA}#>
+        File Type:             <#:{iFile}#>
+
+        Privacy:
+        <#You are the only one able to access this file#Private to you:{rOptPrivate}>
+        <#Everyone will be able to search against this file#Public access:{rOptPublic}>{iScope}>
+        """,
             {
                 "FormChangeCb": Form.FormChangeCb(self.OnFormChange),
                 "iScope": Form.RadGroupControl(
@@ -227,10 +233,21 @@ Privacy:
                 "iDebugFile": Form.FileInput(swidth=40, open=True),
                 "iTags": Form.StringInput(swidth=40, tp=Form.FT_ASCII),
                 "iModel": Form.DropdownListControl(
-                    swidth=40, selval=index, items=state.config.MODELS
+                    swidth=40, selval=0, items=state.config.MODELS
                 ),
+                "iPlatform": Form.DropdownListControl(
+                    swidth=40, selval=0, items=["Auto", "windows", "linux"]
+                ),
+                "iISA": Form.DropdownListControl(
+                    swidth=40, selval=0, items=["Auto", "x86_64", "x86", "ARM64"]
+                ),
+                "iFile": Form.DropdownListControl(
+                    swidth=40, selval=0, items=["Auto", "PE", "ELF", "RAW"]
+                )
             },
         )
+
+
 
 
 class AboutForm(BaseForm):
@@ -243,10 +260,9 @@ class AboutForm(BaseForm):
 RevEng.AI: About
 
 {FormChangeCb}
-RevEng.AI IDA plugin v%s. 
-AI powered Binary Analysis platform for Reverse Engineering and Malware Analysis
+RevEng.AI: AI powered Binary Analysis platform for Reverse Engineering and Malware Analysis
 
-RevEng.AI IDA Plugin is released under the GPL v2.
+Version v%s. RevEng.AI IDA Plugin is released under the GPL v2.
 Find more info at https://reveng.ai/
 """
             % __version__,
