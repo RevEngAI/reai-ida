@@ -28,12 +28,17 @@ from idaapi import unregister_action
 from idc import get_input_file_path
 from idc import here
 
+import logging
+
 from revengai import actions
+from revengai.api import RE_models
 from revengai.actions import load_recent_analyses, setup_wizard
 from revengai.manager import RevEngState
 from revengai.misc.utils import IDAUtils
 
 MENU = "RevEng.AI/"
+
+logger = logging.getLogger("REAI")
 
 
 class Handler(action_handler_t):
@@ -280,6 +285,10 @@ class RevEngGUI(object):
     def show_windows(self):
         self.config_form.register_actions()
         self._handle_first_time()
+        
+        logger.info('Refreshing your RevEng.AI models..')
+        self._handle_model_update()
+        logger.info('Updated to the latest model!')
 
     def term(self):
         self.config_form.Close(PluginForm.WCLS_SAVE)
@@ -287,3 +296,11 @@ class RevEngGUI(object):
     def _handle_first_time(self):
         if not self.state.config.is_valid():
             setup_wizard(self.state)
+
+    def _handle_model_update(self):
+        response = RE_models().json()
+
+        self.state.config.set(
+            "models", [model["model_name"]
+                for model in response["models"]]
+        )
