@@ -16,6 +16,7 @@ from revengai.misc.qtutils import inthread, inmain
 from revengai.misc.utils import IDAUtils
 from revengai.models import CheckableItem, IconItem, SimpleItem
 from revengai.models.checkable_model import RevEngCheckableTableModel
+from revengai.models.single_checkable_model import RevEngSingleCheckableTableModel
 from revengai.gui.custom_card import QRevEngCard
 from revengai.ui.function_similarity_panel_2 import Ui_FunctionSimilarityPanel
 from datetime import datetime
@@ -72,7 +73,7 @@ class FunctionSimilarityDialog(BaseDialog):
         )
 
         self.ui.resultsTable.setModel(
-            RevEngCheckableTableModel(
+            RevEngSingleCheckableTableModel(
                 data=[],
                 parent=self,
                 columns=[0],
@@ -81,15 +82,15 @@ class FunctionSimilarityDialog(BaseDialog):
                     "Original Function Name",
                     "Matched Function Name",
                     "Signature",
-                    "Matched Binary"
+                    "Matched Binary",
                     "Confidence",
-                    "Error",
                 ],
             )
         )
 
         self.ui.resultsTable.customContextMenuRequested.connect(
-            self._table_menu)
+            self._table_menu
+        )
 
         self.ui.confidenceSlider.valueChanged.connect(self._confidence)
 
@@ -119,7 +120,7 @@ class FunctionSimilarityDialog(BaseDialog):
                 (100 - int(self.ui.confidenceSlider.property("value"))) / 100,
             )
 
-    def _load(self, collections: list[str], distance: float = 0.1):
+    def _load(self, filter_data: dict, distance: float = 0.1):
         try:
             model = inmain(self.ui.resultsTable.model)
 
@@ -135,12 +136,12 @@ class FunctionSimilarityDialog(BaseDialog):
 
             function_id = self.analyzed_functions.get(self.v_addr, None)
 
-            if function_id is None:
-                func_name = inmain(
-                    IDAUtils.get_demangled_func_name, self.v_addr +
-                    self.base_addr
-                )
+            func_name = inmain(
+                IDAUtils.get_demangled_func_name, self.v_addr +
+                self.base_addr
+            )
 
+            if function_id is None:
                 inmain(idc.warning, f"No matches found for {func_name}.")
                 logger.error("No similar functions found for: %s", func_name)
                 return
@@ -149,29 +150,52 @@ class FunctionSimilarityDialog(BaseDialog):
 
             nb_results = inmain(self.ui.spinBox.text)
 
-            res = RE_nearest_symbols_batch(
-                function_ids=[
-                    function_id,
-                ],
-                nns=int(nb_results) if nb_results else 1,
+            res: dict = RE_nearest_symbols_batch(
+                function_ids=[function_id],
                 distance=distance,
-                collections=collections,
-                debug_enabled=inmain(self.ui.checkBox.isChecked),
-            )
+                collections=filter_data["collections"],
+                binaries=filter_data["binaries"],
+                nns=nb_results,
+                debug_enabled=inmain(self.ui.checkBox.isChecked)
+            ).json()
 
             inmain(self.ui.progressBar.setProperty, "value", 75)
 
+            matches = res.get("function_matches", [])
+
             data = []
-            for function in res.json()["function_matches"]:
+
+            # header = [
+            #     "Selected",
+            #     "Original Function Name",
+            #     "Matched Function Name",
+            #     "Signature",
+            #     "Matched Binary"
+            #     "Confidence",
+            #     "Error",
+            # ],
+
+            for function in matches:
+
+                nnbn = function["nearest_neighbor_binary_name"]
+                confidence = function["confidence"] * 100
+
                 data.append(
                     (
+                        CheckableItem(
+                            checked=False,
+                        ),
+                        func_name,
                         SimpleItem(
                             function["nearest_neighbor_function_name"],
                             function
                         ),
-                        f"{float(str(function['confidence'])[:6]) * 100:#.02f}"
-                        "%",
-                        function["nearest_neighbor_binary_name"],
+                        SimpleItem(
+                            text="N/A",
+                            data=None,
+                        ),
+                        nnbn,
+                        f"{confidence:.2f}%",
                     )
                 )
 
@@ -189,6 +213,8 @@ class FunctionSimilarityDialog(BaseDialog):
                     (1 - distance) * 100,
                 )
         except HTTPError as e:
+            import traceback as tb
+            logger.error(f"Error: {e} \n{tb.format_exc()}")
             error = e.response.json().get(
                 "error", "An unexpected error occurred. Sorry for the "
                          "inconvenience."
@@ -392,17 +418,18 @@ class FunctionSimilarityDialog(BaseDialog):
                 for index in self.ui.resultsTable.selectedIndexes())
         )
         selected = self.ui.resultsTable.model().get_data(rows[0])
+        logger.info(f"Selected: {selected}")
 
         if (
                 selected
                 and self.ui.renameButton.isEnabled()
-                and isinstance(selected[0], SimpleItem)
+                and isinstance(selected[2], SimpleItem)
         ):
             menu = QMenu()
             renameAction = menu.addAction(self.ui.renameButton.text())
             renameAction.triggered.connect(self._rename_symbol)
 
-            func_id = selected[0].data["nearest_neighbor_id"]
+            func_id = selected[2].data["nearest_neighbor_id"]
             breakdownAction = menu.addAction("View Function Breakdown")
             breakdownAction.triggered.connect(
                 lambda: self._function_breakdown(func_id))
@@ -447,6 +474,8 @@ class FunctionSimilarityDialog(BaseDialog):
         row = index.row()
         item = self.ui.collectionsTable.model().get_data(row)
 
+        logger.info(f"State changed: {item}")
+
         item_name = item[1].text if isinstance(
             item[1], SimpleItem) else item[1]
 
@@ -469,7 +498,8 @@ class FunctionSimilarityDialog(BaseDialog):
                 data
             )
 
-    def _callback(self, row: int) -> None:
-        row_element = self.ui.collectionsTable.model().get_data(row)
-        row_element[0].checkState = Qt.Unchecked
-        self.ui.collectionsTable.model().layoutChanged.emit()
+    def _callback(self, data: dict) -> None:
+        row_element = self.ui.collectionsTable.model().get_data(data["row"])
+        if row_element[6] == data["item_id"]:
+            row_element[0].checkState = Qt.Unchecked
+            self.ui.collectionsTable.model().layoutChanged.emit()

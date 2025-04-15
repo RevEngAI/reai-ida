@@ -17,7 +17,7 @@ class SimpleItem(object):
 
 
 class IconItem(SimpleItem):
-    def __init__(self, text: str, resource_name: str = None):
+    def __init__(self, text: str = "", resource_name: str = None):
         super().__init__(text=text)
 
         resource_path = (
@@ -26,7 +26,7 @@ class IconItem(SimpleItem):
 
         self.icon: Optional[QIcon] = (
             QIcon(resource_path) if (
-                    resource_path and isfile(resource_path)) else None
+                resource_path and isfile(resource_path)) else None
         )
 
     @staticmethod

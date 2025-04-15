@@ -20,6 +20,7 @@ from revengai.misc.qtutils import inthread, inmain
 from revengai.misc.utils import IDAUtils
 from revengai.models import CheckableItem, IconItem, SimpleItem
 from revengai.models.checkable_model import RevEngCheckableTableModel
+from revengai.models.table_model import RevEngTableModel
 from revengai.ui.auto_analysis_panel_2 import Ui_AutoAnalysisPanel
 from datetime import datetime
 
@@ -112,9 +113,9 @@ class AutoAnalysisDialog(BaseDialog):
             Qt.AlignCenter
         )
         self.ui.resultsTable.setModel(
-            RevEngCheckableTableModel(
+            RevEngTableModel(
                 data=[],
-                columns=[0],
+                # columns=[0],
                 parent=self,
                 header=[
                     "Successful",
@@ -566,7 +567,10 @@ class AutoAnalysisDialog(BaseDialog):
                     resultsData.append(
                         (
                             # Successful
-                            CheckableItem(None, checked=False),
+                            # CheckableItem(None, checked=False),
+                            IconItem(
+                                resource_name="failed.png"
+                            ),
                             # Original Function Name
                             func["name"],
                             # Matched Function Names
@@ -720,7 +724,10 @@ class AutoAnalysisDialog(BaseDialog):
                                     resultsData.append(
                                         (
                                             # Successful
-                                            CheckableItem(None, checked=False),
+                                            IconItem(
+                                                resource_name="failed.png"
+                                            ),
+                                            # CheckableItem(None, checked=False),
                                             # Original Function Name
                                             next(
                                                 (
@@ -784,9 +791,12 @@ class AutoAnalysisDialog(BaseDialog):
                                             self._analysis[Analysis.SKIPPED.value] += 1
                                             resultsData.append((
                                                 # Successful
-                                                CheckableItem(
-                                                    None,
-                                                    checked=False
+                                                # CheckableItem(
+                                                #     None,
+                                                #     checked=False
+                                                # ),
+                                                IconItem(
+                                                    resource_name="failed.png"
                                                 ),
                                                 # Original Function Name
                                                 symbol["org_func_name"],
@@ -823,7 +833,10 @@ class AutoAnalysisDialog(BaseDialog):
                                             resultsData.append(
                                                 (
                                                     # Successful
-                                                    CheckableItem(symbol),
+                                                    # CheckableItem(symbol),
+                                                    IconItem(
+                                                        resource_name="success.png"
+                                                    ),
                                                     # Original Function Name
                                                     symbol["org_func_name"],
                                                     # Matched Function Names

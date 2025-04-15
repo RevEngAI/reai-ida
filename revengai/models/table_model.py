@@ -4,6 +4,10 @@ from PyQt5.QtCore import QAbstractTableModel, Qt
 
 from revengai.models import IconItem, SimpleItem
 
+import logging
+
+logger = logging.getLogger("REAI")
+
 
 class RevEngTableModel(QAbstractTableModel):
     def __init__(self, data: list, header: list, parent=None):

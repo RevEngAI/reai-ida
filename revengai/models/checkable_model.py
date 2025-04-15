@@ -59,19 +59,30 @@ class RevEngCheckableTableModel(RevEngTableModel):
         #         self._data[index.row()][index.column()].checkState = value
         #         self.dataChanged.emit(index, index)
         #         return True
+        # logger.info(
+        #     f"setData: {index.row()} {index.column()} {value} {role}
+        # {self._data[index.row()][index.column()]}")
+
         super().setData(index, value, role)
         data = self._data[index.row()]
-        # data is a tuple so first convert it to a list
         data = list(data)
-        # set the value
-        data[index.column()] = value
-        # convert it back to a tuple
-        data = tuple(data)
-        # set the data back to the original list
-        self._data[index.row()] = data
-        # emit the dataChanged signal
-        self.dataChanged.emit(index, index)
-        return True
+
+        if isinstance(data[index.column()], CheckableItem):
+            if role == Qt.CheckStateRole:
+                # set the check state
+                data[index.column()].checkState = value
+                self.dataChanged.emit(index, index)
+                return True
+        else:
+            # set the value
+            data[index.column()] = value
+            # convert it back to a tuple
+            data = tuple(data)
+            # set the data back to the original list
+            self._data[index.row()] = data
+            # emit the dataChanged signal
+            self.dataChanged.emit(index, index)
+            return True
 
     def flags(self, index) -> Qt.ItemFlag:
         if index.isValid() and index.column() in self._columns:
