@@ -2,7 +2,7 @@ import logging
 
 import idc
 from PyQt5.QtCore import Qt, QModelIndex
-from PyQt5.QtGui import QIntValidator, QCursor
+from PyQt5.QtGui import QCursor
 from PyQt5.QtWidgets import QMenu
 from idaapi import ASKBTN_YES, hide_wait_box, show_wait_box
 from requests import HTTPError, RequestException
@@ -16,8 +16,8 @@ from revengai.misc.qtutils import inthread, inmain
 from revengai.misc.utils import IDAUtils
 from revengai.models import CheckableItem, IconItem, SimpleItem
 from revengai.models.checkable_model import RevEngCheckableTableModel
-from revengai.models.table_model import RevEngTableModel
-from revengai.ui.function_similarity_panel import Ui_FunctionSimilarityPanel
+from revengai.gui.custom_card import QRevEngCard
+from revengai.ui.function_similarity_panel_2 import Ui_FunctionSimilarityPanel
 from datetime import datetime
 
 logger = logging.getLogger("REAI")
@@ -41,14 +41,10 @@ class FunctionSimilarityDialog(BaseDialog):
         self.ui.setupUi(self)
 
         self.ui.renameButton.setEnabled(False)
-
-        self.ui.lineEdit.setValidator(QIntValidator(1, 256, self))
-
         self.ui.layoutFilter.register_cb(self._callback)
-
-        self.ui.collectionsFilter.textChanged.connect(self._filter)
+        self.ui.searchButton.clicked.connect(self._filter_collections)
         self.ui.collectionsTable.horizontalHeader().setDefaultAlignment(
-            Qt.AlignLeft
+            Qt.AlignCenter
         )
         self.ui.collectionsTable.setModel(
             RevEngCheckableTableModel(
@@ -70,17 +66,24 @@ class FunctionSimilarityDialog(BaseDialog):
         self.ui.collectionsTable.model().dataChanged.connect(
             self._state_change
         )
+
         self.ui.resultsTable.horizontalHeader().setDefaultAlignment(
-            Qt.AlignLeft
+            Qt.AlignCenter
         )
+
         self.ui.resultsTable.setModel(
-            RevEngTableModel(
+            RevEngCheckableTableModel(
                 data=[],
                 parent=self,
+                columns=[0],
                 header=[
-                    "Function Name",
+                    "Selected",
+                    "Original Function Name",
+                    "Matched Function Name",
+                    "Signature",
+                    "Matched Binary"
                     "Confidence",
-                    "Source File",
+                    "Error",
                 ],
             )
         )
@@ -90,9 +93,10 @@ class FunctionSimilarityDialog(BaseDialog):
 
         self.ui.confidenceSlider.valueChanged.connect(self._confidence)
 
-        self.ui.fetchButton.setFocus()
-        self.ui.fetchButton.clicked.connect(self._fetch)
+        self.ui.fetchResultsButton.setFocus()
+        self.ui.fetchResultsButton.clicked.connect(self._fetch)
         self.ui.renameButton.clicked.connect(self._rename_symbol)
+        self.ui.fetchDataTypesButton.clicked.connect(self._fetch_data_types)
 
         self._confidence(self.ui.confidenceSlider.sliderPosition())
 
@@ -103,6 +107,9 @@ class FunctionSimilarityDialog(BaseDialog):
 
     def closeEvent(self, event):
         super(FunctionSimilarityDialog, self).closeEvent(event)
+
+    def _fetch_data_types(self):
+        pass
 
     def _fetch(self):
         if self.v_addr != idc.BADADDR:
@@ -117,7 +124,7 @@ class FunctionSimilarityDialog(BaseDialog):
             model = inmain(self.ui.resultsTable.model)
 
             inmain(model.fill_table, [])
-            inmain(self.ui.fetchButton.setEnabled, False)
+            inmain(self.ui.fetchResultsButton.setEnabled, False)
             inmain(self.ui.renameButton.setEnabled, False)
             inmain(self.ui.progressBar.setProperty, "value", 25)
             inmain(show_wait_box, "HIDECANCEL\nGetting results…")
@@ -140,7 +147,7 @@ class FunctionSimilarityDialog(BaseDialog):
 
             inmain(self.ui.progressBar.setProperty, "value", 50)
 
-            nb_results = inmain(self.ui.lineEdit.text)
+            nb_results = inmain(self.ui.spinBox.text)
 
             res = RE_nearest_symbols_batch(
                 function_ids=[
@@ -192,7 +199,7 @@ class FunctionSimilarityDialog(BaseDialog):
         finally:
             inmain(hide_wait_box)
             inmain(self.ui.tabWidget.setCurrentIndex, 1)
-            inmain(self.ui.fetchButton.setEnabled, True)
+            inmain(self.ui.fetchResultsButton.setEnabled, True)
             inmain(self.ui.progressBar.setProperty, "value", 0)
 
             width: int = inmain(self.ui.resultsTable.width)
@@ -250,7 +257,19 @@ class FunctionSimilarityDialog(BaseDialog):
                         self._get_function_id(self.v_addr),
                     )
 
-    def _search_collection(self, search: str = None):
+    def _tab_changed(self, index: int) -> None:
+        if index == 0:
+            self.ui.description.setVisible(True)
+            self.ui.renameButton.setEnabled(False)
+            self.ui.fetchDataTypesButton.setEnabled(False)
+            self.ui.confidenceSlider.show()
+            self.ui.description.setText(
+                f"Confidence: {self.ui.confidenceSlider.sliderPosition():#02d}"
+            )
+        else:
+            self.ui.confidenceSlider.hide()
+
+    def _search_collection(self, query: dict = {}) -> None:
         def parse_date(date: str) -> str:
             parsed_date = datetime.strptime(date, "%Y-%m-%dT%H:%M:%S.%f")
             return f"{parsed_date:%Y-%m-%d %H:%M:%S}"
@@ -258,10 +277,14 @@ class FunctionSimilarityDialog(BaseDialog):
         try:
             inmain(show_wait_box, "HIDECANCEL\nGetting RevEng.AI collections…")
 
-            inmain(self.ui.fetchButton.setEnabled, False)
+            inmain(self.ui.fetchResultsButton.setEnabled, False)
+
+            logger.info(
+                "Searching for collections with '%s'", query or "N/A"
+            )
 
             res: dict = RE_collections_search(
-                search=search,
+                query=query,
                 page=1,
                 page_size=1024,
             ).json()
@@ -273,11 +296,16 @@ class FunctionSimilarityDialog(BaseDialog):
             collections = []
 
             for collection in result_collections:
+                data = {
+                    "item_name": collection["collection_name"],
+                    "item_id": collection["collection_id"],
+                }
+
                 collections.append(
                     (
                         CheckableItem(
                             checked=self.ui.layoutFilter.is_present(
-                                collection["collection_name"]
+                                data
                             )
                         ),
                         IconItem(
@@ -298,7 +326,7 @@ class FunctionSimilarityDialog(BaseDialog):
 
             # include binaries too
             res: dict = RE_binaries_search(
-                search=search,
+                query=query,
                 page=1,
                 page_size=1024,
             ).json()
@@ -308,11 +336,15 @@ class FunctionSimilarityDialog(BaseDialog):
             logger.info(f"Found {len(result_binaries)} binaries")
 
             for binary in result_binaries:
+                data = {
+                    "item_name": binary["binary_name"],
+                    "item_id": binary["binary_id"],
+                }
                 collections.append(
                     (
                         CheckableItem(
                             checked=self.ui.layoutFilter.is_present(
-                                binary["binary_name"]
+                                data
                             )
                         ),
                         IconItem(
@@ -331,6 +363,7 @@ class FunctionSimilarityDialog(BaseDialog):
                 inmain(self.ui.collectionsTable.model).fill_table,
                 collections
             )
+
             inmain(
                 self.ui.collectionsTable.setColumnWidth,
                 0,
@@ -348,8 +381,10 @@ class FunctionSimilarityDialog(BaseDialog):
             logger.error("An unexpected error has occurred. %s", e)
         finally:
             inmain(hide_wait_box)
-            inmain(self.ui.fetchButton.setEnabled, True)
-            inmain(self.ui.fetchButton.setFocus)
+            inmain(self._tab_changed, 0)
+            inmain(self.ui.tabWidget.setCurrentIndex, 0)
+            inmain(self.ui.fetchResultsButton.setEnabled, True)
+            inmain(self.ui.fetchResultsButton.setFocus)
 
     def _table_menu(self) -> None:
         rows = sorted(
@@ -378,21 +413,35 @@ class FunctionSimilarityDialog(BaseDialog):
 
             menu.exec_(QCursor.pos())
 
-    def _selected_collections(self) -> list[str]:
-        return [
-            self.ui.layoutFilter.itemAt(idx).widget().objectName()
-            for idx in range(self.ui.layoutFilter.count())
-        ]
-
-    def _filter(self, _) -> None:
-        # Starts the countdown to call the filtering method
-        self.typing_timer.start(self.searchDelay)
+    def _selected_collections(self) -> dict:
+        collections = []
+        binaries = []
+        for idx in range(self.ui.layoutFilter.count()):
+            item: QRevEngCard = self.ui.layoutFilter.itemAt(idx).widget()
+            data = item.custom_data
+            if data["is_collection"]:
+                collections.append(data["item_id"])
+            else:
+                binaries.append(data["item_id"])
+        return {
+            "collections": collections,
+            "binaries": binaries,
+        }
 
     def _confidence(self, value: int) -> None:
         self.ui.description.setText(f"Confidence: {value:#02d}")
 
     def _filter_collections(self):
-        self._search_collection(self.ui.collectionsFilter.text().lower())
+        query = self.ui.searchQuery.text().lower()
+        try:
+            query_data = self._parse_search_query(query)
+            self._search_collection(query_data)
+        except ValueError as e:
+            logger.error("Invalid search query: %s", query)
+            Dialog.showError(
+                "Auto Analysis",
+                f"Invalid search query: {e}"
+            )
 
     def _state_change(self, index: QModelIndex):
         row = index.row()
@@ -401,14 +450,23 @@ class FunctionSimilarityDialog(BaseDialog):
         item_name = item[1].text if isinstance(
             item[1], SimpleItem) else item[1]
 
+        item_id = item[6]
+        is_collection = item[2] == "Collection"
+
+        data = {
+            "row": row,
+            "is_collection": is_collection,
+            "item_name": item_name,
+            "item_id": item_id,
+        }
+
         if item[0].checkState == Qt.Checked:
             self.ui.layoutFilter.add_card(
-                item_name,
-                row
+                data
             )
         else:
             self.ui.layoutFilter.remove_card(
-                row
+                data
             )
 
     def _callback(self, row: int) -> None:

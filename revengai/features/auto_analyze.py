@@ -434,8 +434,9 @@ class AutoAnalysisDialog(BaseDialog):
                 elif isinstance(artifact, Typedef):
                     deci.typedefs[artifact.name] = artifact
             except Exception as e:
+                import traceback as tb
                 logger.error(f"Error while applying artifact '{artifact.name}'"
-                             f" of type {artifact.__class__.__name__}: {e}")
+                             f" of type {artifact.__class__.__name__}: {e} - {tb.format_exc()}")
                 if not soft_skip:
                     return f"Error while applying artifact '{artifact.name}'"\
                         f" of type {artifact.__class__.__name__}: {e}"

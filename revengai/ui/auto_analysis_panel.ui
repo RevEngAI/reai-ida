@@ -14,7 +14,7 @@
    <enum>Qt::NoContextMenu</enum>
   </property>
   <property name="windowTitle">
-   <string>RevEng.AI Toolkit: Match Functions</string>
+   <string>RevEng.AI: Match Functions</string>
   </property>
   <property name="windowIcon">
    <iconset>
@@ -432,7 +432,7 @@ p, li { white-space: pre-wrap; }
         <bool>false</bool>
        </property>
        <property name="text">
-        <string>Rename</string>
+        <string>Apply Matches</string>
        </property>
       </widget>
      </item>
