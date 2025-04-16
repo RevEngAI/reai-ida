@@ -1,3 +1,5 @@
+import ida_funcs
+import idaapi
 import logging
 
 from idc import (
@@ -23,14 +25,87 @@ from idaapi import (
     PLUGIN_UNL,
 )
 
+from idautils import (
+    Functions,
+)
+
+from revengai.actions import is_condition_met, is_analysis_complete
+from revengai.gui.dialog import Dialog
+from revengai.misc.qtutils import inthread, inmain
+
 from revengai.manager import RevEngState
 import urllib3
 from revengai.gui import Requests
 import importlib
-from idc import msg
+import idc
+
+from revengai.misc.utils import IDAUtils
 
 
 logger = logging.getLogger("REAI")
+
+
+class FunctionRenameHook(idaapi.IDP_Hooks):
+    state: RevEngState
+
+    def __init__(self, state: RevEngState):
+        self.state = state
+        idaapi.IDP_Hooks.__init__(self)
+        self.last_names = {}
+        # Initialize with current function names
+        for func_ea in Functions():
+            if IDAUtils.is_in_valid_segment(func_ea):
+                self.last_names[func_ea] = IDAUtils.get_demangled_func_name(
+                    func_ea
+                )
+
+        logger.info(f"FunctionRenameHook initialized: {self.last_names}")
+
+    def ev_rename(self, ea, new_name):
+        fpath = idc.get_input_file_path()
+
+        if is_condition_met(self.state, fpath):
+
+            def bg_task() -> None:
+                done, status = is_analysis_complete(self.state, fpath)
+                if done:
+                    # rename the function in the database
+                    old_name = self.last_names.get(ea, "")
+                    if old_name != new_name:
+                        self.last_names[ea] = new_name
+                else:
+                    logger.warning(
+                        "Analysis is not complete, skipping function rename"
+                    )
+
+            inthread(bg_task)
+        else:
+            logger.warning(
+                "Cannot rename function our the platform as long as the"
+                " plugin is not configured"
+            )
+        # Check if the renamed item is a function
+        # func = ida_funcs.get_func(ea)
+        # if func:
+        #     old_name = self.last_names.get(func.start_ea, "")
+        #     if old_name != new_name:
+        #         # Your custom action goes here
+        #         print(
+        #             f"Function renamed: {old_name} -> {new_name} at 0x{func.start_ea:X}")
+
+        #         # Example of custom action: log to a file
+        #         with open("function_renames.log", "a") as f:
+        #             f.write(f"0x{func.start_ea:X}: {old_name} -> {new_name}\n")
+
+        #         # Update our record of the name
+        #         self.last_names[func.start_ea] = new_name
+
+        # # Must return 0 to let IDA process the event
+        # return 0
+        logger.info(
+            f"Function renamed: {self.last_names.get(ea, '')} -> {new_name} at 0x{ea:X}"
+        )
+        return 0
 
 
 class RevEngPlugin(plugin_t):
@@ -47,6 +122,7 @@ class RevEngPlugin(plugin_t):
     wanted_name = "RevEngAI"
     help = f"Configure IDA plugin for {wanted_name}"
     comment = f"AI-assisted reverse engineering from {wanted_name}"
+    hook: FunctionRenameHook = None
 
     def __init__(self):
         super(RevEngPlugin, self).__init__()
@@ -57,6 +133,7 @@ class RevEngPlugin(plugin_t):
         """
         self.initialized = False
         self.state = RevEngState()
+        self.hook = FunctionRenameHook(self.state)
 
         if IDA_SDK_VERSION < 800:
             logger.warning("%s support 8.X IDA => skipping...",
@@ -81,6 +158,7 @@ class RevEngPlugin(plugin_t):
 
         logger.info("%s plugin starts", self.wanted_name)
 
+        self.hook.hook()
         self.run()
         return PLUGIN_KEEP
 
@@ -106,6 +184,8 @@ class RevEngPlugin(plugin_t):
         if self.state is not None:
             self.state.stop_plugin()
 
+        if hasattr(self, 'hook'):
+            self.hook.unhook()
         self.initialized = False
 
 
@@ -158,7 +238,7 @@ def PLUGIN_ENTRY():
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         return RevEngPlugin()
     else:
-        msg(
+        idc.msg(
             "[!] RevEng.AI Toolkit requires the dependencies to be "
             "installed.\n"
             "    Missing libraries: %s\n"
