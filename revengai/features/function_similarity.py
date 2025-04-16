@@ -16,10 +16,13 @@ from revengai.misc.qtutils import inthread, inmain
 from revengai.misc.utils import IDAUtils
 from revengai.models import CheckableItem, IconItem, SimpleItem
 from revengai.models.checkable_model import RevEngCheckableTableModel
-from revengai.models.single_checkable_model import RevEngSingleCheckableTableModel
+from revengai.models.single_checkable_model import (
+    RevEngSingleCheckableTableModel
+)
 from revengai.gui.custom_card import QRevEngCard
 from revengai.ui.function_similarity_panel_2 import Ui_FunctionSimilarityPanel
 from datetime import datetime
+
 
 logger = logging.getLogger("REAI")
 

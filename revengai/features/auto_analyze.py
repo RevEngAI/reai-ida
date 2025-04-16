@@ -24,6 +24,7 @@ from revengai.models.table_model import RevEngTableModel
 from revengai.ui.auto_analysis_panel_2 import Ui_AutoAnalysisPanel
 from datetime import datetime
 
+from typing import Generator
 
 from libbs.api import DecompilerInterface
 from libbs.artifacts import _art_from_dict
@@ -354,8 +355,8 @@ class AutoAnalysisDialog(BaseDialog):
                 status = res.get("data", {}).get("status", "")
                 if count >= 3 and not completed:
                     logger.error(
-                        "Failed to generate data types for functionId %d (timeout).",
-                        matched_func_id,
+                        "Failed to generate data types for "
+                        f"functionId {matched_func_id} (timeout).",
                     )
                     return
 
@@ -409,7 +410,11 @@ class AutoAnalysisDialog(BaseDialog):
         row: int,
         function_addr: int = 0,
     ) -> None:
-        def apply_type(deci: DecompilerInterface, artifact, soft_skip=False) -> None | str:
+        def apply_type(
+                deci: DecompilerInterface,
+                artifact,
+                soft_skip=False
+        ) -> None | str:
             supported_types = [
                 Function,
                 GlobalVariable,
@@ -435,9 +440,8 @@ class AutoAnalysisDialog(BaseDialog):
                 elif isinstance(artifact, Typedef):
                     deci.typedefs[artifact.name] = artifact
             except Exception as e:
-                import traceback as tb
                 logger.error(f"Error while applying artifact '{artifact.name}'"
-                             f" of type {artifact.__class__.__name__}: {e} - {tb.format_exc()}")
+                             f" of type {artifact.__class__.__name__}: {e}")
                 if not soft_skip:
                     return f"Error while applying artifact '{artifact.name}'"\
                         f" of type {artifact.__class__.__name__}: {e}"
@@ -727,14 +731,14 @@ class AutoAnalysisDialog(BaseDialog):
                                             IconItem(
                                                 resource_name="failed.png"
                                             ),
-                                            # CheckableItem(None, checked=False),
                                             # Original Function Name
                                             next(
                                                 (
                                                     function["name"]
                                                     for function in
                                                     self._functions
-                                                    if func_addr == function["start_addr"]
+                                                    if func_addr ==
+                                                    function["start_addr"]
                                                 ),
                                                 "Unknown",
                                             ),
@@ -784,11 +788,17 @@ class AutoAnalysisDialog(BaseDialog):
                                             "Unknown",
                                         )
 
-                                        nnfn = symbol["nearest_neighbor_function_name"]
-                                        nnbn = symbol["nearest_neighbor_binary_name"]
+                                        nnfn = symbol[
+                                            "nearest_neighbor_function_name"
+                                        ]
+                                        nnbn = symbol[
+                                            "nearest_neighbor_binary_name"
+                                        ]
 
                                         if (nnfn == symbol["org_func_name"]):
-                                            self._analysis[Analysis.SKIPPED.value] += 1
+                                            self._analysis[
+                                                Analysis.SKIPPED.value
+                                            ] += 1
                                             resultsData.append((
                                                 # Successful
                                                 # CheckableItem(
@@ -819,7 +829,9 @@ class AutoAnalysisDialog(BaseDialog):
                                                 Analysis.SUCCESSFUL.value
                                             ] += 1
 
-                                            confidence = symbol["confidence"] * 100
+                                            confidence = symbol[
+                                                "confidence"
+                                            ] * 100
 
                                             logger.info(
                                                 f"Found similar function "
@@ -830,13 +842,15 @@ class AutoAnalysisDialog(BaseDialog):
 
                                             symbol["function_addr"] = func_addr
 
+                                            icon_success = IconItem(
+                                                resource_name="success.png"
+                                            ),
+
                                             resultsData.append(
                                                 (
                                                     # Successful
                                                     # CheckableItem(symbol),
-                                                    IconItem(
-                                                        resource_name="success.png"
-                                                    ),
+                                                    icon_success,
                                                     # Original Function Name
                                                     symbol["org_func_name"],
                                                     # Matched Function Names
@@ -1122,9 +1136,9 @@ class AutoAnalysisDialog(BaseDialog):
             original_id = symbol["origin_function_id"]
             matched_name = symbol["nearest_neighbor_function_name"]
             confidence = symbol["confidence"]
-            nnfid = symbol["nearest_neighbor_id"]
-            nnbid = symbol["nearest_neighbor_binary_id"]
-            nn_is_debug = symbol["nearest_neighbor_debug"]
+            # nnfid = symbol["nearest_neighbor_id"]
+            # nnbid = symbol["nearest_neighbor_binary_id"]
+            # nn_is_debug = symbol["nearest_neighbor_debug"]
 
             if IDAUtils.set_name(
                     function_addr,
@@ -1228,7 +1242,7 @@ class AutoAnalysisDialog(BaseDialog):
     # Yield successive n-sized
     # chunks from data.
     @staticmethod
-    def _divide_chunks(data: list, n: int = 50) -> list:
+    def _divide_chunks(data: list, n: int = 50) -> Generator[list, None, None]:
         # looping till length l
         for idx in range(0, len(data), n):
             yield data[idx: idx + n]
