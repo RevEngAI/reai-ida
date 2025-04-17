@@ -1,5 +1,5 @@
 import logging
-import sys
+import idc
 
 from idc import (
     get_inf_attr,
@@ -28,7 +28,6 @@ from revengai.manager import RevEngState
 import urllib3
 from revengai.gui import Requests
 import importlib
-from idc import msg
 
 
 logger = logging.getLogger("REAI")
@@ -60,7 +59,8 @@ class RevEngPlugin(plugin_t):
         self.state = RevEngState()
 
         if IDA_SDK_VERSION < 800:
-            logger.warning("%s support 8.X IDA => skipping...", self.wanted_name)
+            logger.warning("%s support 8.X IDA => skipping...",
+                           self.wanted_name)
             return PLUGIN_SKIP
         elif get_inf_attr(INF_APPTYPE) not in (
             APPT_LIBRARY,
@@ -109,33 +109,73 @@ class RevEngPlugin(plugin_t):
         self.initialized = False
 
 
+def is_dependency_installed(package_name):
+    """
+    Check if a Python package is installed.
+    Works for Python 3.10 - 3.12
+
+    Args:
+        package_name (str): Name of the package to check
+
+    Returns:
+        bool: True if package is installed, False otherwise
+    """
+    try:
+        spec = importlib.util.find_spec(package_name)
+        return spec is not None
+    except (ImportError, AttributeError):
+        return False
+
+
+def check_dependencies(required_packages):
+    """
+    Check if all required packages are installed.
+
+    Args:
+        required_packages (list): List of package names to check
+
+    Returns:
+        tuple: (bool, list) - (all packages installed, missing packages)
+    """
+    missing_packages = []
+
+    for package in required_packages:
+        if not is_dependency_installed(package):
+            missing_packages.append(package)
+
+    return len(missing_packages) == 0, missing_packages
+
+
 # The PLUGIN_ENTRY method is what IDA calls when scriptable plugins are loaded.
 # It needs to return a plugin of type idaapi.plugin_t.
 def PLUGIN_ENTRY():
-    required_version = (3, 10)
-    if sys.version_info < required_version:
-        msg(
-            f"[!] RevEng.AI Toolkit requires Python {required_version[0]}.{required_version[1]} or higher.\n"
-        )
-        return
-
     requested_libraries = ["reait", "libbs"]
 
-    have_all_libraries = all(
-        importlib.find_loader(lib) is not None for lib in requested_libraries
-    )
+    all_installed, missing_libraries = check_dependencies(requested_libraries)
 
-    if have_all_libraries:
+    if all_installed:
         # Workaround to suppress warnings about SSL certificates
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         return RevEngPlugin()
     else:
-        msg("[!] RevEng.AI Toolkit requires the dependencies to be " "installed.\n")
+        idc.msg(
+            "[!] RevEng.AI Toolkit requires the dependencies to be "
+            "installed.\n"
+            "    Missing libraries: %s\n"
+            "    Please install them using the following command:\n"
+            "    pip install %s\n"
+            % (
+                ", ".join(missing_libraries),
+                " ".join(requested_libraries),
+            )
+        )
 
     execute_ui_requests(
         (
             Requests.MsgBox(
-                RevEngPlugin.wanted_name, "Unable to load all the required modules.", -1
+                RevEngPlugin.wanted_name,
+                "Unable to load all the required modules.",
+                -1
             ),
         )
     )
