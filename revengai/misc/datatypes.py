@@ -233,10 +233,6 @@ def fetch_data_types(
             "Data types generation completed."
         )
 
-        logger.info(
-            f"Items: {items}"
-        )
-
         def extract(item: dict) -> dict:
             types = item.get("data_types", {})
             data = {
