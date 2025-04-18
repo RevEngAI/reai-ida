@@ -338,7 +338,7 @@ class FunctionSimilarityDialog(BaseDialog):
     @wait_box_decorator(
         "HIDECANCEL\nApplying function name and data types…"
     )
-    def _rename_symbol(self):
+    def _rename_symbol(self, *args) -> None:
         checked_elements = []
 
         data = self.ui.resultsTable.model().get_datas()

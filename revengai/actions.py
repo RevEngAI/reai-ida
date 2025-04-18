@@ -937,9 +937,10 @@ def generate_function_data_types(state: RevEngState) -> None:
                     )
 
                     function_ids = []
-                    
+
                     logger.info(
-                        "Gathering a list of functions to generate data types on
+                        "Gathering a list of functions to"
+                        " generate data types on"
                     )
 
                     res: dict = RE_analyze_functions(
@@ -960,14 +961,17 @@ def generate_function_data_types(state: RevEngState) -> None:
                             "Successfully started the generation of functions"
                             " data types"
                         )
-                        
+
                         Dialog.showInfo(
                             "Function Types",
                             "Successfully started the generation of functions"
                             " data types",
                         )
                     else:
-                        Dialog.showInfo("Function Types", "Failed to generate function data types")
+                        Dialog.showInfo(
+                            "Function Types",
+                            "Failed to generate function data types"
+                        )
 
                 except HTTPError as e:
                     resp = e.response.json()
@@ -1020,7 +1024,6 @@ def apply_function_data_types(state: RevEngState) -> None:
             function_ids = []
             function_mapper = {}
             functions = res.get("functions", [])
-
 
             for function in functions:
                 function_ids.append(function["function_id"])
@@ -1295,7 +1298,6 @@ def auto_unstrip(state: RevEngState) -> None:
         )
 
 
-
 def generate_summaries(state: RevEngState, function_id: int = 0) -> None:
     fpath = idc.get_input_file_path()
 
@@ -1433,7 +1435,8 @@ def is_condition_met(state: RevEngState, fpath: str) -> bool:
     if not state.config.is_valid():
         setup_wizard(state)
     elif not fpath or not isfile(fpath):
-        idc.warning("The target file was not found on disk. Has it been moved or renamed?")
+        idc.warning(
+            "The target file was not found on disk. Has it been moved or renamed?")
     else:
         return True
     return False
@@ -1484,7 +1487,7 @@ def about(_) -> None:
 def update(_) -> None:
     try:
         res: Response = get(
-            "https://api.github.com/repos/revengai/reai-ida/releases/latest", 
+            "https://api.github.com/repos/revengai/reai-ida/releases/latest",
             timeout=30,
         )
 
@@ -1493,7 +1496,7 @@ def update(_) -> None:
         j = res.json()
         if 'tag_name' not in j:
             raise ValueError("Invalid response from GitHub API")
-        
+
         version_stable = j["tag_name"].lstrip("v")
 
         f = UpdateForm(
