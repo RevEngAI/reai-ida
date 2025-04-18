@@ -1,12 +1,12 @@
 import logging
 from concurrent.futures import ThreadPoolExecutor, CancelledError
 from enum import IntEnum
-from re import sub
 
 import idc
 from PyQt5.QtCore import Qt, QModelIndex
 from PyQt5.QtGui import QCursor
 from PyQt5.QtWidgets import QMenu
+from PyQt5.QtGui import QIcon
 from idaapi import hide_wait_box, show_wait_box, user_cancelled
 from idautils import Functions
 from requests import HTTPError, RequestException
@@ -428,11 +428,37 @@ class AutoAnalysisDialog(BaseDialog):
                 )
             )
 
-            # summariesAction = menu.addAction("Generate AI Summaries")
-            # summariesAction.triggered.connect(
-            # lambda: self._generate_summaries(func_id))
+            excludeRowAction = menu.addAction("Exclude")
+            excludeRowAction.triggered.connect(
+                lambda: self._exclude_row(rows[0])
+            )
+
+            includeRowAction = menu.addAction("Include")
+            includeRowAction.triggered.connect(
+                lambda: self._include_row(rows[0])
+            )
 
             menu.exec_(QCursor.pos())
+
+    def _exclude_row(self, row) -> None:
+        model = self.ui.resultsTable.model()
+        index = model.index(row, 0)
+        item: IconItem = model.getModelData(index)
+        item.icon = QIcon(
+            IconItem._plugin_resource("exclude.png")
+        )
+        item.text = "Excluded"
+        model.dataChanged.emit(index, index)
+
+    def _include_row(self, row) -> None:
+        model = self.ui.resultsTable.model()
+        index = model.index(row, 0)
+        item: IconItem = model.getModelData(index)
+        item.icon = QIcon(
+            IconItem._plugin_resource("success.png")
+        )
+        item.text = "Yes"
+        model.dataChanged.emit(index, index)
 
     @_wait_box_decorator(
         "HIDECANCEL\nGetting data types…"
@@ -1145,54 +1171,33 @@ class AutoAnalysisDialog(BaseDialog):
             inmain(self.ui.fetchResultsButton.setEnabled, True)
             inmain(self.ui.fetchResultsButton.setFocus)
 
-    def _rename_functions(self):
-        batches = []
-        functions = {}
+    @_wait_box_decorator(
+        "HIDECANCEL\nRenaming functions and applying types…"
+    )
+    def _rename_functions(self, *args):
+        data = self.ui.resultsTable.model().get_datas()
 
-        for row_item in self.ui.resultsTable.model().get_datas():
+        for row in range(len(data)):
             if (
-                    isinstance(row_item[0], CheckableItem)
-                    and row_item[0].checkState == Qt.Checked
+                    isinstance(data[row][0], IconItem)
+                    and data[row][0].text == "Yes"
             ):
-                symbol = row_item[0].data
+                symbol = data[row][0].data
+                signature = data[row][3].data
 
                 nnfn = symbol['nearest_neighbor_function_name']
+                original_addr = symbol['function_addr'] + self.base_addr
 
                 if IDAUtils.set_name(
-                        symbol["function_addr"] + self.base_addr,
-                        symbol["nearest_neighbor_function_name"],
+                        original_addr,
+                        nnfn,
                 ):
-                    func_id = self._get_function_id(symbol["function_addr"])
-                    if func_id:
-                        functions[func_id] = nnfn
-                        continue
-
-                batches.append(
-                    "\n     • "
-                    + sub(
-                        r"^(.{10}).*\s+➡\s+(.{10}).*$",
-                        r"\g<1>…  ➡  \g<2>…",
-                        f"{symbol['org_func_name']}  ➡  {nnfn}",
-                    )
-                )
-
-        if len(functions):
-            inthread(self._batch_function_rename, functions)
-
-        if len(batches):
-            cnt = len(batches)
-
-            # trunk the list of unrenamed functions
-            del batches[5:]
-
-            if len(batches) != cnt:
-                batches.append("\n     • …")
-
-            idc.warning(
-                "Can't rename the following"
-                f"{'' if cnt == 1 else ' ' + str(cnt)} function{'s'[:cnt ^ 1]}"
-                f", name already exists for: {''.join(batches)}"
-            )
+                    if signature is not None:
+                        apply_data_types(
+                            row,
+                            original_addr,
+                            self.ui.resultsTable,
+                        )
 
     def _rename_function(self, selected, batches: list = None) -> None:
         if selected and len(selected) > 3 and isinstance(
