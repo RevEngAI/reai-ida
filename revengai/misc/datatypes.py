@@ -332,6 +332,9 @@ def import_data_types(
                 continue
 
             func.addr = func_addr
+            logger.info(
+                f"Applying function signature for '{func.name}'"
+            )
             res = apply_type(deci, func)
 
             if res is not None:
