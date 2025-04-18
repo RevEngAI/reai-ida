@@ -1,9 +1,7 @@
 from typing import Any, Optional
-
 from PyQt5.QtCore import QAbstractTableModel, Qt
-
 from revengai.models import IconItem, SimpleItem
-
+from revengai.models import CheckableItem
 import logging
 
 logger = logging.getLogger("REAI")
@@ -32,6 +30,28 @@ class RevEngTableModel(QAbstractTableModel):
             elif role == Qt.DisplayRole:
                 return item.text if isinstance(item, SimpleItem) else item
         return None
+
+    def setData(self, index, value, role=None) -> bool:
+        super().setData(index, value, role)
+        data = self._data[index.row()]
+        data = list(data)
+
+        if isinstance(data[index.column()], CheckableItem):
+            if role == Qt.CheckStateRole:
+                # set the check state
+                data[index.column()].checkState = value
+                self.dataChanged.emit(index, index)
+                return True
+        else:
+            # set the value
+            data[index.column()] = value
+            # convert it back to a tuple
+            data = tuple(data)
+            # set the data back to the original list
+            self._data[index.row()] = data
+            # emit the dataChanged signal
+            self.dataChanged.emit(index, index)
+            return True
 
     def get_datas(self) -> list[Any]:
         return self._data
