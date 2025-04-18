@@ -102,6 +102,115 @@ def apply_signature(row: int, fnc: Function, deps: list, resultTable):
     model.dataChanged.emit(index, index)
 
 
+def apply_data_types(
+        row: int,
+        function_addr: int = 0,
+        resultsTable=None,
+):
+    def apply_type(
+        deci: DecompilerInterface,
+        artifact,
+        soft_skip=False
+    ) -> None | str:
+        supported_types = [
+            Function,
+            GlobalVariable,
+            Enum,
+            Struct,
+            Typedef
+        ]
+
+        if not any(isinstance(artifact, t) for t in supported_types):
+            return "Unsupported artifact type: " \
+                f"{artifact.__class__.__name__}"
+
+        try:
+
+            if isinstance(artifact, Function):
+                deci.functions[artifact.addr] = artifact
+            elif isinstance(artifact, GlobalVariable):
+                deci.global_vars[artifact.addr] = artifact
+            elif isinstance(artifact, Enum):
+                deci.enums[artifact.name] = artifact
+            elif isinstance(artifact, Struct):
+                deci.structs[artifact.name] = artifact
+            elif isinstance(artifact, Typedef):
+                deci.typedefs[artifact.name] = artifact
+        except Exception as e:
+            logger.error(f"Error while applying artifact '{artifact.name}'"
+                         f" of type {artifact.__class__.__name__}: {e}")
+            if not soft_skip:
+                return f"Error while applying artifact '{artifact.name}'"\
+                    f" of type {artifact.__class__.__name__}: {e}"
+
+        return None
+
+    def apply_types(
+            deci: DecompilerInterface,
+            artifacts: list
+    ) -> None | str:
+        for artifact in artifacts:
+            error = apply_type(deci, artifact, soft_skip=True)
+            if error is not None:
+                return error
+        return None
+
+    def _load_many_artifacts_from_list(artifacts: list[dict]) -> list:
+        _artifacts = []
+        for artifact in artifacts:
+            art = _art_from_dict(artifact)
+            if art is not None:
+                _artifacts.append(art)
+        return _artifacts
+
+    deci = DecompilerInterface.discover(force_decompiler="ida")
+    if not deci:
+        logger.error("Libbs: Unable to find a decompiler")
+        return
+
+    try:
+        model = resultsTable.model()
+        index = model.index(row, 3)
+        data = model.getModelData(index)
+        logger.info(
+            f"Data: {data}"
+        )
+        if isinstance(data, SimpleItem) and data.data is not None:
+            # get the function signature from the table
+            function: Function = data.data.get("function")
+            deps = data.data.get("deps")
+
+            function.addr = function_addr
+
+            # fisrt apply the dependencies
+            res = apply_types(deci, _load_many_artifacts_from_list(deps))
+            if res is not None:
+                logger.error(
+                    f"Failed to apply function dependencies: {res}")
+                return
+
+            # then apply the function signature
+            res = apply_type(deci, function)
+            if res is not None:
+                logger.error(f"Failed to apply function signature: {res}")
+                return
+
+            # show success message
+            logger.info(
+                "Successfully applied function signature and dependencies"
+            )
+        else:
+            logger.warning(
+                "Failed to get function signature from the table."
+            )
+    except Exception as e:
+        import traceback as tb
+        logger.error(f"Error: {e} \n{tb.format_exc()}")
+        idaapi.warning(
+            f"Error: {e}"
+        )
+
+
 class Analysis(IntEnum):
     TOTAL = 0
     SKIPPED = 1
@@ -549,121 +658,11 @@ class AutoAnalysisDialog(BaseDialog):
         row: int,
         function_addr: int = 0,
     ) -> None:
-        def apply_type(
-                deci: DecompilerInterface,
-                artifact,
-                soft_skip=False
-        ) -> None | str:
-            supported_types = [
-                Function,
-                GlobalVariable,
-                Enum,
-                Struct,
-                Typedef
-            ]
-
-            if not any(isinstance(artifact, t) for t in supported_types):
-                return "Unsupported artifact type: " \
-                    f"{artifact.__class__.__name__}"
-
-            try:
-
-                if isinstance(artifact, Function):
-                    deci.functions[artifact.addr] = artifact
-                elif isinstance(artifact, GlobalVariable):
-                    deci.global_vars[artifact.addr] = artifact
-                elif isinstance(artifact, Enum):
-                    deci.enums[artifact.name] = artifact
-                elif isinstance(artifact, Struct):
-                    deci.structs[artifact.name] = artifact
-                elif isinstance(artifact, Typedef):
-                    deci.typedefs[artifact.name] = artifact
-            except Exception as e:
-                logger.error(f"Error while applying artifact '{artifact.name}'"
-                             f" of type {artifact.__class__.__name__}: {e}")
-                if not soft_skip:
-                    return f"Error while applying artifact '{artifact.name}'"\
-                        f" of type {artifact.__class__.__name__}: {e}"
-
-            return None
-
-        def apply_types(
-                deci: DecompilerInterface,
-                artifacts: list
-        ) -> None | str:
-            for artifact in artifacts:
-                error = apply_type(deci, artifact, soft_skip=True)
-                if error is not None:
-                    return error
-            return None
-
-        def _load_many_artifacts_from_list(artifacts: list[dict]) -> list:
-            _artifacts = []
-            for artifact in artifacts:
-                art = _art_from_dict(artifact)
-                if art is not None:
-                    _artifacts.append(art)
-            return _artifacts
-
-        deci = DecompilerInterface.discover(force_decompiler="ida")
-        if not deci:
-            logger.error("Libbs: Unable to find a decompiler")
-            return
-
-        try:
-            model = self.ui.resultsTable.model()
-            index = model.index(row, 3)
-            data = model.getModelData(index)
-            logger.info(
-                f"Data: {data}"
-            )
-            if isinstance(data, SimpleItem) and data.data is not None:
-                # get the function signature from the table
-                function: Function = data.data.get("function")
-                deps = data.data.get("deps")
-
-                function.addr = function_addr
-
-                # fisrt apply the dependencies
-                res = apply_types(deci, _load_many_artifacts_from_list(deps))
-                if res is not None:
-                    logger.error(
-                        f"Failed to apply function dependencies: {res}")
-                    idaapi.warning(
-                        f"Failed to apply function dependencies: {res}"
-                    )
-                    return
-
-                # then apply the function signature
-                res = apply_type(deci, function)
-                if res is not None:
-                    logger.error(f"Failed to apply function signature: {res}")
-                    idaapi.warning(
-                        f"Failed to apply function signature: {res}"
-                    )
-                    return
-
-                # show success message
-                logger.info(
-                    "Successfully applied function signature and dependencies"
-                )
-                idaapi.info(
-                    "Successfully applied function signature and dependencies"
-                )
-            else:
-                logger.warning(
-                    "Failed to get function signature from the table."
-                )
-                idaapi.warning(
-                    "Failed to get function signature from the table.\n"
-                    "Make sure to fetch the data types first."
-                )
-        except Exception as e:
-            import traceback as tb
-            logger.error(f"Error: {e} \n{tb.format_exc()}")
-            idaapi.warning(
-                f"Error: {e}"
-            )
+        apply_data_types(
+            row=row,
+            function_addr=function_addr,
+            resultsTable=self.ui.resultsTable,
+        )
 
     def _start_analysis(self) -> None:
         inthread(self._auto_analysis)
