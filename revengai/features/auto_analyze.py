@@ -9,7 +9,7 @@ from PyQt5.QtGui import QCursor
 from PyQt5.QtWidgets import QMenu
 from idaapi import hide_wait_box, show_wait_box, user_cancelled
 from idautils import Functions
-from requests import HTTPError, RequestException, Response
+from requests import HTTPError, RequestException
 from reait.api import RE_nearest_symbols_batch
 from reait.api import RE_collections_search
 from reait.api import RE_binaries_search
@@ -38,11 +38,8 @@ from libbs.artifacts import (
 )
 
 from reait.api import (
-    RE_analysis_lookup,
-    RE_generate_data_types,
     RE_functions_data_types,
     RE_functions_data_types_poll,
-    RE_poll_data_types
 )
 
 import idaapi
@@ -211,6 +208,72 @@ def apply_data_types(
         )
 
 
+def fetch_data_types(
+        function_ids: list[int],
+) -> list[dict]:
+    try:
+        # ignore the results
+        RE_functions_data_types(
+            function_ids=function_ids,
+        )
+
+        # poll for data type completition
+        res: dict = RE_functions_data_types_poll(
+            function_ids=function_ids,
+        ).json()
+
+        data = res.get("data", {})
+        total_count = data.get("total_count", 0)
+        total_data_types = data.get("total_data_types_count", 0)
+        items = data.get("items", [])
+
+        while total_count != total_data_types:
+            time.sleep(1)
+            res = RE_functions_data_types_poll(
+                function_ids=function_ids,
+            ).json()
+            data = res.get("data", {})
+            total_count = data.get("total_count", 0)
+            total_data_types = data.get("total_data_types_count", 0)
+            items = data.get("items", [])
+
+        logger.info(
+            "Data types generation completed."
+        )
+
+        def extract(item: dict) -> dict:
+            types = item.get("data_types", {})
+            data = {
+                "function_id": item.get("function_id", 0),
+            }
+            if types:
+                data["func_types"] = types.get("func_types", {})
+                data["func_deps"] = types.get("func_deps", {})
+            return data
+
+        completed_items = list(
+            map(
+                extract,
+                filter(
+                    lambda item:
+                    item.get("status", "not_completed") == "completed" and
+                    item.get("completed", False),
+                    items
+                )
+            )
+        )
+
+        return completed_items
+    except HTTPError as e:
+        resp = e.response.json()
+        error = resp.get("message", "Unexpected error occurred.")
+        logger.error(
+            "Error while fetching data types for the specified function:"
+            f"{error}"
+        )
+        return []
+
+
 class Analysis(IntEnum):
     TOTAL = 0
     SKIPPED = 1
@@ -345,7 +408,6 @@ class AutoAnalysisDialog(BaseDialog):
 
             func_addr = selected[0].data["function_addr"] + self.base_addr
             matched_func_id = selected[0].data["nearest_neighbor_id"]
-            matched_bin_id = selected[0].data["nearest_neighbor_binary_id"]
             fetchDataTypesAction = menu.addAction("Fetch Data Types")
             fetchDataTypesAction.triggered.connect(
                 lambda: self._function_get_datatypes(
@@ -353,8 +415,6 @@ class AutoAnalysisDialog(BaseDialog):
                     rows[0],
                     # matched function id
                     matched_func_id,
-                    # matched bin id
-                    matched_bin_id
                 )
             )
 
@@ -395,56 +455,15 @@ class AutoAnalysisDialog(BaseDialog):
                     if function_id:
                         function_ids.append(function_id)
 
-            # ignore the results
-            RE_functions_data_types(
+            completed_items = fetch_data_types(
                 function_ids=function_ids,
             )
 
-            # poll for data type completition
-            res: dict = RE_functions_data_types_poll(
-                function_ids=function_ids,
-            ).json()
-
-            data = res.get("data", {})
-            total_count = data.get("total_count", 0)
-            total_data_types = data.get("total_data_types_count", 0)
-            items = data.get("items", [])
-
-            while total_count != total_data_types:
-                time.sleep(1)
-                res = RE_functions_data_types_poll(
-                    function_ids=function_ids,
-                ).json()
-                data = res.get("data", {})
-                total_count = data.get("total_count", 0)
-                total_data_types = data.get("total_data_types_count", 0)
-                items = data.get("items", [])
-
-            logger.info(
-                "Data types generation completed."
-            )
-
-            def extract(item: dict) -> dict:
-                types = item.get("data_types", {})
-                data = {
-                    "function_id": item.get("function_id", 0),
-                }
-                if types:
-                    data["func_types"] = types.get("func_types", {})
-                    data["func_deps"] = types.get("func_deps", {})
-                return data
-
-            completed_items = list(
-                map(
-                    extract,
-                    filter(
-                        lambda item:
-                        item.get("status", "not_completed") == "completed" and
-                        item.get("completed", False),
-                        items
-                    )
+            if len(completed_items) == 0:
+                logger.info(
+                    "No data types found for the specified functions."
                 )
-            )
+                return
 
             logger.info(
                 f"Applying signatures for {len(completed_items)} functions"
@@ -514,118 +533,24 @@ class AutoAnalysisDialog(BaseDialog):
             self,
             row: int,
             matched_func_id: int = 0,
-            matched_function_bid: int = 0,
     ) -> None:
         try:
-            # first step is to get the analysis id for the function
-            res: dict = RE_analysis_lookup(matched_function_bid).json()
-            matched_analysis_id = res.get("analysis_id", 0)
 
-            if matched_analysis_id == 0:
-                logger.error(
-                    "Failed to get analysis id for functionId %d.",
-                    matched_func_id,
-                )
-                return
-
-            should_request_generation = False
-
-            try:
-                # poll for data type completition
-                res: Response = RE_poll_data_types(
-                    matched_analysis_id,
-                    matched_func_id
-                )
-            except HTTPError as e:
-                if e.response.status_code == 404:
-                    # only request generation if we don't yet have a task for
-                    # that function
-                    should_request_generation = True
-
-            if should_request_generation:
-                try:
-                    # second step is to start the generation of the datatypes
-                    res = RE_generate_data_types(
-                        matched_analysis_id,
-                        [matched_func_id]
-                    ).json()
-                    status = res.get("status", False)
-                except HTTPError as e:
-                    if e.response.status_code == 409:
-                        logger.info(
-                            "Data types generation already started for"
-                            " functionId %d.",
-                            matched_func_id,
-                        )
-                        status = True
-                    else:
-                        raise e
-            else:
-                status = True
-
-            if status:
-                logger.info(
-                    "Successfully started the generation of functions"
-                    " data types"
-                )
-            else:
-                logger.error(
-                    "Failed to start the generation of functions data types"
-                )
-                return
-
-            logger.info(
-                "Polling for data types to be generated... AID:"
-                f" {matched_analysis_id} FID: {matched_func_id}"
+            completed_items = fetch_data_types(
+                function_ids=[matched_func_id],
             )
 
-            # poll for data type completition
-            res: dict = RE_poll_data_types(
-                matched_analysis_id,
-                matched_func_id
-            ).json()
-
-            completed = res.get("data", {}).get("completed", False)
-            status = res.get("data", {}).get("status", "")
-
-            count = 0
-
-            while not completed and status != "completed":
-                count += 1
-                # sleep 1 seconds before polling again
-                time.sleep(1)
-                logger.info("Waiting for data types to be generated...")
-                res = RE_poll_data_types(
-                    matched_analysis_id,
-                    matched_func_id
-                ).json()
-                completed = res.get("data", {}).get("completed", False)
-                status = res.get("data", {}).get("status", "")
-                if count >= 3 and not completed:
-                    logger.error(
-                        "Failed to generate data types for "
-                        f"functionId {matched_func_id} (timeout).",
-                    )
-                    return
+            if len(completed_items) == 0:
+                logger.info(
+                    "No data types found for the specified function."
+                )
+                return
 
             logger.info(
                 "Data types generation completed."
             )
 
-            data_types = res.get(
-                "data",
-                {}
-            ).get(
-                "data_types",
-                None
-            )
-
-            if data_types is None:
-                logger.error(
-                    "Failed to get function data types for functionId %d.",
-                    matched_func_id,
-                )
-                return
+            data_types = completed_items[0]
 
             func_types = data_types.get("func_types", None)
             func_deps = data_types.get("func_deps", None)
