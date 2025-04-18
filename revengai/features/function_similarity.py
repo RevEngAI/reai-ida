@@ -22,7 +22,16 @@ from revengai.models.single_checkable_model import (
 from revengai.gui.custom_card import QRevEngCard
 from revengai.ui.function_similarity_panel_2 import Ui_FunctionSimilarityPanel
 from datetime import datetime
+from libbs.artifacts import _art_from_dict
+from libbs.artifacts import (
+    Function,
+)
 
+from revengai.misc.datatypes import (
+    fetch_data_types,
+    apply_signature,
+    wait_box_decorator,
+)
 
 logger = logging.getLogger("REAI")
 
@@ -106,14 +115,100 @@ class FunctionSimilarityDialog(BaseDialog):
 
     def showEvent(self, event):
         super(FunctionSimilarityDialog, self).showEvent(event)
-
         inthread(self._search_collection)
 
     def closeEvent(self, event):
         super(FunctionSimilarityDialog, self).closeEvent(event)
 
-    def _fetch_data_types(self):
-        pass
+    @wait_box_decorator(
+        "HIDECANCEL\nGetting data types…"
+    )
+    def _fetch_data_types(self, *args) -> None:
+        try:
+            # get the model from the result table
+            data = self.ui.resultsTable.model().get_datas()
+            # loop all rows in the table
+            function_ids = []
+            for element in data:
+                check_item: CheckableItem = element[0]
+                # get the function id from the table
+                function_id = check_item.data.get(
+                    "nearest_neighbor_id",
+                    None
+                )
+                if function_id:
+                    function_ids.append(function_id)
+
+            completed_items = fetch_data_types(
+                function_ids=function_ids,
+            )
+
+            if len(completed_items) == 0:
+                logger.info(
+                    "No data types found for the specified functions."
+                )
+                return
+
+            logger.info(
+                f"Applying signatures for {len(completed_items)} functions"
+            )
+
+            model = self.ui.resultsTable.model()
+            data = model.get_datas()
+            for row in range(len(data)):
+                row_data = data[row]
+                icon_item: IconItem = row_data[0]
+
+                # skip failed items
+                if icon_item.data is None:
+                    continue
+
+                function_id = icon_item.data.get(
+                    "nearest_neighbor_id",
+                    0
+                )
+
+                logger.info(
+                    f"Applying signature for fid: {function_id}"
+                )
+
+                match_data_types = next(
+                    (
+                        item for item in completed_items
+                        if item.get("function_id", 0) == function_id
+                    ),
+                    None
+                )
+
+                if match_data_types is None:
+                    # skip unmatched items
+                    continue
+
+                logger.info(
+                    f"Found matching data types for fid: {function_id}"
+                )
+
+                func_types = match_data_types.get("func_types", {})
+                func_deps = match_data_types.get("func_deps", [])
+
+                if func_types is not None:
+                    fnc: Function = _art_from_dict(func_types)
+                    logger.info(
+                        f"Applying signature for {fnc.name}"
+                    )
+                    apply_signature(row, fnc, func_deps, self.ui.resultsTable)
+                else:
+                    logger.error(
+                        "Failed to get function data types for functionId"
+                        f" {function_id}."
+                    )
+        except HTTPError as e:
+            resp = e.response.json()
+            error = resp.get("message", "Unexpected error occurred.")
+            logger.error(
+                "Error while fetching data types for the specified function:"
+                f"{error}"
+            )
 
     def _fetch(self):
         if self.v_addr != idc.BADADDR:
@@ -168,31 +263,23 @@ class FunctionSimilarityDialog(BaseDialog):
 
             data = []
 
-            # header = [
-            #     "Selected",
-            #     "Original Function Name",
-            #     "Matched Function Name",
-            #     "Signature",
-            #     "Matched Binary"
-            #     "Confidence",
-            #     "Error",
-            # ],
-
             for function in matches:
 
                 nnbn = function["nearest_neighbor_binary_name"]
                 confidence = function["confidence"] * 100
+                nnfn = function["nearest_neighbor_function_name"]
+
+                function["function_addr"] = self.v_addr + self.base_addr
+                function["function_id"] = function_id
 
                 data.append(
                     (
                         CheckableItem(
                             checked=False,
+                            data=function,
                         ),
                         func_name,
-                        SimpleItem(
-                            function["nearest_neighbor_function_name"],
-                            function
-                        ),
+                        nnfn,
                         SimpleItem(
                             text="N/A",
                             data=None,
@@ -204,6 +291,7 @@ class FunctionSimilarityDialog(BaseDialog):
 
             inmain(model.fill_table, data)
             inmain(self.ui.renameButton.setEnabled, len(data) > 0)
+            inmain(self.ui.fetchDataTypesButton.setEnabled, len(data) > 0)
 
             if len(data) == 0:
                 inmain(
@@ -233,9 +321,18 @@ class FunctionSimilarityDialog(BaseDialog):
 
             width: int = inmain(self.ui.resultsTable.width)
 
-            inmain(self.ui.resultsTable.setColumnWidth, 0, round(width * 0.38))
-            inmain(self.ui.resultsTable.setColumnWidth, 1, round(width * 0.12))
-            inmain(self.ui.resultsTable.setColumnWidth, 2, round(width * 0.5))
+            # Selected
+            inmain(self.ui.resultsTable.setColumnWidth, 0, round(width * 0.08))
+            # Original Function Name
+            inmain(self.ui.resultsTable.setColumnWidth, 1, round(width * 0.2))
+            # Matched Function Name
+            inmain(self.ui.resultsTable.setColumnWidth, 2, round(width * 0.2))
+            # Signature
+            inmain(self.ui.resultsTable.setColumnWidth, 3, round(width * 0.32))
+            # Matched Binary
+            inmain(self.ui.resultsTable.setColumnWidth, 4, round(width * 0.2))
+            # Confidence
+            inmain(self.ui.resultsTable.setColumnWidth, 5, round(width * 0.08))
 
     def _rename_symbol(self):
         if not self.ui.resultsTable.selectedIndexes():
