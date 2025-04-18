@@ -41,6 +41,7 @@ from reait.api import (
     RE_analysis_lookup,
     RE_generate_data_types,
     RE_functions_data_types,
+    RE_functions_data_types_poll,
     RE_poll_data_types
 )
 
@@ -64,6 +65,41 @@ def _wait_box_decorator(message: str = None):
 
         return wrapper
     return decorator
+
+
+def function_arguments(fnc: Function) -> list[str]:
+    args = []
+    for k in fnc.header.args:
+        arg: FunctionArgument = fnc.header.args[k]
+        args.append(
+            f"{arg.type} {arg.name}"
+        )
+    return args
+
+
+def function_to_str(fnc: Function) -> str:
+    # convert the signature to a string representation
+    return f"{fnc.type} {fnc.name}"\
+        f"({', '.join(function_arguments(fnc))})"
+
+
+def apply_signature(row: int, fnc: Function, deps: list, resultTable):
+    # set the selected row of the table and modify the function
+    # signature column to show the new signature
+    model = resultTable.model()
+    index = model.index(row, 3)
+    signature = function_to_str(fnc)
+    logger.info(
+        f"Function signature: {signature}"
+    )
+    model.setData(index, SimpleItem(
+        text=signature,
+        data={
+            "function": fnc,
+            "deps": deps,
+        }
+    ), Qt.DisplayRole)
+    model.dataChanged.emit(index, index)
 
 
 class Analysis(IntEnum):
@@ -185,7 +221,7 @@ class AutoAnalysisDialog(BaseDialog):
         if (
                 selected
                 and self.ui.renameButton.isEnabled()
-                and isinstance(selected[0], CheckableItem)
+                and isinstance(selected[0], IconItem)
                 and selected[0].data is not None
         ):
             menu = QMenu()
@@ -233,18 +269,14 @@ class AutoAnalysisDialog(BaseDialog):
         "HIDECANCEL\nGetting data types…"
     )
     def _fetch_data_types(self, *args) -> None:
-        logger.info(f"args: {args}")
         try:
             # get the model from the result table
             data = self.ui.resultsTable.model().get_datas()
             # loop all rows in the table
             function_ids = []
             for element in data:
-                icon_item: IconItem = element[0][0]
+                icon_item: IconItem = element[0]
                 is_succeed = icon_item.text == "Yes"
-                logger.info(
-                    f"Element: {element} is_succeed: {is_succeed}"
-                )
                 if is_succeed:
                     # get the function id from the table
                     function_id = icon_item.data.get(
@@ -254,11 +286,110 @@ class AutoAnalysisDialog(BaseDialog):
                     if function_id:
                         function_ids.append(function_id)
 
-            res: dict = RE_functions_data_types(
+            # ignore the results
+            RE_functions_data_types(
+                function_ids=function_ids,
+            )
+
+            # poll for data type completition
+            res: dict = RE_functions_data_types_poll(
                 function_ids=function_ids,
             ).json()
 
-            logger.info(f"Response: {res}")
+            data = res.get("data", {})
+            total_count = data.get("total_count", 0)
+            total_data_types = data.get("total_data_types_count", 0)
+            items = data.get("items", [])
+
+            while total_count != total_data_types:
+                time.sleep(1)
+                res = RE_functions_data_types_poll(
+                    function_ids=function_ids,
+                ).json()
+                data = res.get("data", {})
+                total_count = data.get("total_count", 0)
+                total_data_types = data.get("total_data_types_count", 0)
+                items = data.get("items", [])
+
+            logger.info(
+                "Data types generation completed."
+            )
+
+            def extract(item: dict) -> dict:
+                types = item.get("data_types", {})
+                data = {
+                    "function_id": item.get("function_id", 0),
+                }
+                if types:
+                    data["func_types"] = types.get("func_types", {})
+                    data["func_deps"] = types.get("func_deps", {})
+                return data
+
+            completed_items = list(
+                map(
+                    extract,
+                    filter(
+                        lambda item:
+                        item.get("status", "not_completed") == "completed" and
+                        item.get("completed", False),
+                        items
+                    )
+                )
+            )
+
+            logger.info(
+                f"Applying signatures for {len(completed_items)} functions"
+            )
+
+            model = self.ui.resultsTable.model()
+            data = model.get_datas()
+            for row in range(len(data)):
+                row_data = data[row]
+                icon_item: IconItem = row_data[0]
+
+                # skip failed items
+                if icon_item.data is None:
+                    continue
+
+                function_id = icon_item.data.get(
+                    "nearest_neighbor_id",
+                    0
+                )
+
+                logger.info(
+                    f"Applying signature for fid: {function_id}"
+                )
+
+                match_data_types = next(
+                    (
+                        item for item in completed_items
+                        if item.get("function_id", 0) == function_id
+                    ),
+                    None
+                )
+
+                if match_data_types is None:
+                    # skip unmatched items
+                    continue
+
+                logger.info(
+                    f"Found matching data types for fid: {function_id}"
+                )
+
+                func_types = match_data_types.get("func_types", {})
+                func_deps = match_data_types.get("func_deps", [])
+
+                if func_types is not None:
+                    fnc: Function = _art_from_dict(func_types)
+                    logger.info(
+                        f"Applying signature for {fnc.name}"
+                    )
+                    apply_signature(row, fnc, func_deps, self.ui.resultsTable)
+                else:
+                    logger.error(
+                        "Failed to get function data types for functionId"
+                        f" {function_id}."
+                    )
         except HTTPError as e:
             resp = e.response.json()
             error = resp.get("message", "Unexpected error occurred.")
@@ -276,39 +407,6 @@ class AutoAnalysisDialog(BaseDialog):
             matched_func_id: int = 0,
             matched_function_bid: int = 0,
     ) -> None:
-        def function_arguments(fnc: Function) -> list[str]:
-            args = []
-            for k in fnc.header.args:
-                arg: FunctionArgument = fnc.header.args[k]
-                args.append(
-                    f"{arg.type} {arg.name}"
-                )
-            return args
-
-        def function_to_str(fnc: Function) -> str:
-            # convert the signature to a string representation
-            return f"{fnc.type} {fnc.name}({', '.join(
-                function_arguments(fnc)
-            )})"
-
-        def apply_signature(fnc: Function, deps: list):
-            # set the selected row of the table and modify the function
-            # signature column to show the new signature
-            model = self.ui.resultsTable.model()
-            index = model.index(row, 3)
-            signature = function_to_str(fnc)
-            logger.info(
-                f"Function signature: {signature}"
-            )
-            model.setData(index, SimpleItem(
-                text=signature,
-                data={
-                    "function": fnc,
-                    "deps": deps,
-                }
-            ), Qt.DisplayRole)
-            model.dataChanged.emit(index, index)
-
         try:
             # first step is to get the analysis id for the function
             res: dict = RE_analysis_lookup(matched_function_bid).json()
@@ -425,7 +523,7 @@ class AutoAnalysisDialog(BaseDialog):
 
             fnc: Function = _art_from_dict(func_types)
 
-            apply_signature(fnc, func_deps)
+            apply_signature(row, fnc, func_deps, self.ui.resultsTable)
 
         except HTTPError as e:
             errors = e.response.json().get(
@@ -438,7 +536,7 @@ class AutoAnalysisDialog(BaseDialog):
 
             logger.error(
                 "Error while importing data types for the specified function:"
-                f"{errors[0]["message"]}"
+                f"{errors[0]['message']}"
             )
 
             inmain(idaapi.warning, errors[0]["message"])
@@ -465,7 +563,7 @@ class AutoAnalysisDialog(BaseDialog):
             ]
 
             if not any(isinstance(artifact, t) for t in supported_types):
-                return "Unsupported artifact type: "\
+                return "Unsupported artifact type: " \
                     f"{artifact.__class__.__name__}"
 
             try:
@@ -888,18 +986,17 @@ class AutoAnalysisDialog(BaseDialog):
                                             )
 
                                             symbol["function_addr"] = func_addr
-
-                                            icon_success = IconItem(
-                                                text="Yes",
-                                                resource_name="success.png",
-                                                data=symbol
-                                            ),
+                                            success = "success.png"
 
                                             resultsData.append(
                                                 (
                                                     # Successful
                                                     # CheckableItem(symbol),
-                                                    icon_success,
+                                                    IconItem(
+                                                        text="Yes",
+                                                        resource_name=success,
+                                                        data=symbol
+                                                    ),
                                                     # Original Function Name
                                                     symbol["org_func_name"],
                                                     # Matched Function Names
