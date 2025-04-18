@@ -4,7 +4,7 @@ import idc
 from PyQt5.QtCore import Qt, QModelIndex
 from PyQt5.QtGui import QCursor
 from PyQt5.QtWidgets import QMenu
-from idaapi import ASKBTN_YES, hide_wait_box, show_wait_box
+from idaapi import hide_wait_box, show_wait_box
 from requests import HTTPError, RequestException
 from reait.api import RE_nearest_symbols_batch
 from reait.api import RE_collections_search
@@ -29,6 +29,7 @@ from libbs.artifacts import (
 
 from revengai.misc.datatypes import (
     fetch_data_types,
+    apply_data_types,
     apply_signature,
     wait_box_decorator,
 )
@@ -334,54 +335,40 @@ class FunctionSimilarityDialog(BaseDialog):
             # Confidence
             inmain(self.ui.resultsTable.setColumnWidth, 5, round(width * 0.08))
 
+    @wait_box_decorator(
+        "HIDECANCEL\nApplying function name and data types…"
+    )
     def _rename_symbol(self):
-        if not self.ui.resultsTable.selectedIndexes():
-            Dialog.showInfo(
-                "Function Renaming",
-                "Select one of the listed functions that you wish to use.",
-            )
+        checked_elements = []
+
+        data = self.ui.resultsTable.model().get_datas()
+        for row in range(len(data)):
+            check_item: CheckableItem = data[row][0]
+            if check_item.checkState == Qt.Checked:
+                checked_elements.append((data[row], row))
+
+        if len(checked_elements) == 0:
+            inmain(idc.warning, "No function selected.")
             return
 
-        rows = sorted(
-            set(index.row()
-                for index in self.ui.resultsTable.selectedIndexes())
-        )
-        selected = self.ui.resultsTable.model().get_data(rows[0])
+        # this should be impossible, but just in case...
+        if len(checked_elements) > 1:
+            inmain(idc.warning, "Multiple functions selected.")
+            return
 
-        if selected and isinstance(selected[0], SimpleItem):
-            if not IDAUtils.set_name(
-                    self.v_addr + self.base_addr,
-                    selected[0].text
-            ):
-                Dialog.showError(
-                    "Rename Function Error",
-                    f"Function {selected[0].text} already exists.",
+        el, row = checked_elements[0]
+        symbol = el[0].data
+        signature = el[3].data
+        nnfn = symbol['nearest_neighbor_function_name']
+        addr = symbol['function_addr'] + self.base_addr
+
+        if IDAUtils.set_name(addr, nnfn):
+            if signature:
+                apply_data_types(
+                    row,
+                    addr,
+                    self.ui.resultsTable
                 )
-            else:
-                inthread(self._function_rename, self.v_addr, selected[0].text)
-
-                logger.info(
-                    "Renowned %s in %s with confidence of '%s",
-                    IDAUtils.get_demangled_func_name(idc.here()),
-                    selected[0].text,
-                    selected[0].data["confidence"],
-                )
-
-                if self.state.project_cfg.get("func_type") \
-                        and ASKBTN_YES == idc.ask_yn(
-                    ASKBTN_YES,
-                    "HIDECANCEL\nWould you also like to update the "
-                    "function "
-                    "declaration?",
-                ):
-                    # Prevent circular import
-                    from revengai.actions import function_signature
-
-                    function_signature(
-                        self.state,
-                        self.v_addr + self.base_addr,
-                        self._get_function_id(self.v_addr),
-                    )
 
     def _tab_changed(self, index: int) -> None:
         if index == 0:
