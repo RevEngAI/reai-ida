@@ -53,6 +53,10 @@ class RevEngTableModel(QAbstractTableModel):
             self.dataChanged.emit(index, index)
             return True
 
+    def getModelData(self, index) -> Any:
+        data = list(self._data[index.row()])
+        return data[index.column()] if index.isValid() else None
+
     def get_datas(self) -> list[Any]:
         return self._data
 
