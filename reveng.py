@@ -133,10 +133,6 @@ class FunctionRenameHook(idaapi.IDP_Hooks):
 
                             # check if the function ID is valid
                             if function_id == -1:
-                                logger.error(
-                                    "Failed to get function ID for %s",
-                                    hex(ea),
-                                )
                                 return
 
                             logging.info(

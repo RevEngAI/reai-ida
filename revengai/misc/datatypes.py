@@ -41,6 +41,21 @@ def wait_box_decorator(message: str = None):
     return decorator
 
 
+def wait_box_decorator_noclazz(message: str = None):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            try:
+                inmain(show_wait_box, message)
+                return func(*args, **kwargs)
+            except Exception as e:
+                import traceback as tb
+                logger.error(f"Error: {e} \n{tb.format_exc()}")
+            finally:
+                inmain(hide_wait_box)
+        return wrapper
+    return decorator
+
+
 def function_arguments(fnc: Function) -> list[str]:
     args = []
     for k in fnc.header.args:
@@ -76,67 +91,70 @@ def apply_signature(row: int, fnc: Function, deps: list, resultTable):
     model.dataChanged.emit(index, index)
 
 
+def apply_type(
+    deci: DecompilerInterface,
+    artifact,
+    soft_skip=False
+) -> None | str:
+    supported_types = [
+        Function,
+        GlobalVariable,
+        Enum,
+        Struct,
+        Typedef
+    ]
+
+    if not any(isinstance(artifact, t) for t in supported_types):
+        return "Unsupported artifact type: " \
+            f"{artifact.__class__.__name__}"
+
+    try:
+
+        if isinstance(artifact, Function):
+            deci.functions[artifact.addr] = artifact
+        elif isinstance(artifact, GlobalVariable):
+            deci.global_vars[artifact.addr] = artifact
+        elif isinstance(artifact, Enum):
+            deci.enums[artifact.name] = artifact
+        elif isinstance(artifact, Struct):
+            deci.structs[artifact.name] = artifact
+        elif isinstance(artifact, Typedef):
+            deci.typedefs[artifact.name] = artifact
+    except Exception as e:
+        logger.error(f"Error while applying artifact '{artifact.name}'"
+                     f" of type {artifact.__class__.__name__}: {e}")
+        if not soft_skip:
+            return f"Error while applying artifact '{artifact.name}'"\
+                f" of type {artifact.__class__.__name__}: {e}"
+
+    return None
+
+
+def apply_types(
+        deci: DecompilerInterface,
+        artifacts: list
+) -> None | str:
+    for artifact in artifacts:
+        error = apply_type(deci, artifact, soft_skip=True)
+        if error is not None:
+            return error
+    return None
+
+
+def _load_many_artifacts_from_list(artifacts: list[dict]) -> list:
+    _artifacts = []
+    for artifact in artifacts:
+        art = _art_from_dict(artifact)
+        if art is not None:
+            _artifacts.append(art)
+    return _artifacts
+
+
 def apply_data_types(
         row: int,
         function_addr: int = 0,
         resultsTable=None,
 ):
-    def apply_type(
-        deci: DecompilerInterface,
-        artifact,
-        soft_skip=False
-    ) -> None | str:
-        supported_types = [
-            Function,
-            GlobalVariable,
-            Enum,
-            Struct,
-            Typedef
-        ]
-
-        if not any(isinstance(artifact, t) for t in supported_types):
-            return "Unsupported artifact type: " \
-                f"{artifact.__class__.__name__}"
-
-        try:
-
-            if isinstance(artifact, Function):
-                deci.functions[artifact.addr] = artifact
-            elif isinstance(artifact, GlobalVariable):
-                deci.global_vars[artifact.addr] = artifact
-            elif isinstance(artifact, Enum):
-                deci.enums[artifact.name] = artifact
-            elif isinstance(artifact, Struct):
-                deci.structs[artifact.name] = artifact
-            elif isinstance(artifact, Typedef):
-                deci.typedefs[artifact.name] = artifact
-        except Exception as e:
-            logger.error(f"Error while applying artifact '{artifact.name}'"
-                         f" of type {artifact.__class__.__name__}: {e}")
-            if not soft_skip:
-                return f"Error while applying artifact '{artifact.name}'"\
-                    f" of type {artifact.__class__.__name__}: {e}"
-
-        return None
-
-    def apply_types(
-            deci: DecompilerInterface,
-            artifacts: list
-    ) -> None | str:
-        for artifact in artifacts:
-            error = apply_type(deci, artifact, soft_skip=True)
-            if error is not None:
-                return error
-        return None
-
-    def _load_many_artifacts_from_list(artifacts: list[dict]) -> list:
-        _artifacts = []
-        for artifact in artifacts:
-            art = _art_from_dict(artifact)
-            if art is not None:
-                _artifacts.append(art)
-        return _artifacts
-
     deci = DecompilerInterface.discover(force_decompiler="ida")
     if not deci:
         logger.error("Libbs: Unable to find a decompiler")
@@ -264,3 +282,70 @@ def fetch_data_types(
             f"{error}"
         )
         return []
+
+
+def import_data_types(
+        function_ids: list[int],
+        # map the function ids to the function addresses
+        # this is used to update the function signature
+        function_mapper: dict[int, int] = {},
+) -> None:
+    # get the data types from the server
+    data = fetch_data_types(function_ids)
+    if not data:
+        logger.warning(
+            "No data types found for the specified functions."
+        )
+        return
+
+    deci = DecompilerInterface.discover(force_decompiler="ida")
+    if not deci:
+        logger.error("Libbs: Unable to find a decompiler")
+        return
+
+    try:
+        for item in data:
+            ftypes = item.get("func_types", {})
+            fdeps = item.get("func_deps", [])
+            fid = item.get("function_id", 0)
+            func_addr = function_mapper.get(fid, 0)
+
+            if func_addr == 0:
+                logger.warning(
+                    f"Function address not found for function id {fid}."
+                )
+                continue
+
+            # first apply the dependencies
+            res = apply_types(deci, _load_many_artifacts_from_list(fdeps))
+            if res is not None:
+                logger.error(
+                    f"Failed to apply function dependencies: {res}")
+                continue
+
+            # then apply the function signature
+            func: Function = _art_from_dict(ftypes)
+            if func is None:
+                logger.warning(
+                    f"Function signature not found for function id {fid}."
+                )
+                continue
+
+            func.addr = func_addr
+            res = apply_type(deci, func)
+
+            if res is not None:
+                logger.error(
+                    f"Failed to apply function signature: {res}"
+                )
+                continue
+        # show success message
+        logger.info(
+            "Successfully applied function signatures and dependencies"
+        )
+    except Exception as e:
+        import traceback as tb
+        logger.error(f"Error: {e} \n{tb.format_exc()}")
+        idaapi.warning(
+            f"Error: {e}"
+        )

@@ -9,20 +9,12 @@ from idautils import Functions
 import idaapi
 import ida_funcs
 from requests import get, HTTPError, Response, RequestException
-from libbs.artifacts import load_many_artifacts
-from libbs.artifacts import ArtifactFormat
-from libbs.api import DecompilerInterface
-from libbs.artifacts import (
-    Function,
-    GlobalVariable,
-    Enum,
-    Struct,
-    Typedef,
+from revengai.misc.datatypes import (
+    wait_box_decorator_noclazz,
+    import_data_types,
 )
-
 from revengai.ai_decompilation_view import AICodeViewer
 
-import json
 
 from reait.api import (
     RE_upload,
@@ -32,11 +24,10 @@ from reait.api import (
     RE_analyze_functions,
     file_type,
     RE_functions_rename_batch,
-    RE_generate_data_types,
-    RE_list_data_types,
     RE_analysis_lookup,
     RE_poll_ai_decompilation,
     RE_begin_ai_decompilation,
+    RE_functions_data_types
 )
 
 from revengai import __version__
@@ -925,6 +916,9 @@ def generate_function_data_types(state: RevEngState) -> None:
 
     if is_condition_met(state, fpath):
 
+        @wait_box_decorator_noclazz(
+            "HIDECANCEL\nGenerating data types at binary level…",
+        )
         def bg_task() -> None:
             done, status = is_analysis_complete(state, fpath)
             if done:
@@ -943,22 +937,11 @@ def generate_function_data_types(state: RevEngState) -> None:
                         fpath, state.config.get("binary_id", 0)
                     ).json()
 
-                    success = res.get("success", False)
-
-                    if not success:
-                        logger.error("Error getting function list")
-                        Dialog.showError(
-                            "Function Types",
-                            "Failed to get function list. Please try again.",
-                        )
-                        return
-
                     for function in res.get("functions", []):
                         function_ids.append(function["function_id"])
 
-                    res = RE_generate_data_types(
-                        analysis_id,
-                        function_ids
+                    res: dict = RE_functions_data_types(
+                        function_ids=function_ids,
                     ).json()
 
                     status = res.get("status", False)
@@ -998,174 +981,51 @@ def generate_function_data_types(state: RevEngState) -> None:
         inthread(bg_task)
 
 
+@wait_box_decorator_noclazz(
+    "HIDECANCEL\nApplying data types to functions…",
+)
 def apply_function_data_types(state: RevEngState) -> None:
     fpath = idc.get_input_file_path()
-
-    def apply_type(deci: DecompilerInterface, artifact) -> None | str:
-        supported_types = [Function, GlobalVariable, Enum, Struct, Typedef]
-
-        if not any(isinstance(artifact, t) for t in supported_types):
-            return f"Unsupported artifact type: {artifact.__class__.__name__}"
-
-        if isinstance(artifact, Function):
-            deci.functions[artifact.addr] = artifact
-        elif isinstance(artifact, GlobalVariable):
-            deci.global_vars[artifact.addr] = artifact
-        elif isinstance(artifact, Enum):
-            deci.enums[artifact.name] = artifact
-        elif isinstance(artifact, Struct):
-            deci.structs[artifact.name] = artifact
-        elif isinstance(artifact, Typedef):
-            deci.typedefs[artifact.name] = artifact
-
-        return None
-
-    def apply_types(deci: DecompilerInterface, artifacts: list) -> None | str:
-        for artifact in artifacts:
-            error = apply_type(deci, artifact)
-            if error is not None:
-                return error
-        return None
-
     if is_condition_met(state, fpath):
         try:
-            analysis_id = state.config.get("analysis_id", 0)
-
             logger.info("Function data types application started")
             logger.info("Getting the list of functions to apply data types")
+
+            local_functions = {}
+
+            image_base = idaapi.get_imagebase()
+
+            for func_ea in Functions():
+                local_functions[func_ea - image_base] = {
+                    "name": IDAUtils.get_demangled_func_name(func_ea),
+                    "addr": func_ea
+                }
 
             res: dict = RE_analyze_functions(
                 fpath,
                 state.config.get("binary_id", 0)
             ).json()
 
-            success = res.get("success", False)
-
-            if not success:
-                logger.error("Error getting function list")
-                Dialog.showError(
-                    "Function Types",
-                    "Failed to get function list. Please try again.",
-                )
-                return
-
             function_ids = []
+            function_mapper = {}
             functions = res.get("functions", [])
 
-            logger.info(
-                f"Found {len(functions)} functions to apply data types"
-            )
-
-            for function in res.get("functions", []):
+            for function in functions:
                 function_ids.append(function["function_id"])
+                func_vaddr = function["function_vaddr"]
+                item = local_functions.get(func_vaddr)
+                if item:
+                    function_mapper[function["function_id"]] = item["addr"]
+                else:
+                    logger.warning(
+                        f"Skipping fid: {function['function_id']},"
+                        " not found in IDA"
+                    )
 
-            res: Response = RE_list_data_types(
-                analysis_id,
-                function_ids
-            ).json()
-
-            status = res.get("status", False)
-
-            if not status:
-                logger.error("Error getting function data types")
-                Dialog.showError(
-                    "Function Types",
-                    "Failed to get function data types. Please try again.",
-                )
-                return
-
-            deci = DecompilerInterface.discover(force_decompiler="ida")
-            if not deci:
-                logger.error("Libbs: Unable to find a decompiler")
-                Dialog.showError(
-                    "Function Types",
-                    "Libbs: Unable to find a decompiler. Please try again.",
-                )
-                return
-
-            total_count = res.get("data", {}).get("total_count", 0)
-
-            if total_count > 0:
-                items = res.get("data", {}).get("items", [])
-                for item in items:
-                    function_types = item.get(
-                        "data_types", {}).get("func_types", None)
-                    func_deps = item.get(
-                        "data_types", {}).get("func_deps", [])
-                    function_id = item.get("function_id", 0)
-
-                    if function_types and len(func_deps) > 0:
-                        # TODO: this might be redundant, check if I can
-                        # TODO: instantiate the object directly from dict
-                        # TODO: like Function(**function_types) maybe
-                        # TODO: creating an utility function is the best
-                        # TODO: approach
-                        deps_types = [x for x in map(
-                            lambda x: json.dumps(x),
-                            func_deps
-                        )]
-
-                        deps = load_many_artifacts(
-                            deps_types,
-                            fmt=ArtifactFormat.JSON
-                        )
-
-                        logger.info(
-                            f"Loaded {len(deps_types)} for function "
-                            f"{function_id}"
-                        )
-
-                        deps_res = apply_types(deci, deps)
-                        if deps_res is not None:
-                            logger.error(
-                                "Error applying data type dependencies for "
-                                f"function {function_id}: {deps_res}"
-                            )
-                            Dialog.showError(
-                                "Function Types",
-                                f"Error applying data type dependencies for "
-                                f"function {function_id}: {deps_res}",
-                            )
-                            return
-                        else:
-                            logger.info(
-                                "Applied data type dependencies for function "
-                                f"id {function_id}"
-                            )
-
-                    if function_types:
-                        # TODO: this might be redundant, check if I can
-                        # TODO: instantiate the object directly from dict
-                        # TODO: like Function(**function_types) maybe
-                        # TODO: creating an utility function is the best
-                        # TODO: approach
-                        fnc = json.dumps(function_types)
-                        func = Function.loads(fnc, fmt=ArtifactFormat.JSON)
-                        func_res = apply_type(deci, func)
-                        if func_res is not None:
-                            logger.error(
-                                "Error applying function data type for "
-                                f"function id {function_id}: {func_res}"
-                            )
-                            Dialog.showError(
-                                "Function Types",
-                                "Erorr applying function data type for "
-                                f"function id {function_id}: {func_res}",
-                            )
-                            return
-                        else:
-                            logger.info(
-                                "Applied data types for function id "
-                                f"{function_id}"
-                            )
-
-                logger.info("Function data types application completed")
-            else:
-                logger.warning("No function data types to apply")
-                Dialog.showInfo(
-                    "Function Types",
-                    "No function data types to apply. Please try again.",
-                )
+            import_data_types(
+                function_ids=function_ids,
+                function_mapper=function_mapper,
+            )
         except HTTPError as e:
             resp: dict = e.response.json()
             error = resp.get(
