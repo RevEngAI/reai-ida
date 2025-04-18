@@ -29,7 +29,7 @@ from idc import get_input_file_path
 from idc import here
 
 from revengai import actions
-from revengai.actions import load_recent_analyses
+from revengai.actions import load_recent_analyses, setup_wizard
 from revengai.manager import RevEngState
 from revengai.misc.utils import IDAUtils
 
@@ -279,6 +279,11 @@ class RevEngGUI(object):
 
     def show_windows(self):
         self.config_form.register_actions()
+        self._handle_first_time()
 
     def term(self):
         self.config_form.Close(PluginForm.WCLS_SAVE)
+
+    def _handle_first_time(self):
+        if not self.state.config.is_valid():
+            setup_wizard(self.state)

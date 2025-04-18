@@ -40,6 +40,7 @@ from revengai.api import (
 from revengai.features.auto_analyze import AutoAnalysisDialog
 from revengai.features.function_similarity import FunctionSimilarityDialog
 from revengai.features.sync_functions import SyncFunctionsDialog
+from revengai.features.auto_unstrip import AutoUnstrip
 from revengai.gui.dialog import (
     Dialog,
     StatusForm,
@@ -52,11 +53,12 @@ from revengai.misc.qtutils import inthread, inmain
 from revengai.misc.utils import IDAUtils
 from revengai.wizard.wizard import RevEngSetupWizard
 
+from requests import get, HTTPError, Response, RequestException
+
 logger = logging.getLogger("REAI")
 
 version = float(idaapi.get_kernel_version())
 if version < 9.0:
-
     def is_32bit() -> bool:
         info: idaapi.idainfo = idaapi.get_inf_structure()
         return info.is_32bit()
@@ -64,9 +66,7 @@ if version < 9.0:
     def is_64bit() -> bool:
         info: idaapi.idainfo = idaapi.get_inf_structure()
         return info.is_64bit()
-
 else:
-
     def is_32bit() -> bool:
         return idaapi.inf_is_32bit_exactly()
 
@@ -124,9 +124,17 @@ def upload_binary(state: RevEngState) -> None:
                             model_name=model,
                             tags=tags,
                             symbols=symbols,
+
                             duplicate=state.project_cfg.get(
                                 "duplicate_analysis"
                             ),
+                            dynamic_execution=False,
+                            # NOTE: disable all other analyses options
+                            skip_scraping=True,
+                            skip_sbom=True,
+                            skip_capabilities=True,
+                            advanced_analysis=False,
+
                         )
 
                         analysis = res.json()
@@ -929,8 +937,9 @@ def generate_function_data_types(state: RevEngState) -> None:
                     )
 
                     function_ids = []
+                    
                     logger.info(
-                        "Getting the list of functions to generate data types"
+                        "Gathering a list of functions to generate data types on
                     )
 
                     res: dict = RE_analyze_functions(
@@ -951,11 +960,14 @@ def generate_function_data_types(state: RevEngState) -> None:
                             "Successfully started the generation of functions"
                             " data types"
                         )
+                        
                         Dialog.showInfo(
                             "Function Types",
                             "Successfully started the generation of functions"
                             " data types",
                         )
+                    else:
+                        Dialog.showInfo("Function Types", "Failed to generate function data types")
 
                 except HTTPError as e:
                     resp = e.response.json()
@@ -1002,13 +1014,13 @@ def apply_function_data_types(state: RevEngState) -> None:
                 }
 
             res: dict = RE_analyze_functions(
-                fpath,
-                state.config.get("binary_id", 0)
+                fpath, state.config.get("binary_id", 0)
             ).json()
 
             function_ids = []
             function_mapper = {}
             functions = res.get("functions", [])
+
 
             for function in functions:
                 function_ids.append(function["function_id"])
@@ -1236,7 +1248,52 @@ def ai_decompile(state: RevEngState) -> None:
 
 
 def auto_unstrip(state: RevEngState) -> None:
-    pass
+    fpath = idc.get_input_file_path()
+    if is_condition_met(state, fpath) and idaapi.ASKBTN_YES == idaapi.ask_buttons(
+        "Auto Unstrip",
+        "Cancel",
+        "",
+        idaapi.ASKBTN_YES,
+        "Auto Unstrip Binary\n\n"
+        "Using official RevEngAI sources, function names will be"
+        " recovered based on a low similarity threshold and"
+        " limited to available debug symbols.\n\n"
+        "Functions will be renamed automatically for easier analysis.",
+    ):
+        auto_unstrip = AutoUnstrip(state)
+
+        def bg_task() -> None:
+            try:
+                inmain(
+                    idaapi.show_wait_box,
+                    "HIDECANCEL\nAuto Unstripping binary…",
+                )
+
+                matched = auto_unstrip.unstrip()
+                if matched > 0:
+                    Dialog.showInfo(
+                        "Auto Unstrip",
+                        "Auto Unstrip completed successfully!\n"
+                        f"A total of {matched} symbols were renamed."
+                    )
+                else:
+                    Dialog.showInfo(
+                        "Auto Unstrip",
+                        "Auto Unstrip completed, but no symbols were renamed.\n"
+                        "This may indicate that all symbols were already properly named or\n"
+                        "no matches were found during the process."
+                    )
+            except HTTPError as e:
+                logger.error(
+                    "Unable to auto unstrip binary: %s", e.response.json().get("error")
+                )
+            finally:
+                inmain(idaapi.hide_wait_box)
+
+        inthread(
+            bg_task,
+        )
+
 
 
 def generate_summaries(state: RevEngState, function_id: int = 0) -> None:
@@ -1255,6 +1312,7 @@ def generate_summaries(state: RevEngState, function_id: int = 0) -> None:
         )
 
     if is_condition_met(state, fpath) and idaapi.ASKBTN_YES == ask_btn():
+
         def bg_task(func_ea: int, func_id: int = 0) -> None:
             func_name = inmain(IDAUtils.get_demangled_func_name, func_ea)
 
@@ -1375,7 +1433,7 @@ def is_condition_met(state: RevEngState, fpath: str) -> bool:
     if not state.config.is_valid():
         setup_wizard(state)
     elif not fpath or not isfile(fpath):
-        idc.warning("No input file provided.")
+        idc.warning("The target file was not found on disk. Has it been moved or renamed?")
     else:
         return True
     return False
@@ -1426,17 +1484,23 @@ def about(_) -> None:
 def update(_) -> None:
     try:
         res: Response = get(
-            "https://github.com/RevEngAI/reai-ida/releases/latest", timeout=30
+            "https://api.github.com/repos/revengai/reai-ida/releases/latest", 
+            timeout=30,
         )
 
         res.raise_for_status()
 
-        version_stable = res.url.split("/")[-1]
+        j = res.json()
+        if 'tag_name' not in j:
+            raise ValueError("Invalid response from GitHub API")
+        
+        version_stable = j["tag_name"].lstrip("v")
 
         f = UpdateForm(
-            "Good, you are already using the latest stable version!"
+            "You're already using the latest stable version!"
             if version_stable == __version__
-            else f"Kindly download the latest stable version {version_stable}."
+            else f"The latest stable version is {version_stable}. Please update to stay current.",
+            version=version_stable
         )
 
         f.Show()

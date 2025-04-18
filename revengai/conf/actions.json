@@ -7,7 +7,7 @@
 	},
 	{
 		"id": "reai:upload",
-		"name": "Upload Binary",
+		"name": "Process Binary",
 		"callback": "upload_binary",
 		"shortcut": "Ctrl+Shift+U"
 	},
@@ -22,6 +22,12 @@
 		"name": "Match Functions",
 		"callback": "auto_analyze",
 		"shortcut": "Ctrl+Shift+A"
+	},
+	{
+		"id": "reai:auto_unstrip",
+		"name": "Auto Unstrip",
+		"callback": "auto_unstrip",
+		"shortcut": "Ctrl+Shift+Q"
 	},
 	{
 		"id": "reai:functions",

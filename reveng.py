@@ -35,6 +35,7 @@ from revengai.manager import RevEngState
 import urllib3
 from revengai.gui import Requests
 import importlib
+
 import idc
 
 from revengai.misc.utils import IDAUtils
@@ -45,6 +46,7 @@ from reait.api import (
 )
 
 from requests.exceptions import HTTPError
+
 
 
 logger = logging.getLogger("REAI")
@@ -239,7 +241,7 @@ class RevEngPlugin(plugin_t):
 
         self.run()
         return PLUGIN_KEEP
-
+      
     def initialize_hook(self):
         """
         Initialize the function rename hook after auto-analysis is complete
@@ -312,6 +314,7 @@ def check_dependencies(required_packages):
     return len(missing_packages) == 0, missing_packages
 
 
+
 # Global variable to store the plugin instance
 plugin_instance: RevEngPlugin = None
 
@@ -332,6 +335,7 @@ def check_analysis_status():
         "Auto-analysis is not complete, waiting for it to finish..."
     )
     return 500  # Continue checking every 500ms
+
 
 
 # The PLUGIN_ENTRY method is what IDA calls when scriptable plugins are loaded.
