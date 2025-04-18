@@ -65,6 +65,10 @@ class FunctionRenameHook(idaapi.IDP_Hooks):
             self.last_names[func_ea] = IDAUtils.get_demangled_func_name(
                 func_ea
             )
+        logger.info(
+            f"FunctionRenameHook initialized with {len(self.last_names)}"
+            " functions"
+        )
 
     def _get_function_id(self, fpath: str,  ea: int) -> int:
         """
@@ -116,7 +120,6 @@ class FunctionRenameHook(idaapi.IDP_Hooks):
 
     def ev_rename(self, ea, new_name):
         fpath = idc.get_input_file_path()
-
         if is_condition_met(self.state, fpath):
             def bg_task() -> None:
                 done, _ = is_analysis_complete(self.state, fpath)
@@ -137,7 +140,7 @@ class FunctionRenameHook(idaapi.IDP_Hooks):
                                 return
 
                             logging.info(
-                                "Renaming function "
+                                "EventHook - Renaming function "
                                 f"{function_id} to {new_name}"
                             )
                             # renaming the function in the database
@@ -150,6 +153,10 @@ class FunctionRenameHook(idaapi.IDP_Hooks):
                                 "Failed to rename function: %s", str(e)
                             )
                             return
+                    else:
+                        logger.info(
+                            "Function name is the same, skipping rename"
+                        )
                 else:
                     logger.warning(
                         "Analysis is not complete, skipping function rename"
@@ -226,7 +233,7 @@ class RevEngPlugin(plugin_t):
         if ida_auto.auto_is_ok():
             logger.info("Auto-analysis is complete, initializing hooks")
             self.initialize_hook()
-            self.initialized = True
+            self.auto_analysis_complete = True
         else:
             logger.info(
                 "Auto-analysis is not complete, waiting for it to finish"
