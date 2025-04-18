@@ -40,7 +40,7 @@ from libbs.artifacts import (
 from reait.api import (
     RE_analysis_lookup,
     RE_generate_data_types,
-    # RE_list_data_types,
+    RE_functions_data_types,
     RE_poll_data_types
 )
 
@@ -83,6 +83,9 @@ class AutoAnalysisDialog(BaseDialog):
         self.ui.layoutFilter.register_cb(self._callback)
         self.ui.searchButton.clicked.connect(self._filter_collections)
         self.ui.searchQuery.returnPressed.connect(self._filter_collections)
+        self.ui.fetchDataTypesButton.clicked.connect(
+            self._fetch_data_types
+        )
         self.ui.collectionsTable.horizontalHeader().setDefaultAlignment(
             Qt.AlignCenter
         )
@@ -225,6 +228,44 @@ class AutoAnalysisDialog(BaseDialog):
             # lambda: self._generate_summaries(func_id))
 
             menu.exec_(QCursor.pos())
+
+    @_wait_box_decorator(
+        "HIDECANCEL\nGetting data types…"
+    )
+    def _fetch_data_types(self, *args) -> None:
+        logger.info(f"args: {args}")
+        try:
+            # get the model from the result table
+            data = self.ui.resultsTable.model().get_datas()
+            # loop all rows in the table
+            function_ids = []
+            for element in data:
+                icon_item: IconItem = element[0][0]
+                is_succeed = icon_item.text == "Yes"
+                logger.info(
+                    f"Element: {element} is_succeed: {is_succeed}"
+                )
+                if is_succeed:
+                    # get the function id from the table
+                    function_id = icon_item.data.get(
+                        "nearest_neighbor_id",
+                        None
+                    )
+                    if function_id:
+                        function_ids.append(function_id)
+
+            res: dict = RE_functions_data_types(
+                function_ids=function_ids,
+            ).json()
+
+            logger.info(f"Response: {res}")
+        except HTTPError as e:
+            resp = e.response.json()
+            error = resp.get("message", "Unexpected error occurred.")
+            logger.error(
+                "Error while fetching data types for the specified function:"
+                f"{error}"
+            )
 
     @_wait_box_decorator(
         "HIDECANCEL\nGetting data types for function…"
@@ -573,7 +614,9 @@ class AutoAnalysisDialog(BaseDialog):
                             # Successful
                             # CheckableItem(None, checked=False),
                             IconItem(
-                                resource_name="failed.png"
+                                text="No",
+                                resource_name="failed.png",
+                                data=None
                             ),
                             # Original Function Name
                             func["name"],
@@ -729,7 +772,9 @@ class AutoAnalysisDialog(BaseDialog):
                                         (
                                             # Successful
                                             IconItem(
-                                                resource_name="failed.png"
+                                                text="No",
+                                                resource_name="failed.png",
+                                                data=None
                                             ),
                                             # Original Function Name
                                             next(
@@ -806,7 +851,9 @@ class AutoAnalysisDialog(BaseDialog):
                                                 #     checked=False
                                                 # ),
                                                 IconItem(
-                                                    resource_name="failed.png"
+                                                    text="No",
+                                                    resource_name="failed.png",
+                                                    data=None
                                                 ),
                                                 # Original Function Name
                                                 symbol["org_func_name"],
@@ -843,7 +890,9 @@ class AutoAnalysisDialog(BaseDialog):
                                             symbol["function_addr"] = func_addr
 
                                             icon_success = IconItem(
-                                                resource_name="success.png"
+                                                text="Yes",
+                                                resource_name="success.png",
+                                                data=symbol
                                             ),
 
                                             resultsData.append(
