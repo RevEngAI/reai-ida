@@ -1,17 +1,18 @@
 import logging
 from concurrent.futures import ThreadPoolExecutor, CancelledError
 from enum import IntEnum
-from re import sub
 
 import idc
 from PyQt5.QtCore import Qt, QModelIndex
 from PyQt5.QtGui import QCursor
 from PyQt5.QtWidgets import QMenu
+from PyQt5.QtGui import QIcon
 from idaapi import hide_wait_box, show_wait_box, user_cancelled
 from idautils import Functions
 from requests import HTTPError, RequestException
 from reait.api import RE_nearest_symbols_batch
 from reait.api import RE_collections_search
+from reait.api import RE_binaries_search
 from revengai.features import BaseDialog
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
@@ -19,7 +20,22 @@ from revengai.misc.qtutils import inthread, inmain
 from revengai.misc.utils import IDAUtils
 from revengai.models import CheckableItem, IconItem, SimpleItem
 from revengai.models.checkable_model import RevEngCheckableTableModel
-from revengai.ui.auto_analysis_panel import Ui_AutoAnalysisPanel
+from revengai.models.table_model import RevEngTableModel
+from revengai.ui.auto_analysis_panel_2 import Ui_AutoAnalysisPanel
+from datetime import datetime
+from revengai.misc.datatypes import (
+    apply_data_types,
+    fetch_data_types,
+    wait_box_decorator,
+    apply_signature,
+)
+from typing import Generator
+from libbs.artifacts import _art_from_dict
+from libbs.artifacts import (
+    Function,
+)
+
+import idaapi
 
 logger = logging.getLogger("REAI")
 
@@ -39,19 +55,27 @@ class AutoAnalysisDialog(BaseDialog):
         self.ui.setupUi(self)
 
         self.ui.layoutFilter.register_cb(self._callback)
-
-        self.ui.collectionsFilter.textChanged.connect(self._filter)
+        self.ui.searchButton.clicked.connect(self._filter_collections)
+        self.ui.searchQuery.returnPressed.connect(self._filter_collections)
+        self.ui.fetchDataTypesButton.clicked.connect(
+            self._fetch_data_types
+        )
         self.ui.collectionsTable.horizontalHeader().setDefaultAlignment(
-            Qt.AlignLeft
+            Qt.AlignCenter
         )
         self.ui.collectionsTable.setModel(
             RevEngCheckableTableModel(
                 data=[],
-                columns=[1],
+                columns=[0],
                 parent=self,
                 header=[
-                    "Collection Name",
-                    "Include",
+                    "",  # Include
+                    "Name",
+                    "Type",
+                    "Date",
+                    "Model Name",
+                    "Owner",
+                    "ID"
                 ],
             )
         )
@@ -64,23 +88,26 @@ class AutoAnalysisDialog(BaseDialog):
         self.ui.resultsTable.customContextMenuRequested.connect(
             self._table_menu)
         self.ui.resultsTable.horizontalHeader().setDefaultAlignment(
-            Qt.AlignLeft
+            Qt.AlignCenter
         )
         self.ui.resultsTable.setModel(
-            RevEngCheckableTableModel(
+            RevEngTableModel(
                 data=[],
-                columns=[2],
+                # columns=[0],
                 parent=self,
                 header=[
-                    "Function Name",
-                    "Destination Function Name",
                     "Successful",
-                    "Reason",
+                    "Original Function Name",
+                    "Matched Function Name",
+                    "Signature",
+                    "Matched Binary",
+                    "Confidence",
+                    "Error",
                 ],
             )
         )
 
-        self.ui.fetchButton.clicked.connect(self._start_analysis)
+        self.ui.fetchResultsButton.clicked.connect(self._start_analysis)
         self.ui.renameButton.clicked.connect(self._rename_functions)
 
         self.ui.confidenceSlider.valueChanged.connect(self._confidence)
@@ -132,23 +159,227 @@ class AutoAnalysisDialog(BaseDialog):
         if (
                 selected
                 and self.ui.renameButton.isEnabled()
-                and isinstance(selected[2], CheckableItem)
+                and isinstance(selected[0], IconItem)
+                and selected[0].data is not None
         ):
             menu = QMenu()
-            renameAction = menu.addAction(self.ui.renameButton.text())
+            renameAction = menu.addAction("Rename Function")
             renameAction.triggered.connect(
                 lambda: self._rename_function(selected))
 
-            func_id = selected[2].data["nearest_neighbor_id"]
+            func_id = selected[0].data["nearest_neighbor_id"]
             breakdownAction = menu.addAction("View Function Breakdown")
             breakdownAction.triggered.connect(
                 lambda: self._function_breakdown(func_id))
 
-            # summariesAction = menu.addAction("Generate AI Summaries")
-            # summariesAction.triggered.connect(
-            # lambda: self._generate_summaries(func_id))
+            func_addr = selected[0].data["function_addr"] + self.base_addr
+            matched_func_id = selected[0].data["nearest_neighbor_id"]
+            fetchDataTypesAction = menu.addAction("Fetch Data Types")
+            fetchDataTypesAction.triggered.connect(
+                lambda: self._function_get_datatypes(
+                    # row
+                    rows[0],
+                    # matched function id
+                    matched_func_id,
+                )
+            )
+
+            applyDataTypesAction = menu.addAction("Apply Data Types")
+            applyDataTypesAction.triggered.connect(
+                lambda: self._function_import_symbol_datatypes(
+                    # row
+                    rows[0],
+                    # selected function addr
+                    func_addr,
+                )
+            )
+
+            excludeRowAction = menu.addAction("Exclude")
+            excludeRowAction.triggered.connect(
+                lambda: self._exclude_row(rows[0])
+            )
+
+            includeRowAction = menu.addAction("Include")
+            includeRowAction.triggered.connect(
+                lambda: self._include_row(rows[0])
+            )
 
             menu.exec_(QCursor.pos())
+
+    def _exclude_row(self, row) -> None:
+        model = self.ui.resultsTable.model()
+        index = model.index(row, 0)
+        item: IconItem = model.getModelData(index)
+        item.icon = QIcon(
+            IconItem._plugin_resource("exclude.png")
+        )
+        item.text = "Excluded"
+        model.dataChanged.emit(index, index)
+
+    def _include_row(self, row) -> None:
+        model = self.ui.resultsTable.model()
+        index = model.index(row, 0)
+        item: IconItem = model.getModelData(index)
+        item.icon = QIcon(
+            IconItem._plugin_resource("success.png")
+        )
+        item.text = "Yes"
+        model.dataChanged.emit(index, index)
+
+    @wait_box_decorator(
+        "HIDECANCEL\nGetting data types…"
+    )
+    def _fetch_data_types(self, *args) -> None:
+        try:
+            # get the model from the result table
+            data = self.ui.resultsTable.model().get_datas()
+            # loop all rows in the table
+            function_ids = []
+            for element in data:
+                icon_item: IconItem = element[0]
+                is_succeed = icon_item.text == "Yes"
+                if is_succeed:
+                    # get the function id from the table
+                    function_id = icon_item.data.get(
+                        "nearest_neighbor_id",
+                        None
+                    )
+                    if function_id:
+                        function_ids.append(function_id)
+
+            completed_items = fetch_data_types(
+                function_ids=function_ids,
+            )
+
+            if len(completed_items) == 0:
+                logger.info(
+                    "No data types found for the specified functions."
+                )
+                return
+
+            logger.info(
+                f"Applying signatures for {len(completed_items)} functions"
+            )
+
+            model = self.ui.resultsTable.model()
+            data = model.get_datas()
+            for row in range(len(data)):
+                row_data = data[row]
+                icon_item: IconItem = row_data[0]
+
+                # skip failed items
+                if icon_item.data is None:
+                    continue
+
+                function_id = icon_item.data.get(
+                    "nearest_neighbor_id",
+                    0
+                )
+
+                logger.info(
+                    f"Applying signature for fid: {function_id}"
+                )
+
+                match_data_types = next(
+                    (
+                        item for item in completed_items
+                        if item.get("function_id", 0) == function_id
+                    ),
+                    None
+                )
+
+                if match_data_types is None:
+                    # skip unmatched items
+                    continue
+
+                logger.info(
+                    f"Found matching data types for fid: {function_id}"
+                )
+
+                func_types = match_data_types.get("func_types", {})
+                func_deps = match_data_types.get("func_deps", [])
+
+                if func_types is not None:
+                    fnc: Function = _art_from_dict(func_types)
+                    logger.info(
+                        f"Applying signature for {fnc.name}"
+                    )
+                    apply_signature(row, fnc, func_deps, self.ui.resultsTable)
+                else:
+                    logger.error(
+                        "Failed to get function data types for functionId"
+                        f" {function_id}."
+                    )
+        except HTTPError as e:
+            resp = e.response.json()
+            error = resp.get("message", "Unexpected error occurred.")
+            logger.error(
+                "Error while fetching data types for the specified function:"
+                f"{error}"
+            )
+
+    @wait_box_decorator(
+        "HIDECANCEL\nGetting data types for function…"
+    )
+    def _function_get_datatypes(
+            self,
+            row: int,
+            matched_func_id: int = 0,
+    ) -> None:
+        try:
+
+            completed_items = fetch_data_types(
+                function_ids=[matched_func_id],
+            )
+
+            if len(completed_items) == 0:
+                logger.info(
+                    "No data types found for the specified function."
+                )
+                return
+
+            logger.info(
+                "Data types generation completed."
+            )
+
+            data_types = completed_items[0]
+
+            func_types = data_types.get("func_types", None)
+            func_deps = data_types.get("func_deps", None)
+
+            fnc: Function = _art_from_dict(func_types)
+
+            apply_signature(row, fnc, func_deps, self.ui.resultsTable)
+
+        except HTTPError as e:
+            errors = e.response.json().get(
+                "errors",
+                [{
+                    "message": f"An unexpected error occurred. Sorry for the "
+                    f"inconvenience. {e.response.status_code}"
+                }],
+            )
+
+            logger.error(
+                "Error while importing data types for the specified function:"
+                f"{errors[0]['message']}"
+            )
+
+            inmain(idaapi.warning, errors[0]["message"])
+
+    @wait_box_decorator(
+        "HIDECANCEL\nApplying data types to function…"
+    )
+    def _function_import_symbol_datatypes(
+        self,
+        row: int,
+        function_addr: int = 0,
+    ) -> None:
+        apply_data_types(
+            row=row,
+            function_addr=function_addr,
+            resultsTable=self.ui.resultsTable,
+        )
 
     def _start_analysis(self) -> None:
         inthread(self._auto_analysis)
@@ -158,10 +389,10 @@ class AutoAnalysisDialog(BaseDialog):
             inmain(show_wait_box, "Getting results…")
 
             self._analysis = [
-                                 0,
-                             ] * len(Analysis)
+                0,
+            ] * len(Analysis)
 
-            inmain(self.ui.fetchButton.setEnabled, False)
+            inmain(self.ui.fetchResultsButton.setEnabled, False)
             inmain(self.ui.renameButton.setEnabled, False)
             inmain(self.ui.confidenceSlider.setEnabled, False)
             inmain(self.ui.progressBar.setProperty, "value", 1)
@@ -194,9 +425,24 @@ class AutoAnalysisDialog(BaseDialog):
                     self._analysis[Analysis.SKIPPED.value] += 1
                     resultsData.append(
                         (
+                            # Successful
+                            # CheckableItem(None, checked=False),
+                            IconItem(
+                                text="No",
+                                resource_name="failed.png",
+                                data=None
+                            ),
+                            # Original Function Name
                             func["name"],
+                            # Matched Function Names
                             "N/A",
-                            None,
+                            # Signature
+                            SimpleItem(text="N/A", data=None),
+                            # Matched Binary
+                            "N/A",
+                            # Confidence
+                            "0.0%",
+                            # Error
                             "No Similar Function Found",
                         )
                     )
@@ -215,10 +461,13 @@ class AutoAnalysisDialog(BaseDialog):
             with ThreadPoolExecutor(
                     max_workers=max_workers, thread_name_prefix="reai-batch"
             ) as executor:
-                collections = inmain(self._selected_collections)
+                filter_data = inmain(self._selected_collections)
                 distance = 1.0 - (
-                        int(inmain(self.ui.confidenceSlider.property, "value"))
-                        / int(inmain(self.ui.confidenceSlider.property, "maximum"))
+                    int(inmain(self.ui.confidenceSlider.property, "value"))
+                    / int(inmain(
+                        self.ui.confidenceSlider.property,
+                        "maximum"
+                    ))
                 )
 
                 def worker(chunk: list[int]) -> any:
@@ -229,7 +478,8 @@ class AutoAnalysisDialog(BaseDialog):
                         res: dict = RE_nearest_symbols_batch(
                             function_ids=chunk,
                             distance=distance,
-                            collections=collections,
+                            collections=filter_data["collections"],
+                            binaries=filter_data["binaries"],
                             nns=1,
                             debug_enabled=inmain(self.ui.checkBox.isChecked)
                         ).json()
@@ -321,21 +571,45 @@ class AutoAnalysisDialog(BaseDialog):
                                     None,
                                 )
 
+                                # header=[
+                                #     "Successful",
+                                #     "Original Function Name",
+                                #     "Matched Function Name",
+                                #     "Signature",
+                                #     "Matched Binary",
+                                #     "Confidence",
+                                #     "Error",
+                                # ],
+
                                 if func_addr:
                                     resultsData.append(
                                         (
+                                            # Successful
+                                            IconItem(
+                                                text="No",
+                                                resource_name="failed.png",
+                                                data=None
+                                            ),
+                                            # Original Function Name
                                             next(
                                                 (
                                                     function["name"]
                                                     for function in
                                                     self._functions
-                                                    if func_addr
-                                                       == function["start_addr"]
+                                                    if func_addr ==
+                                                    function["start_addr"]
                                                 ),
                                                 "Unknown",
                                             ),
+                                            # Matched Function Names
                                             "N/A",
-                                            None,
+                                            # Signature
+                                            SimpleItem(text="N/A", data=None),
+                                            # Matched Binary
+                                            SimpleItem(text="N/A", data=None),
+                                            # Confidence
+                                            "0.0%",
+                                            # Error
                                             err_msg,
                                         )
                                     )
@@ -347,7 +621,7 @@ class AutoAnalysisDialog(BaseDialog):
                                         for func_addr, func_id in
                                         self.analyzed_functions.items()
                                         if symbol["origin_function_id"] ==
-                                           func_id
+                                        func_id
                                     ),
                                     None,
                                 )
@@ -360,29 +634,55 @@ class AutoAnalysisDialog(BaseDialog):
                                     ),
                                     "Unknown",
                                 )
+
                                 if "FUN_" not in func_name:
-                                    print(func_name)
                                     if func_addr:
                                         symbol["org_func_name"] = next(
                                             (
                                                 function["name"]
                                                 for function in self._functions
                                                 if func_addr ==
-                                                   function["start_addr"]
+                                                function["start_addr"]
                                             ),
                                             "Unknown",
                                         )
 
-                                        nnfn = symbol["nearest_neighbor_function_name"]
+                                        nnfn = symbol[
+                                            "nearest_neighbor_function_name"
+                                        ]
+                                        nnbn = symbol[
+                                            "nearest_neighbor_binary_name"
+                                        ]
 
                                         if (nnfn == symbol["org_func_name"]):
-                                            self._analysis[Analysis.SKIPPED.value] += 1
-
+                                            self._analysis[
+                                                Analysis.SKIPPED.value
+                                            ] += 1
                                             resultsData.append((
+                                                # Successful
+                                                # CheckableItem(
+                                                #     None,
+                                                #     checked=False
+                                                # ),
+                                                IconItem(
+                                                    text="No",
+                                                    resource_name="failed.png",
+                                                    data=None
+                                                ),
+                                                # Original Function Name
                                                 symbol["org_func_name"],
-                                                f"{nnfn} "
-                                                f"({nnfn})",
-                                                None,
+                                                # Matched Function Names
+                                                nnfn,
+                                                # Signature
+                                                SimpleItem(
+                                                    text="N/A",
+                                                    data=None
+                                                ),
+                                                # Matched Binary
+                                                nnbn,
+                                                # Confidence
+                                                "0.0%",
+                                                # Error
                                                 "Same Function Name Found",
                                             ))
                                         else:
@@ -390,29 +690,51 @@ class AutoAnalysisDialog(BaseDialog):
                                                 Analysis.SUCCESSFUL.value
                                             ] += 1
 
+                                            confidence = symbol[
+                                                "confidence"
+                                            ] * 100
+
                                             logger.info(
-                                                "Found similar function '%s' with a confidence level of '%s",
-                                                nnfn,
-                                                str(symbol["confidence"]),
+                                                f"Found similar function "
+                                                f"'{nnfn}' with a confidence"
+                                                " level of "
+                                                f"'{confidence:#.02f}'"
                                             )
 
                                             symbol["function_addr"] = func_addr
+                                            success = "success.png"
 
                                             resultsData.append(
                                                 (
+                                                    # Successful
+                                                    # CheckableItem(symbol),
+                                                    IconItem(
+                                                        text="Yes",
+                                                        resource_name=success,
+                                                        data=symbol
+                                                    ),
+                                                    # Original Function Name
                                                     symbol["org_func_name"],
-                                                    f"{nnfn} "
-                                                    f"({nnfn})",
-                                                    CheckableItem(symbol),
-                                                    "Can be renamed with a confidence level of "
-                                                    f"{float(str(symbol['confidence'])[:6]) * 100:#.02f}%",
+                                                    # Matched Function Names
+                                                    nnfn,
+                                                    # Signature
+                                                    SimpleItem(
+                                                        text="N/A",
+                                                        data=None
+                                                    ),
+                                                    # Matched Binary
+                                                    nnbn,
+                                                    # Confidence
+                                                    f"{confidence:#.02f}%",
+                                                    # Error
+                                                    "",
                                                 )
                                             )
                     finally:
                         pos += len(chunk)
                         inmain(self.ui.progressBar.setProperty, "value", pos)
 
-            resultsData.sort(key=lambda tup: tup[0])
+            resultsData.sort(key=lambda tup: tup[1])
 
             # self._analysis[Analysis.TOTAL.value] = len(resultsData)
 
@@ -430,32 +752,37 @@ class AutoAnalysisDialog(BaseDialog):
             inmain(hide_wait_box)
             inmain(self._tab_changed, 1)
             inmain(self.ui.tabWidget.setCurrentIndex, 1)
-            inmain(self.ui.fetchButton.setEnabled, True)
+            inmain(self.ui.fetchResultsButton.setEnabled, True)
             inmain(self.ui.confidenceSlider.setEnabled, True)
             inmain(self.ui.progressBar.setProperty, "value", 0)
 
             width: int = inmain(self.ui.resultsTable.width)
 
-            inmain(self.ui.resultsTable.setColumnWidth, 0, round(width * 0.2))
-            inmain(self.ui.resultsTable.setColumnWidth, 1, round(width * 0.4))
-            inmain(self.ui.resultsTable.setColumnWidth, 2, round(width * 0.1))
-            inmain(self.ui.resultsTable.setColumnWidth, 3, round(width * 0.3))
+            # Successful
+            inmain(self.ui.resultsTable.setColumnWidth, 0, round(width * 0.08))
+            # Original Function Name
+            inmain(self.ui.resultsTable.setColumnWidth, 1, round(width * 0.2))
+            # Matched Function Name
+            inmain(self.ui.resultsTable.setColumnWidth, 2, round(width * 0.2))
+            # Signature
+            inmain(self.ui.resultsTable.setColumnWidth, 3, round(width * 0.1))
+            # Matched Binary
+            inmain(self.ui.resultsTable.setColumnWidth, 4, round(width * 0.2))
+            # Confidence
+            inmain(self.ui.resultsTable.setColumnWidth, 5, round(width * 0.08))
+            # Error
+            inmain(self.ui.resultsTable.setColumnWidth, 6, round(width * 0.3))
 
     def _filter(self, filter_text) -> None:
-        if self.ui.tabWidget.currentIndex() == 0:
-            self.typing_timer.start(
-                self.searchDelay
-            )  # Starts the countdown to call the filtering method
-        else:
-            table = self.ui.resultsTable
+        table = self.ui.resultsTable
 
-            for row in range(table.model().rowCount()):
-                item = table.model().index(row, 0)
-                table.setRowHidden(
-                    row,
-                    filter_text.lower() not in
-                    item.sibling(row, 0).data().lower()
-                )
+        for row in range(table.model().rowCount()):
+            item = table.model().index(row, 0)
+            table.setRowHidden(
+                row,
+                filter_text.lower() not in
+                item.sibling(row, 0).data().lower()
+            )
 
     def _confidence(self, value: int) -> None:
         if self.ui.tabWidget.currentIndex() == 0:
@@ -465,13 +792,19 @@ class AutoAnalysisDialog(BaseDialog):
         if index == 0:
             self.ui.description.setVisible(True)
             self.ui.renameButton.setEnabled(False)
+            self.ui.fetchDataTypesButton.setEnabled(False)
+            self.ui.confidenceSlider.show()
             self.ui.description.setText(
                 f"Confidence: {self.ui.confidenceSlider.sliderPosition():#02d}"
             )
         else:
+            self.ui.confidenceSlider.hide()
             self.ui.description.setVisible(
                 self._analysis[Analysis.TOTAL.value] > 0)
             self.ui.renameButton.setEnabled(
+                self._analysis[Analysis.SUCCESSFUL.value] > 0
+            )
+            self.ui.fetchDataTypesButton.setEnabled(
                 self._analysis[Analysis.SUCCESSFUL.value] > 0
             )
             self.ui.description.setText(
@@ -485,18 +818,23 @@ class AutoAnalysisDialog(BaseDialog):
                 f"{self._analysis[Analysis.UNSUCCESSFUL.value]}"
             )
 
-    def _search_collection(self, search: str = None) -> None:
+    def _search_collection(self, query: dict = {}) -> None:
+
+        def parse_date(date: str) -> str:
+            parsed_date = datetime.strptime(date, "%Y-%m-%dT%H:%M:%S.%f")
+            return f"{parsed_date:%Y-%m-%d %H:%M:%S}"
+
         try:
             inmain(show_wait_box, "HIDECANCEL\nGetting RevEng.AI collections…")
 
-            inmain(self.ui.fetchButton.setEnabled, False)
+            inmain(self.ui.fetchResultsButton.setEnabled, False)
 
             logger.info(
-                "Searching for collections with '%s'", search or "N/A"
+                "Searching for collections with '%s'", query or "N/A"
             )
 
             res: dict = RE_collections_search(
-                partial_collection_name=search,
+                query=query,
                 page=1,
                 page_size=1024,
             ).json()
@@ -508,34 +846,68 @@ class AutoAnalysisDialog(BaseDialog):
             collections = []
 
             for collection in result_collections:
-                if isinstance(collection, str):
-                    collections.append(
-                        (
-                            collection,
-                            CheckableItem(
-                                checked=self.ui.layoutFilter.is_present(
-                                    collection)
+                data = {
+                    "item_name": collection["collection_name"],
+                    "item_id": collection["collection_id"],
+                }
+
+                collections.append(
+                    (
+                        CheckableItem(
+                            checked=self.ui.layoutFilter.is_present(
+                                data
+                            )
+                        ),
+                        IconItem(
+                            collection["collection_name"],
+                            (
+                                "lock.png"
+                                if collection["scope"] == "PRIVATE"
+                                else "unlock.png"
                             ),
-                        )
+                        ),
+                        "Collection",
+                        parse_date(collection["last_updated_at"]),
+                        collection["model_name"],
+                        collection["owned_by"],
+                        collection["collection_id"]
                     )
-                else:
-                    collections.append(
-                        (
-                            IconItem(
-                                collection["collection_name"],
-                                (
-                                    "lock.png"
-                                    if collection["scope"] == "PRIVATE"
-                                    else "unlock.png"
-                                ),
-                            ),
-                            CheckableItem(
-                                checked=self.ui.layoutFilter.is_present(
-                                    collection["collection_name"]
-                                )
-                            ),
-                        )
+                )
+
+            # include binaries too
+            res: dict = RE_binaries_search(
+                query=query,
+                page=1,
+                page_size=1024,
+            ).json()
+
+            result_binaries = res.get("data", {}).get("results", [])
+
+            logger.info(f"Found {len(result_binaries)} binaries")
+
+            for binary in result_binaries:
+                data = {
+                    "item_name": binary["binary_name"],
+                    "item_id": binary["binary_id"],
+                }
+                collections.append(
+                    (
+                        CheckableItem(
+                            checked=self.ui.layoutFilter.is_present(
+                                data
+                            )
+                        ),
+                        IconItem(
+                            binary["binary_name"],
+                            "file.png",
+                        ),
+                        "Binary",
+                        parse_date(binary["created_at"]),
+                        binary["model_name"],
+                        binary["owned_by"],
+                        binary["binary_id"]
                     )
+                )
 
             inmain(
                 inmain(self.ui.collectionsTable.model).fill_table,
@@ -545,7 +917,7 @@ class AutoAnalysisDialog(BaseDialog):
             inmain(
                 self.ui.collectionsTable.setColumnWidth,
                 0,
-                round(inmain(self.ui.collectionsTable.width) * 0.9),
+                round(inmain(self.ui.collectionsTable.width) * 0.1),
             )
         except HTTPError as e:
             if e.response.status_code != 400:
@@ -561,57 +933,36 @@ class AutoAnalysisDialog(BaseDialog):
             inmain(hide_wait_box)
             inmain(self._tab_changed, 0)
             inmain(self.ui.tabWidget.setCurrentIndex, 0)
-            inmain(self.ui.fetchButton.setEnabled, True)
-            inmain(self.ui.fetchButton.setFocus)
+            inmain(self.ui.fetchResultsButton.setEnabled, True)
+            inmain(self.ui.fetchResultsButton.setFocus)
 
-    def _rename_functions(self):
-        batches = []
-        functions = {}
+    @wait_box_decorator(
+        "HIDECANCEL\nRenaming functions and applying types…"
+    )
+    def _rename_functions(self, *args):
+        data = self.ui.resultsTable.model().get_datas()
 
-        for row_item in self.ui.resultsTable.model().get_datas():
+        for row in range(len(data)):
             if (
-                    isinstance(row_item[2], CheckableItem)
-                    and row_item[2].checkState == Qt.Checked
+                    isinstance(data[row][0], IconItem)
+                    and data[row][0].text == "Yes"
             ):
-                symbol = row_item[2].data
+                symbol = data[row][0].data
+                signature = data[row][3].data
 
                 nnfn = symbol['nearest_neighbor_function_name']
+                original_addr = symbol['function_addr'] + self.base_addr
 
                 if IDAUtils.set_name(
-                        symbol["function_addr"] + self.base_addr,
-                        symbol["nearest_neighbor_function_name"],
+                        original_addr,
+                        nnfn,
                 ):
-                    func_id = self._get_function_id(symbol["function_addr"])
-                    if func_id:
-                        functions[func_id] = nnfn
-                        continue
-
-                batches.append(
-                    "\n     • "
-                    + sub(
-                        r"^(.{10}).*\s+➡\s+(.{10}).*$",
-                        r"\g<1>…  ➡  \g<2>…",
-                        f"{symbol['org_func_name']}  ➡  {nnfn}",
-                    )
-                )
-
-        if len(functions):
-            inthread(self._batch_function_rename, functions)
-
-        if len(batches):
-            cnt = len(batches)
-
-            # trunk the list of unrenamed functions
-            del batches[5:]
-
-            if len(batches) != cnt:
-                batches.append("\n     • …")
-
-            idc.warning(
-                "Can't rename the following"
-                f"{'' if cnt == 1 else ' ' + str(cnt)} function{'s'[:cnt ^ 1]}"
-                f", name already exists for: {''.join(batches)}"
-            )
+                    if signature is not None:
+                        apply_data_types(
+                            row,
+                            original_addr,
+                            self.ui.resultsTable,
+                        )
 
     def _rename_function(self, selected, batches: list = None) -> None:
         if selected and len(selected) > 3 and isinstance(
@@ -620,82 +971,118 @@ class AutoAnalysisDialog(BaseDialog):
         ):
             symbol = selected[2].data
 
+            function_addr = symbol["function_addr"] + self.base_addr
+            original_name = symbol["org_func_name"]
+            original_id = symbol["origin_function_id"]
+            matched_name = symbol["nearest_neighbor_function_name"]
+            confidence = symbol["confidence"]
+            # nnfid = symbol["nearest_neighbor_id"]
+            # nnbid = symbol["nearest_neighbor_binary_id"]
+            # nn_is_debug = symbol["nearest_neighbor_debug"]
+
             if IDAUtils.set_name(
-                    symbol["function_addr"] + self.base_addr,
-                    symbol["nearest_neighbor_function_name"],
+                    function_addr,
+                    matched_name,
             ):
+                # perform the renaming on our platform too
                 inthread(
                     self._function_rename,
-                    symbol["function_addr"],
-                    symbol["nearest_neighbor_function_name"],
+                    function_addr,
+                    matched_name,
+                    original_id,
                 )
+
+                # if nn_is_debug:
+                #     # import datatypes from the nearest neighbor binary
+                #     inthread(
+                #         self._function_import_symbol_datatypes,
+                #         nnbid,
+                #         nnfid,
+                #         function_addr,
+                #     )
 
                 logger.info(
                     "Renowned %s in %s with confidence of '%s",
-                    symbol["org_func_name"],
-                    symbol["nearest_neighbor_function_name"],
-                    symbol["confidence"],
+                    original_name,
+                    matched_name,
+                    confidence,
                 )
             else:
                 logger.warning(
-                    "Symbol name %s already exists",
-                    symbol["nearest_neighbor_function_name"],
+                    "Unable to rename %s in %s. Name %s already exists.",
+                    original_name,
+                    matched_name,
+                    matched_name,
                 )
 
-                if batches is not None:
-                    nnfn = symbol['nearest_neighbor_function_name']
-                    batches.append(
-                        "\n     • "
-                        + sub(
-                            r"^(.{10}).*\s+➡\s+(.{10}).*$",
-                            r"\g<1>…  ➡  \g<2>…",
-                            f"{symbol['org_func_name']}  ➡  {nnfn}",
-                        )
-                    )
-                else:
-                    idc.warning(
-                        f"Can't rename {symbol['org_func_name']}. Name"
-                        f" {symbol['nearest_neighbor_function_name']} already "
-                        "exists."
-                    )
+                idc.warning(
+                    f"Can't rename {original_name}. Name {matched_name} "
+                    "already exists."
+                )
 
-    def _selected_collections(self) -> list[str]:
-        return [
-            self.ui.layoutFilter.itemAt(idx).widget().objectName()
-            for idx in range(self.ui.layoutFilter.count())
-        ]
+    def _selected_collections(self) -> dict:
+        collections = []
+        binaries = []
+        for idx in range(self.ui.layoutFilter.count()):
+            item = self.ui.layoutFilter.itemAt(idx).widget()
+            data = item.custom_data
+            if data["is_collection"]:
+                collections.append(data["item_id"])
+            else:
+                binaries.append(data["item_id"])
+        return {
+            "collections": collections,
+            "binaries": binaries,
+        }
 
     def _filter_collections(self):
-        self._search_collection(self.ui.collectionsFilter.text().lower())
+        query = self.ui.searchQuery.text().lower()
+        try:
+            query_data = self._parse_search_query(query)
+            self._search_collection(query_data)
+        except ValueError as e:
+            logger.error("Invalid search query: %s", query)
+            Dialog.showError(
+                "Auto Analysis",
+                f"Invalid search query: {e}"
+            )
 
     def _state_change(self, index: QModelIndex):
-        item = self.ui.collectionsTable.model().get_data(index.row())
+        row = index.row()
+        item = self.ui.collectionsTable.model().get_data(row)
 
-        if item[1].checkState == Qt.Checked:
+        item_name = item[1].text if isinstance(
+            item[1], SimpleItem) else item[1]
+
+        item_id = item[6]
+        is_collection = item[2] == "Collection"
+
+        data = {
+            "row": row,
+            "is_collection": is_collection,
+            "item_name": item_name,
+            "item_id": item_id,
+        }
+
+        if item[0].checkState == Qt.Checked:
             self.ui.layoutFilter.add_card(
-                item[0].text if isinstance(item[0], SimpleItem) else item[0]
+                data
             )
         else:
             self.ui.layoutFilter.remove_card(
-                item[0].text if isinstance(item[0], SimpleItem) else item[0]
+                data
             )
 
-    def _callback(self, text: str) -> None:
-        for row_item in self.ui.collectionsTable.model().get_datas():
-            if isinstance(row_item[1], CheckableItem) and (
-                    isinstance(row_item[0], str)
-                    and row_item[0] == text
-                    or isinstance(row_item[0], SimpleItem)
-                    and row_item[0].text == text
-            ):
-                row_item[1].checkState = Qt.Unchecked
-
-        self.ui.collectionsTable.model().layoutChanged.emit()
+    def _callback(self, data: dict) -> None:
+        row_element = self.ui.collectionsTable.model().get_data(data["row"])
+        if row_element[6] == data["item_id"]:
+            row_element[0].checkState = Qt.Unchecked
+            self.ui.collectionsTable.model().layoutChanged.emit()
 
     # Yield successive n-sized
     # chunks from data.
     @staticmethod
-    def _divide_chunks(data: list, n: int = 50) -> list:
+    def _divide_chunks(data: list, n: int = 50) -> Generator[list, None, None]:
         # looping till length l
         for idx in range(0, len(data), n):
             yield data[idx: idx + n]

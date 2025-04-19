@@ -1,2 +1,6 @@
-reait==1.1.1
-libbs==2.11.3
+reait>=1.0.1
+libbs==2.14.1
+tree-sitter==0.24.0
+tree-sitter-c==0.23.4
+tree-sitter-cpp==0.23.4
+pygments==2.19.1

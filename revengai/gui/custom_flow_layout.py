@@ -4,11 +4,14 @@ from PyQt5.QtCore import QPoint
 from PyQt5.QtCore import QRect
 from PyQt5.QtCore import QSize
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QCheckBox
 from PyQt5.QtWidgets import QLayout
 from PyQt5.QtWidgets import QLayoutItem
 from PyQt5.QtWidgets import QSizePolicy
 from PyQt5.QtWidgets import QWidget
+from revengai.gui.custom_card import QRevEngCard
+import logging
+
+logger = logging.getLogger("REAI")
 
 
 class CustomFlowLayout(QLayout):
@@ -36,13 +39,18 @@ class CustomFlowLayout(QLayout):
             item = self.takeAt(0)
 
     def addItem(self, a0: QLayoutItem) -> None:
-        try:
-            position = self.__pending_positions[a0.widget()]
-            self._items.insert(position, a0)
+        # try:
+        #     position = self.__pending_positions[a0.widget()]
+        #     self._items.insert(position, a0)
 
-            del self.__pending_positions[a0.widget()]
-        except KeyError:
+        #     del self.__pending_positions[a0.widget()]
+        # except KeyError:
+        #     self._items.append(a0)
+        widget = a0.widget()
+        if isinstance(widget, QRevEngCard):
             self._items.append(a0)
+        else:
+            logger.warning("CustomFlowLayout: addItem: not a QRevEngCard")
 
     def addWidget(
             self,
@@ -89,13 +97,22 @@ class CustomFlowLayout(QLayout):
         return size
 
     def removeItem(self, a0: QLayoutItem) -> None:
-        self.removeWidget(a0.widget())
+        logger.info("CustomFlowLayout: removeItem")
+        widget = a0.widget()
+        if widget and hasattr(widget, 'custom_data'):
+            el = next(
+                (item for item in self._items if item.widget() == widget), None
+            )
+            if el:
+                self._items.remove(el)
 
-    def removeWidget(self, w: QWidget) -> None:
-        w.deleteLater()
-
-        if self.callback:
-            self.callback(w.objectName())
+    def removeWidget(self, widget: QRevEngCard) -> None:
+        if widget is not None:
+            if self.callback and hasattr(widget, 'custom_data'):
+                data = widget.custom_data
+                self.callback(data)
+            super().removeWidget(widget)
+            widget.deleteLater()
 
     def setGeometry(self, rect: QRect) -> None:
         super().setGeometry(rect)
@@ -106,7 +123,8 @@ class CustomFlowLayout(QLayout):
 
     def takeAt(self, index: int) -> Optional[QLayoutItem]:
         if 0 <= index < len(self._items):
-            return self._items.pop(index)
+            item = self._items.pop(index)
+            return item
         return None
 
     def _doLayout(self, rect: QRect, testOnly: bool = False):
@@ -149,36 +167,34 @@ class CustomFlowLayout(QLayout):
         super().resizeEvent(event)
         self._doLayout(self.geometry())
 
-    def add_card(self, text: str) -> None:
-        if not self.is_present(text):
-            child: QWidget = QCheckBox(text)
-
-            child.setStyleSheet(
-                """
-                QCheckBox {
-                    min-width: 2em;
-                    border-radius: 3px;
-                    border: 2px solid gray;
-                    padding: 2px 2px 2px 2px;
-                    background-color: #737373;
-                }
-                """
-            )
-
+    def add_card(self, data: dict) -> None:
+        if not self.is_present(data):
+            child: QRevEngCard = QRevEngCard(data["item_name"])
+            child.custom_data = data
             child.setChecked(True)
-            child.setObjectName(text)
+            child.setObjectName(data["item_name"])
             child.setLayoutDirection(Qt.RightToLeft)
             child.stateChanged.connect(lambda: self.removeWidget(child))
 
             self.addWidget(child)
 
-    def remove_card(self, text: str) -> None:
-        for item in self._items:
-            if item.widget().objectName() == text:
-                self.removeWidget(item.widget())
+    def remove_card(self, data: dict) -> None:
+        element = next(
+            (
+                item for item in self._items
+                if item.widget().custom_data["item_id"] == data["item_id"] and
+                item.widget().custom_data["item_name"] == data["item_name"]
+            ),
+            None
+        )
+        self.removeWidget(element.widget()) if element else None
 
-    def is_present(self, text: str) -> bool:
-        return any(item.widget().objectName() == text for item in self._items)
+    def is_present(self, data: dict) -> bool:
+        return any(
+            item.widget().custom_data["item_id"] == data["item_id"] and
+            item.widget().custom_data["item_name"] == data["item_name"]
+            for item in self._items
+        ) if data else False
 
     def register_cb(self, fn):
         self.callback = fn

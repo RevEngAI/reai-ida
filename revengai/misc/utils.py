@@ -58,11 +58,11 @@ class IDAUtils(object):
         """
         try:
             return IDAUtils.is_in_valid_segment(func_ea) and (
-                    idaapi.set_name(
-                        func_ea, func_name, idaapi.SN_NOWARN | idaapi.SN_NOCHECK
-                    )
-                    or anyway
-                    and idaapi.force_name(func_ea, func_name)
+                idaapi.set_name(
+                    func_ea, func_name, idaapi.SN_NOWARN | idaapi.SN_NOCHECK
+                )
+                or anyway
+                and idaapi.force_name(func_ea, func_name)
             )
         finally:
             idaapi.request_refresh(IWID_DISASMS())

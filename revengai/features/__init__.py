@@ -6,7 +6,7 @@ from os.path import dirname, join
 from typing import Generator
 
 import idaapi
-from PyQt5.QtCore import QRect, QTimer
+from PyQt5.QtCore import QRect
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QDialog, QDesktopWidget
 from idaapi import get_imagebase
@@ -19,6 +19,7 @@ from requests import HTTPError, Response, RequestException
 
 from revengai.manager import RevEngState
 from revengai.misc.qtutils import inthread, inmain
+
 
 logger = logging.getLogger("REAI")
 
@@ -40,16 +41,113 @@ class BaseDialog(QDialog):
 
         self.base_addr = get_imagebase()
 
-        self.typing_timer = QTimer(self)
-        self.typing_timer.setSingleShot(
-            True
-        )  # Ensure the timer will fire only once after it was started
-        self.typing_timer.timeout.connect(self._filter_collections)
+        # self.typing_timer = QTimer(self)
+        # self.typing_timer.setSingleShot(
+        #     True
+        # )  # Ensure the timer will fire only once after it was started
+        # self.typing_timer.timeout.connect(self._filter_collections)
 
         self.setModal(True)
         self.setWindowIcon(
             QIcon(join(dirname(__file__), "..", "resources", "favicon.png"))
         )
+
+    def _parse_search_query(self, query):
+        """
+        Parse a search query with special selectors.
+
+        Args:
+            query (str): The search query string to parse
+
+        Returns:
+            dict: A dictionary containing parsed query components
+
+        Raises:
+            ValueError: If multiple non-tag selectors or a selector with raw
+                        query are used
+        """
+        # Initialize the result dictionary with default empty values
+        result = {
+            'query': None,
+            'sha_256_hash': None,
+            'tags': [],
+            'binary_name': None,
+            'collection_name': None,
+            'function_name': None,
+            'model_name': None
+        }
+
+        # List of possible selectors (excluding 'tag')
+        single_selectors = [
+            'sha_256_hash',
+            'binary_name',
+            'collection_name',
+            'function_name',
+            'model_name'
+        ]
+
+        # Parse selector-based queries
+        def extract_selector_value(query, selector):
+            """Helper function to extract selector value"""
+            selector_pattern = f"{selector}:"
+            selector_match = query.find(selector_pattern)
+
+            if selector_match != -1:
+                # Extract the value after the selector
+                start = selector_match + len(selector_pattern)
+                end = query.find(' ', start)
+
+                # If no space found, take till the end of string
+                if end == -1:
+                    end = len(query)
+
+                # Extract the value and the full selector part
+                value = query[start:end].strip()
+                full_selector_part = query[selector_match:end].strip()
+
+                return value, full_selector_part
+
+            return None, None
+
+        # Process tags first (can be multiple)
+        def process_tags(query):
+            tags = []
+            while True:
+                tag_value, tag_part = extract_selector_value(query, 'tag')
+                if not tag_value:
+                    break
+                tags.append(tag_value)
+                query = query.replace(tag_part, '').strip()
+            return tags, query
+
+        # Process tags
+        result['tags'], query = process_tags(query)
+
+        # Process other single selectors
+        for selector in single_selectors:
+            value, selector_part = extract_selector_value(query, selector)
+
+            if value:
+                # Check if this selector was already set
+                if result[selector] is not None:
+                    raise ValueError(
+                        f"Only one {selector} selector can be used.")
+
+                result[selector] = value
+                query = query.replace(selector_part, '').strip()
+
+        # Validation checks for additional text
+        query = query.strip()
+        if query:
+            # If query is not empty after removing selectors
+            if any(result[selector] is not None for selector in
+                   single_selectors):
+                raise ValueError(
+                    "Selector cannot be used with additional text.")
+            # If no other selectors, treat as raw query
+            result['query'] = query
+
+        return result
 
     def showEvent(self, event):
         super(BaseDialog, self).showEvent(event)
@@ -155,6 +253,12 @@ class BaseDialog(QDialog):
                         )
                 except Exception as e:
                     logger.error("Exception raised: %s", e)
+
+            inmain(
+                idaapi.info,
+                "Completed batch renaming of functions. "
+                "Check the log for details."
+            )
 
     def _function_breakdown(self, func_id: int) -> None:
         # Prevent circular import
