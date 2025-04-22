@@ -53,8 +53,6 @@ from revengai.misc.qtutils import inthread, inmain
 from revengai.misc.utils import IDAUtils
 from revengai.wizard.wizard import RevEngSetupWizard
 
-from requests import get, HTTPError, Response, RequestException
-
 logger = logging.getLogger("REAI")
 
 version = float(idaapi.get_kernel_version())
