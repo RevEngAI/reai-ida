@@ -30,8 +30,13 @@ class IdaPluginInstallCommand(install):
             )
 
             if not self.dry_run:
-                pip.main(["install", "-t", install_dir,
-                         "--ignore-installed", dependency,])
+                pip.main([
+                    "install",
+                    "-t",
+                    install_dir,
+                    "--ignore-installed",
+                    dependency
+                ])
 
     def install_packages(self, dist: Distribution, install_dir: str) -> None:
         """ Install python packages """
