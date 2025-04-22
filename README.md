@@ -108,17 +108,17 @@ Once the analysis is complete, the results panel is enabled. This provides infor
 
 ![auto_analyze_results](./assets/img/9.png)
 
-## Generate Block Summaries
+## AI Decompiler
 
-Right-clicking on any function name in an IDA View and selecting `Generate AI Summaries` will bring up the following window which allows you to generate block summaries.
+The AI decompiler is available from the `RevEng.AI` menu. It allows you to decompile a function using the RevEng.AI platform. The decompiled code is displayed in a new window.
 
-![generate_summaries](./assets/img/14.png)
+First you have to click on the top menu `RevEng.AI` and select `Functions` submenu, then click on `AI Decompiler`.
 
-Once clicked, a dialog box appears inviting to confirm the generation of block summaries.
+![ai_decompiler](./assets/img/17.png)
 
-![confirm_summaries](./assets/img/15.png)
+Wait for the decompilation to finish, and the decompiled code will be displayed in a new window.
 
-⚠️ This action is irrevocable and no refunds can be issued on the credits used.
+![ai_decompiler_result](./assets/img/16.png)
 
 # Troubleshooting
 
