@@ -119,20 +119,20 @@ class Hooks(UI_Hooks):
                                     or (
                                     action["id"]
                                     in (
-                                            "reai:rename",
-                                            "reai:breakdown",
-                                            "reai:summary",
+                                        "reai:rename",
+                                        "reai:breakdown",
+                                        "reai:summary",
                                     )
                                     and not IDAUtils.is_function(func_ea)
-                            )
+                                    )
                                     or (
                                     get_widget_type(form) != BWN_PSEUDOCODE
                                     and action["id"]
                                     in (
-                                            "reai:explain",
-                                            "reai:signature",
+                                        "reai:explain",
+                                        "reai:signature",
                                     )
-                            )
+                                    )
                             ):
                                 continue
                         elif action["id"] != "reai:wizard":
@@ -168,12 +168,12 @@ class RevEngConfigForm_t(PluginForm):
                 self,
                 caption,
                 options=(
-                        options
-                        | PluginForm.WOPN_TAB
-                        | PluginForm.WCLS_SAVE
-                        | PluginForm.WOPN_MENU
-                        | PluginForm.WOPN_PERSIST
-                        | PluginForm.WOPN_RESTORE
+                    options
+                    | PluginForm.WOPN_TAB
+                    | PluginForm.WCLS_SAVE
+                    | PluginForm.WOPN_MENU
+                    | PluginForm.WOPN_PERSIST
+                    | PluginForm.WOPN_RESTORE
                 ),
             )
 

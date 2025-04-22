@@ -21,7 +21,7 @@ from revengai.misc.utils import IDAUtils
 from revengai.models import CheckableItem, IconItem, SimpleItem
 from revengai.models.checkable_model import RevEngCheckableTableModel
 from revengai.models.table_model import RevEngTableModel
-from revengai.ui.auto_analysis_panel_2 import Ui_AutoAnalysisPanel
+from revengai.ui.auto_analysis_panel import Ui_AutoAnalysisPanel
 from datetime import datetime
 from revengai.misc.datatypes import (
     apply_data_types,

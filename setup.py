@@ -23,9 +23,9 @@ setup(
     name="reai-ida",
     version=__version__,
     python_requires=">=3.9",
-    author="Yannick Tournier",
-    maintainer="Yannick Tournier",
-    author_email="yannick@reveng.ai",
+    author="RevEng.AI",
+    maintainer="RevEng.AI",
+    author_email="root@reveng.ai",
     packages=find_packages(),
     install_requires=required,
     include_package_data=True,
@@ -41,7 +41,8 @@ setup(
     classifiers=[
         "Operating System :: OS Independent",
         "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: GNU General Public License v2 or later (GPLv2+)",
+        "License :: OSI Approved :: "
+        "GNU General Public License v2 or later (GPLv2+)",
     ],
     cmdclass={
         "install": IdaPluginInstallCommand,

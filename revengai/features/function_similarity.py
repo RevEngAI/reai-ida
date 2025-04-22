@@ -20,7 +20,7 @@ from revengai.models.single_checkable_model import (
     RevEngSingleCheckableTableModel
 )
 from revengai.gui.custom_card import QRevEngCard
-from revengai.ui.function_similarity_panel_2 import Ui_FunctionSimilarityPanel
+from revengai.ui.function_similarity_panel import Ui_FunctionSimilarityPanel
 from datetime import datetime
 from libbs.artifacts import _art_from_dict
 from libbs.artifacts import (
