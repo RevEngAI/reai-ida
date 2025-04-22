@@ -53,6 +53,8 @@ from revengai.misc.qtutils import inthread, inmain
 from revengai.misc.utils import IDAUtils
 from revengai.wizard.wizard import RevEngSetupWizard
 
+from idaapi import ASKBTN_YES, ask_buttons
+
 logger = logging.getLogger("REAI")
 
 version = float(idaapi.get_kernel_version())
@@ -1250,7 +1252,7 @@ def ai_decompile(state: RevEngState) -> None:
 
 def auto_unstrip(state: RevEngState) -> None:
     fpath = idc.get_input_file_path()
-    if is_condition_met(state, fpath) and idaapi.ASKBTN_YES == idaapi.ask_buttons(
+    if is_condition_met(state, fpath) and ASKBTN_YES == ask_buttons(
         "Auto Unstrip",
         "Cancel",
         "",
