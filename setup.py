@@ -41,7 +41,8 @@ setup(
     classifiers=[
         "Operating System :: OS Independent",
         "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: GNU General Public License v2 or later (GPLv2+)",
+        "License :: OSI Approved :: "
+        "GNU General Public License v2 or later (GPLv2+)",
     ],
     cmdclass={
         "install": IdaPluginInstallCommand,
