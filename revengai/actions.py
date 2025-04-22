@@ -1213,9 +1213,6 @@ def ai_decompile(state: RevEngState) -> None:
         if decomp_data is not None:
             try:
                 if isinstance(decomp_data, tuple):
-                    logger.info(
-                        f"Decompilation {decomp_data}"
-                    )
                     c_code, summary = decomp_data
                     sv.set_code(c_code, summary)
             except Exception as e:
