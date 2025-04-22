@@ -1282,13 +1282,16 @@ def auto_unstrip(state: RevEngState) -> None:
                 else:
                     Dialog.showInfo(
                         "Auto Unstrip",
-                        "Auto Unstrip completed, but no symbols were renamed.\n"
-                        "This may indicate that all symbols were already properly named or\n"
+                        "Auto Unstrip completed, "
+                        "but no symbols were renamed.\n"
+                        "This may indicate that all symbols were already"
+                        " properly named or\n"
                         "no matches were found during the process."
                     )
             except HTTPError as e:
+                res: dict = e.response.json()
                 logger.error(
-                    "Unable to auto unstrip binary: %s", e.response.json().get("error")
+                    f"Unable to auto unstrip binary: {res.get('error')}"
                 )
             finally:
                 inmain(idaapi.hide_wait_box)
@@ -1436,7 +1439,9 @@ def is_condition_met(state: RevEngState, fpath: str) -> bool:
         setup_wizard(state)
     elif not fpath or not isfile(fpath):
         idc.warning(
-            "The target file was not found on disk. Has it been moved or renamed?")
+            "The target file was not found on disk. Has it "
+            "been moved or renamed?"
+        )
     else:
         return True
     return False
@@ -1502,7 +1507,8 @@ def update(_) -> None:
         f = UpdateForm(
             "You're already using the latest stable version!"
             if version_stable == __version__
-            else f"The latest stable version is {version_stable}. Please update to stay current.",
+            else f"The latest stable version is {version_stable}. Please "
+            "update to stay current.",
             version=version_stable
         )
 
