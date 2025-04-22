@@ -36,7 +36,8 @@ class Dialog(object):
 
     @staticmethod
     def showError(title: str, message: str) -> None:
-        execute_sync(Requests.MsgBox(title, message, QMessageBox.Warning), MFF_FAST)
+        execute_sync(Requests.MsgBox(title, message,
+                     QMessageBox.Warning), MFF_FAST)
 
 
 class BaseForm(Form):
@@ -284,6 +285,7 @@ Your current RevEngAI IDA plugin version is v%s.
         )
 
     def OnFormChange(self, fid):
+        uri = f"https://github.com/RevEngAI/reai-ida/releases/v{self.version}"
         if fid == -2:
-            open_url(f"https://github.com/RevEngAI/reai-ida/releases/v{self.version}")
+            open_url(uri)
         return super().OnFormChange(fid)
