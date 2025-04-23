@@ -1150,6 +1150,13 @@ def ai_decompile(state: RevEngState) -> None:
 
                 if poll_status == "uninitialised":
                     uninitialised_count += 1
+                elif poll_status == "error":
+                    return error_and_close_view(
+                        callback,
+                        "AI Decompilation failed. This could be due to an"
+                        " error in the decompilation process or the function"
+                        " not being supported.",
+                    )
                 else:
                     logger.info(f"Polling AI decompilation: {poll_status}")
 
