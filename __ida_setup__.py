@@ -74,10 +74,8 @@ class IdaPluginInstallCommand(install):
             install_dir = IdaPluginInstallCommand._get_install_dir()
 
         self.install_dependencies(dist, install_dir)
-
         self.install_packages(dist, install_dir)
         self.install_plugins(dist, install_dir)
-
         install.run(self)
 
     @staticmethod

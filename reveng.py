@@ -338,7 +338,14 @@ def check_analysis_status():
 # The PLUGIN_ENTRY method is what IDA calls when scriptable plugins are loaded.
 # It needs to return a plugin of type idaapi.plugin_t.
 def PLUGIN_ENTRY():
-    requested_libraries = ["reait", "libbs"]
+    requested_libraries = [
+        "reait",
+        "libbs",
+        "tree-sitter",
+        "tree-sitter-c",
+        "tree-sitter-cpp",
+        "pygments"
+    ]
 
     all_installed, missing_libraries = check_dependencies(requested_libraries)
 
