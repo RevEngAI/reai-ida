@@ -341,9 +341,9 @@ def PLUGIN_ENTRY():
     requested_libraries = [
         "reait",
         "libbs",
-        "tree-sitter",
-        "tree-sitter-c",
-        "tree-sitter-cpp",
+        "tree_sitter",
+        "tree_sitter_c",
+        "tree_sitter_cpp",
         "pygments"
     ]
 
