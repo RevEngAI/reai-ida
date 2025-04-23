@@ -1187,6 +1187,10 @@ def ai_decompile(state: RevEngState) -> None:
             for key, value in inverse_string_map.items():
                 c_code = c_code.replace(key, value.get("string", key))
 
+            summary = decompilation_data.get("summary", "")
+            if summary is None:
+                summary = ""
+
             for key, value in inverse_function_map.items():
                 val = value.get("name", key)
                 if val.startswith("<EXTERNAL>::"):
@@ -1194,10 +1198,7 @@ def ai_decompile(state: RevEngState) -> None:
                 if val.startswith("."):
                     val = val[1:]
                 c_code = c_code.replace(key, val)
-
-            summary = decompilation_data.get("summary", "")
-            if summary is None:
-                summary = ""
+                summary = summary.replace(key, val)
 
             logger.info("Update UI with decompiled code")
             idaapi.execute_sync(lambda: callback(
