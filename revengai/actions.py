@@ -1172,21 +1172,21 @@ def ai_decompile(state: RevEngState) -> None:
                     break
 
             logger.info("AI Decompilation completed")
-            decompilation_data = res.get("data")
+            decompilation_data: dict = res.get("data", {})
 
             c_code = decompilation_data.get("decompilation", "")
 
-            function_mapping_full = decompilation_data.get(
+            function_mapping_full: dict = decompilation_data.get(
                 "function_mapping_full",
                 {}
             )
 
-            inverse_string_map = function_mapping_full.get(
+            inverse_string_map: list = function_mapping_full.get(
                 "inverse_string_map",
                 []
             )
 
-            inverse_function_map = function_mapping_full.get(
+            inverse_function_map: list = function_mapping_full.get(
                 "inverse_function_map",
                 []
             )
