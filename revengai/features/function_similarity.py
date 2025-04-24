@@ -57,6 +57,10 @@ class FunctionSimilarityDialog(BaseDialog):
         self.ui.renameButton.setEnabled(False)
         self.ui.layoutFilter.register_cb(self._callback)
         self.ui.searchButton.clicked.connect(self._filter_collections)
+        self.ui.searchQuery.returnPressed.connect(
+            self._filter_collections
+        )
+        self.ui.tabWidget.tabBarClicked.connect(self._tab_changed)
         self.ui.collectionsTable.horizontalHeader().setDefaultAlignment(
             Qt.AlignCenter
         )
@@ -106,8 +110,6 @@ class FunctionSimilarityDialog(BaseDialog):
         )
 
         self.ui.confidenceSlider.valueChanged.connect(self._confidence)
-
-        self.ui.fetchResultsButton.setFocus()
         self.ui.fetchResultsButton.clicked.connect(self._fetch)
         self.ui.renameButton.clicked.connect(self._rename_symbol)
         self.ui.fetchDataTypesButton.clicked.connect(self._fetch_data_types)
@@ -220,6 +222,7 @@ class FunctionSimilarityDialog(BaseDialog):
             )
 
     def _load(self, filter_data: dict, distance: float = 0.1):
+        data = []
         try:
             model = inmain(self.ui.resultsTable.model)
 
@@ -261,8 +264,6 @@ class FunctionSimilarityDialog(BaseDialog):
             inmain(self.ui.progressBar.setProperty, "value", 75)
 
             matches = res.get("function_matches", [])
-
-            data = []
 
             for function in matches:
 
@@ -316,24 +317,30 @@ class FunctionSimilarityDialog(BaseDialog):
             logger.error("An unexpected error has occurred. %s", e)
         finally:
             inmain(hide_wait_box)
-            inmain(self.ui.tabWidget.setCurrentIndex, 1)
-            inmain(self.ui.fetchResultsButton.setEnabled, True)
             inmain(self.ui.progressBar.setProperty, "value", 0)
-
-            width: int = inmain(self.ui.resultsTable.width)
-
-            # Selected
-            inmain(self.ui.resultsTable.setColumnWidth, 0, round(width * 0.08))
-            # Original Function Name
-            inmain(self.ui.resultsTable.setColumnWidth, 1, round(width * 0.2))
-            # Matched Function Name
-            inmain(self.ui.resultsTable.setColumnWidth, 2, round(width * 0.2))
-            # Signature
-            inmain(self.ui.resultsTable.setColumnWidth, 3, round(width * 0.32))
-            # Matched Binary
-            inmain(self.ui.resultsTable.setColumnWidth, 4, round(width * 0.2))
-            # Confidence
-            inmain(self.ui.resultsTable.setColumnWidth, 5, round(width * 0.08))
+            inmain(self.ui.fetchResultsButton.setEnabled, True)
+            if len(data) > 0:
+                inmain(self._tab_changed, 1)
+                inmain(self.ui.tabWidget.setCurrentIndex, 1)
+                width: int = inmain(self.ui.resultsTable.width)
+                # Selected
+                inmain(self.ui.resultsTable.setColumnWidth,
+                       0, round(width * 0.08))
+                # Original Function Name
+                inmain(self.ui.resultsTable.setColumnWidth,
+                       1, round(width * 0.2))
+                # Matched Function Name
+                inmain(self.ui.resultsTable.setColumnWidth,
+                       2, round(width * 0.2))
+                # Signature
+                inmain(self.ui.resultsTable.setColumnWidth,
+                       3, round(width * 0.32))
+                # Matched Binary
+                inmain(self.ui.resultsTable.setColumnWidth,
+                       4, round(width * 0.2))
+                # Confidence
+                inmain(self.ui.resultsTable.setColumnWidth,
+                       5, round(width * 0.08))
 
     @wait_box_decorator(
         "HIDECANCEL\nApplying function name and data types…"
@@ -360,7 +367,7 @@ class FunctionSimilarityDialog(BaseDialog):
         symbol = el[0].data
         signature = el[3].data
         nnfn = symbol['nearest_neighbor_function_name']
-        addr = symbol['function_addr'] + self.base_addr
+        addr = symbol['function_addr']
 
         if IDAUtils.set_name(addr, nnfn):
             if signature:
@@ -368,6 +375,10 @@ class FunctionSimilarityDialog(BaseDialog):
                     row,
                     addr,
                     self.ui.resultsTable
+                )
+            else:
+                logger.info(
+                    "No signature found for the function. Skipping."
                 )
 
     def _tab_changed(self, index: int) -> None:
@@ -379,8 +390,11 @@ class FunctionSimilarityDialog(BaseDialog):
             self.ui.description.setText(
                 f"Confidence: {self.ui.confidenceSlider.sliderPosition():#02d}"
             )
+            self.ui.progressBar.show()
         else:
             self.ui.confidenceSlider.hide()
+            self.ui.progressBar.hide()
+            self.ui.description.setVisible(False)
 
     def _search_collection(self, query: dict = {}) -> None:
         def parse_date(date: str) -> str:
@@ -497,7 +511,6 @@ class FunctionSimilarityDialog(BaseDialog):
             inmain(self._tab_changed, 0)
             inmain(self.ui.tabWidget.setCurrentIndex, 0)
             inmain(self.ui.fetchResultsButton.setEnabled, True)
-            inmain(self.ui.fetchResultsButton.setFocus)
 
     def _table_menu(self) -> None:
         rows = sorted(
@@ -505,18 +518,17 @@ class FunctionSimilarityDialog(BaseDialog):
                 for index in self.ui.resultsTable.selectedIndexes())
         )
         selected = self.ui.resultsTable.model().get_data(rows[0])
-        logger.info(f"Selected: {selected}")
 
         if (
                 selected
                 and self.ui.renameButton.isEnabled()
-                and isinstance(selected[2], SimpleItem)
+                and isinstance(selected[0], SimpleItem)
         ):
             menu = QMenu()
-            renameAction = menu.addAction(self.ui.renameButton.text())
-            renameAction.triggered.connect(self._rename_symbol)
+            # renameAction = menu.addAction(self.ui.renameButton.text())
+            # renameAction.triggered.connect(self._rename_symbol)
 
-            func_id = selected[2].data["nearest_neighbor_id"]
+            func_id = selected[0].data["nearest_neighbor_id"]
             breakdownAction = menu.addAction("View Function Breakdown")
             breakdownAction.triggered.connect(
                 lambda: self._function_breakdown(func_id))
@@ -547,9 +559,19 @@ class FunctionSimilarityDialog(BaseDialog):
 
     def _filter_collections(self):
         query = self.ui.searchQuery.text().lower()
+        if hasattr(self, "search_query") and self.search_query == query:
+            return
+        setattr(self, "search_query", query)
         try:
             query_data = self._parse_search_query(query)
-            self._search_collection(query_data)
+            if not self._is_query_empty(query_data):
+                self._search_collection(query_data)
+            else:
+                # empty resultTable
+                inmain(
+                    inmain(self.ui.collectionsTable.model).fill_table,
+                    []
+                )
         except ValueError as e:
             logger.error("Invalid search query: %s", query)
             Dialog.showError(

@@ -56,7 +56,9 @@ class AutoAnalysisDialog(BaseDialog):
 
         self.ui.layoutFilter.register_cb(self._callback)
         self.ui.searchButton.clicked.connect(self._filter_collections)
-        self.ui.searchQuery.returnPressed.connect(self._filter_collections)
+        self.ui.searchQuery.returnPressed.connect(
+            self._filter_collections
+        )
         self.ui.fetchDataTypesButton.clicked.connect(
             self._fetch_data_types
         )
@@ -750,28 +752,34 @@ class AutoAnalysisDialog(BaseDialog):
             logger.error("An unexpected error has occurred. %s", e)
         finally:
             inmain(hide_wait_box)
-            inmain(self._tab_changed, 1)
-            inmain(self.ui.tabWidget.setCurrentIndex, 1)
             inmain(self.ui.fetchResultsButton.setEnabled, True)
-            inmain(self.ui.confidenceSlider.setEnabled, True)
             inmain(self.ui.progressBar.setProperty, "value", 0)
-
-            width: int = inmain(self.ui.resultsTable.width)
-
-            # Successful
-            inmain(self.ui.resultsTable.setColumnWidth, 0, round(width * 0.08))
-            # Original Function Name
-            inmain(self.ui.resultsTable.setColumnWidth, 1, round(width * 0.2))
-            # Matched Function Name
-            inmain(self.ui.resultsTable.setColumnWidth, 2, round(width * 0.2))
-            # Signature
-            inmain(self.ui.resultsTable.setColumnWidth, 3, round(width * 0.1))
-            # Matched Binary
-            inmain(self.ui.resultsTable.setColumnWidth, 4, round(width * 0.2))
-            # Confidence
-            inmain(self.ui.resultsTable.setColumnWidth, 5, round(width * 0.08))
-            # Error
-            inmain(self.ui.resultsTable.setColumnWidth, 6, round(width * 0.3))
+            inmain(self.ui.confidenceSlider.setEnabled, True)
+            if len(resultsData) > 0:
+                inmain(self._tab_changed, 1)
+                inmain(self.ui.tabWidget.setCurrentIndex, 1)
+                width: int = inmain(self.ui.resultsTable.width)
+                # Successful
+                inmain(self.ui.resultsTable.setColumnWidth,
+                       0, round(width * 0.08))
+                # Original Function Name
+                inmain(self.ui.resultsTable.setColumnWidth,
+                       1, round(width * 0.2))
+                # Matched Function Name
+                inmain(self.ui.resultsTable.setColumnWidth,
+                       2, round(width * 0.2))
+                # Signature
+                inmain(self.ui.resultsTable.setColumnWidth,
+                       3, round(width * 0.1))
+                # Matched Binary
+                inmain(self.ui.resultsTable.setColumnWidth,
+                       4, round(width * 0.2))
+                # Confidence
+                inmain(self.ui.resultsTable.setColumnWidth,
+                       5, round(width * 0.08))
+                # Error
+                inmain(self.ui.resultsTable.setColumnWidth,
+                       6, round(width * 0.3))
 
     def _filter(self, filter_text) -> None:
         table = self.ui.resultsTable
@@ -797,7 +805,9 @@ class AutoAnalysisDialog(BaseDialog):
             self.ui.description.setText(
                 f"Confidence: {self.ui.confidenceSlider.sliderPosition():#02d}"
             )
+            self.ui.progressBar.show()
         else:
+            self.ui.progressBar.hide()
             self.ui.confidenceSlider.hide()
             self.ui.description.setVisible(
                 self._analysis[Analysis.TOTAL.value] > 0)
@@ -934,7 +944,7 @@ class AutoAnalysisDialog(BaseDialog):
             inmain(self._tab_changed, 0)
             inmain(self.ui.tabWidget.setCurrentIndex, 0)
             inmain(self.ui.fetchResultsButton.setEnabled, True)
-            inmain(self.ui.fetchResultsButton.setFocus)
+            # inmain(self.ui.fetchResultsButton.setFocus)
 
     @wait_box_decorator(
         "HIDECANCEL\nRenaming functions and applying types…"
@@ -1037,9 +1047,19 @@ class AutoAnalysisDialog(BaseDialog):
 
     def _filter_collections(self):
         query = self.ui.searchQuery.text().lower()
+        if hasattr(self, "search_query") and self.search_query == query:
+            return
+        setattr(self, "search_query", query)
         try:
             query_data = self._parse_search_query(query)
-            self._search_collection(query_data)
+            if not self._is_query_empty(query_data):
+                self._search_collection(query_data)
+            else:
+                # empty resultTable
+                inmain(
+                    inmain(self.ui.collectionsTable.model).fill_table,
+                    []
+                )
         except ValueError as e:
             logger.error("Invalid search query: %s", query)
             Dialog.showError(
