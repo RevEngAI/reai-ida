@@ -379,8 +379,10 @@ class FunctionSimilarityDialog(BaseDialog):
             self.ui.description.setText(
                 f"Confidence: {self.ui.confidenceSlider.sliderPosition():#02d}"
             )
+            self.ui.progressBar.show()
         else:
             self.ui.confidenceSlider.hide()
+            self.ui.progressBar.hide()
 
     def _search_collection(self, query: dict = {}) -> None:
         def parse_date(date: str) -> str:

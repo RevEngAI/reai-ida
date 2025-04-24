@@ -797,7 +797,9 @@ class AutoAnalysisDialog(BaseDialog):
             self.ui.description.setText(
                 f"Confidence: {self.ui.confidenceSlider.sliderPosition():#02d}"
             )
+            self.ui.progressBar.show()
         else:
+            self.ui.progressBar.hide()
             self.ui.confidenceSlider.hide()
             self.ui.description.setVisible(
                 self._analysis[Analysis.TOTAL.value] > 0)
