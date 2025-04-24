@@ -361,7 +361,7 @@ class FunctionSimilarityDialog(BaseDialog):
         symbol = el[0].data
         signature = el[3].data
         nnfn = symbol['nearest_neighbor_function_name']
-        addr = symbol['function_addr'] + self.base_addr
+        addr = symbol['function_addr']
 
         if IDAUtils.set_name(addr, nnfn):
             if signature:
@@ -369,6 +369,10 @@ class FunctionSimilarityDialog(BaseDialog):
                     row,
                     addr,
                     self.ui.resultsTable
+                )
+            else:
+                logger.info(
+                    "No signature found for the function. Skipping."
                 )
 
     def _tab_changed(self, index: int) -> None:
@@ -507,18 +511,17 @@ class FunctionSimilarityDialog(BaseDialog):
                 for index in self.ui.resultsTable.selectedIndexes())
         )
         selected = self.ui.resultsTable.model().get_data(rows[0])
-        logger.info(f"Selected: {selected}")
 
         if (
                 selected
                 and self.ui.renameButton.isEnabled()
-                and isinstance(selected[2], SimpleItem)
+                and isinstance(selected[0], SimpleItem)
         ):
             menu = QMenu()
-            renameAction = menu.addAction(self.ui.renameButton.text())
-            renameAction.triggered.connect(self._rename_symbol)
+            # renameAction = menu.addAction(self.ui.renameButton.text())
+            # renameAction.triggered.connect(self._rename_symbol)
 
-            func_id = selected[2].data["nearest_neighbor_id"]
+            func_id = selected[0].data["nearest_neighbor_id"]
             breakdownAction = menu.addAction("View Function Breakdown")
             breakdownAction.triggered.connect(
                 lambda: self._function_breakdown(func_id))
