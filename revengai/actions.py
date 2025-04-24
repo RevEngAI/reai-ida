@@ -1155,7 +1155,7 @@ def ai_decompile(state: RevEngState) -> None:
                         callback,
                         "AI Decompilation failed. This could be due to an"
                         " error in the decompilation process or the function"
-                        " not being supported.",
+                        " not being supported (Windows).",
                     )
                 else:
                     logger.info(f"Polling AI decompilation: {poll_status}")
