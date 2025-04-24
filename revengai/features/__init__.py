@@ -52,6 +52,18 @@ class BaseDialog(QDialog):
             QIcon(join(dirname(__file__), "..", "resources", "favicon.png"))
         )
 
+    def _is_query_empty(self, query: dict) -> bool:
+        """
+        Check if the query dictionary is empty or contains only None values.
+
+        Args:
+            query (dict): The query dictionary to check
+
+        Returns:
+            bool: True if the query is empty, False otherwise
+        """
+        return all(value is None for value in query.values())
+
     def _parse_search_query(self, query):
         """
         Parse a search query with special selectors.
@@ -70,7 +82,7 @@ class BaseDialog(QDialog):
         result = {
             'query': None,
             'sha_256_hash': None,
-            'tags': [],
+            'tags': None,
             'binary_name': None,
             'collection_name': None,
             'function_name': None,
@@ -118,6 +130,8 @@ class BaseDialog(QDialog):
                     break
                 tags.append(tag_value)
                 query = query.replace(tag_part, '').strip()
+            if len(tags) == 0:
+                tags = None
             return tags, query
 
         # Process tags

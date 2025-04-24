@@ -57,6 +57,9 @@ class FunctionSimilarityDialog(BaseDialog):
         self.ui.renameButton.setEnabled(False)
         self.ui.layoutFilter.register_cb(self._callback)
         self.ui.searchButton.clicked.connect(self._filter_collections)
+        self.ui.searchQuery.returnPressed.connect(
+            self._filter_collections
+        )
         self.ui.collectionsTable.horizontalHeader().setDefaultAlignment(
             Qt.AlignCenter
         )
@@ -106,8 +109,6 @@ class FunctionSimilarityDialog(BaseDialog):
         )
 
         self.ui.confidenceSlider.valueChanged.connect(self._confidence)
-
-        self.ui.fetchResultsButton.setFocus()
         self.ui.fetchResultsButton.clicked.connect(self._fetch)
         self.ui.renameButton.clicked.connect(self._rename_symbol)
         self.ui.fetchDataTypesButton.clicked.connect(self._fetch_data_types)
@@ -499,7 +500,6 @@ class FunctionSimilarityDialog(BaseDialog):
             inmain(self._tab_changed, 0)
             inmain(self.ui.tabWidget.setCurrentIndex, 0)
             inmain(self.ui.fetchResultsButton.setEnabled, True)
-            inmain(self.ui.fetchResultsButton.setFocus)
 
     def _table_menu(self) -> None:
         rows = sorted(
@@ -549,9 +549,19 @@ class FunctionSimilarityDialog(BaseDialog):
 
     def _filter_collections(self):
         query = self.ui.searchQuery.text().lower()
+        if hasattr(self, "search_query") and self.search_query == query:
+            return
+        setattr(self, "search_query", query)
         try:
             query_data = self._parse_search_query(query)
-            self._search_collection(query_data)
+            if not self._is_query_empty(query_data):
+                self._search_collection(query_data)
+            else:
+                # empty resultTable
+                inmain(
+                    inmain(self.ui.collectionsTable.model).fill_table,
+                    []
+                )
         except ValueError as e:
             logger.error("Invalid search query: %s", query)
             Dialog.showError(
