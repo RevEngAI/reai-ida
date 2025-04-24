@@ -1,6 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 from reait.api import RE_nearest_symbols_batch, RE_analyze_functions
-from requests import Response, HTTPError, RequestException
+from requests import Response, HTTPError
 import idc
 import logging
 from revengai.misc.utils import IDAUtils
@@ -14,9 +14,9 @@ logger = logging.getLogger("REAI")
 
 
 @staticmethod
-def _divide_chunks(data: list, n: int = 50) -> list:
+def _divide_chunks(data: list, n: int = 50):
     for idx in range(0, len(data), n):
-        yield data[idx : idx + n]
+        yield data[idx: idx + n]
 
 
 class AutoUnstrip:
@@ -58,15 +58,16 @@ class AutoUnstrip:
             )
 
             for function in res.json()["functions"]:
-                self._analysed_functions[function["function_vaddr"]] = function[
-                    "function_id"
-                ]
+                self._analysed_functions[
+                    function["function_vaddr"]
+                ] = function["function_id"]
         except HTTPError as e:
             logger.error(
                 "Error getting analysed functions: %s",
                 e.response.json().get(
                     "error",
-                    "An unexpected error occurred. Sorry for the inconvenience",
+                    "An unexpected error occurred."
+                    " Sorry for the inconvenience",
                 ),
             )
 
@@ -76,7 +77,8 @@ class AutoUnstrip:
         for idx, func in enumerate(self._functions):
             idx += 1
 
-            function_id = self._analysed_functions.get(func["start_addr"], None)
+            function_id = self._analysed_functions.get(
+                func["start_addr"], None)
 
             if function_id:
                 function_ids.append(function_id)
@@ -100,7 +102,7 @@ class AutoUnstrip:
                     j = ret.json()
                     if 'function_matches' not in j:
                         raise ValueError
-                    
+
                     return j['function_matches']
                 except Exception as e:
                     return e
@@ -121,7 +123,8 @@ class AutoUnstrip:
                     func_addr = next(
                         (
                             func_addr
-                            for func_addr, func_id in self._analysed_functions.items()
+                            for func_addr, func_id in
+                            self._analysed_functions.items()
                             if symbol["origin_function_id"] == func_id
                         ),
                         None,
@@ -152,7 +155,8 @@ class AutoUnstrip:
                             symbol["function_addr"] = func_addr
 
                             results.append(
-                                {"target_func_addr": func_addr, "new_name_str": nnfn}
+                                {"target_func_addr": func_addr,
+                                    "new_name_str": nnfn}
                             )
         return results
 
