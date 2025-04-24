@@ -60,6 +60,7 @@ class FunctionSimilarityDialog(BaseDialog):
         self.ui.searchQuery.returnPressed.connect(
             self._filter_collections
         )
+        self.ui.tabWidget.tabBarClicked.connect(self._tab_changed)
         self.ui.collectionsTable.horizontalHeader().setDefaultAlignment(
             Qt.AlignCenter
         )
@@ -221,6 +222,7 @@ class FunctionSimilarityDialog(BaseDialog):
             )
 
     def _load(self, filter_data: dict, distance: float = 0.1):
+        data = []
         try:
             model = inmain(self.ui.resultsTable.model)
 
@@ -262,8 +264,6 @@ class FunctionSimilarityDialog(BaseDialog):
             inmain(self.ui.progressBar.setProperty, "value", 75)
 
             matches = res.get("function_matches", [])
-
-            data = []
 
             for function in matches:
 
@@ -317,24 +317,30 @@ class FunctionSimilarityDialog(BaseDialog):
             logger.error("An unexpected error has occurred. %s", e)
         finally:
             inmain(hide_wait_box)
-            inmain(self.ui.tabWidget.setCurrentIndex, 1)
-            inmain(self.ui.fetchResultsButton.setEnabled, True)
             inmain(self.ui.progressBar.setProperty, "value", 0)
-
-            width: int = inmain(self.ui.resultsTable.width)
-
-            # Selected
-            inmain(self.ui.resultsTable.setColumnWidth, 0, round(width * 0.08))
-            # Original Function Name
-            inmain(self.ui.resultsTable.setColumnWidth, 1, round(width * 0.2))
-            # Matched Function Name
-            inmain(self.ui.resultsTable.setColumnWidth, 2, round(width * 0.2))
-            # Signature
-            inmain(self.ui.resultsTable.setColumnWidth, 3, round(width * 0.32))
-            # Matched Binary
-            inmain(self.ui.resultsTable.setColumnWidth, 4, round(width * 0.2))
-            # Confidence
-            inmain(self.ui.resultsTable.setColumnWidth, 5, round(width * 0.08))
+            inmain(self.ui.fetchResultsButton.setEnabled, True)
+            if len(data) > 0:
+                inmain(self._tab_changed, 1)
+                inmain(self.ui.tabWidget.setCurrentIndex, 1)
+                width: int = inmain(self.ui.resultsTable.width)
+                # Selected
+                inmain(self.ui.resultsTable.setColumnWidth,
+                       0, round(width * 0.08))
+                # Original Function Name
+                inmain(self.ui.resultsTable.setColumnWidth,
+                       1, round(width * 0.2))
+                # Matched Function Name
+                inmain(self.ui.resultsTable.setColumnWidth,
+                       2, round(width * 0.2))
+                # Signature
+                inmain(self.ui.resultsTable.setColumnWidth,
+                       3, round(width * 0.32))
+                # Matched Binary
+                inmain(self.ui.resultsTable.setColumnWidth,
+                       4, round(width * 0.2))
+                # Confidence
+                inmain(self.ui.resultsTable.setColumnWidth,
+                       5, round(width * 0.08))
 
     @wait_box_decorator(
         "HIDECANCEL\nApplying function name and data types…"
@@ -388,6 +394,7 @@ class FunctionSimilarityDialog(BaseDialog):
         else:
             self.ui.confidenceSlider.hide()
             self.ui.progressBar.hide()
+            self.ui.description.setVisible(False)
 
     def _search_collection(self, query: dict = {}) -> None:
         def parse_date(date: str) -> str:

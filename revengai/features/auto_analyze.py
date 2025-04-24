@@ -752,28 +752,34 @@ class AutoAnalysisDialog(BaseDialog):
             logger.error("An unexpected error has occurred. %s", e)
         finally:
             inmain(hide_wait_box)
-            inmain(self._tab_changed, 1)
-            inmain(self.ui.tabWidget.setCurrentIndex, 1)
             inmain(self.ui.fetchResultsButton.setEnabled, True)
-            inmain(self.ui.confidenceSlider.setEnabled, True)
             inmain(self.ui.progressBar.setProperty, "value", 0)
-
-            width: int = inmain(self.ui.resultsTable.width)
-
-            # Successful
-            inmain(self.ui.resultsTable.setColumnWidth, 0, round(width * 0.08))
-            # Original Function Name
-            inmain(self.ui.resultsTable.setColumnWidth, 1, round(width * 0.2))
-            # Matched Function Name
-            inmain(self.ui.resultsTable.setColumnWidth, 2, round(width * 0.2))
-            # Signature
-            inmain(self.ui.resultsTable.setColumnWidth, 3, round(width * 0.1))
-            # Matched Binary
-            inmain(self.ui.resultsTable.setColumnWidth, 4, round(width * 0.2))
-            # Confidence
-            inmain(self.ui.resultsTable.setColumnWidth, 5, round(width * 0.08))
-            # Error
-            inmain(self.ui.resultsTable.setColumnWidth, 6, round(width * 0.3))
+            inmain(self.ui.confidenceSlider.setEnabled, True)
+            if len(resultsData) > 0:
+                inmain(self._tab_changed, 1)
+                inmain(self.ui.tabWidget.setCurrentIndex, 1)
+                width: int = inmain(self.ui.resultsTable.width)
+                # Successful
+                inmain(self.ui.resultsTable.setColumnWidth,
+                       0, round(width * 0.08))
+                # Original Function Name
+                inmain(self.ui.resultsTable.setColumnWidth,
+                       1, round(width * 0.2))
+                # Matched Function Name
+                inmain(self.ui.resultsTable.setColumnWidth,
+                       2, round(width * 0.2))
+                # Signature
+                inmain(self.ui.resultsTable.setColumnWidth,
+                       3, round(width * 0.1))
+                # Matched Binary
+                inmain(self.ui.resultsTable.setColumnWidth,
+                       4, round(width * 0.2))
+                # Confidence
+                inmain(self.ui.resultsTable.setColumnWidth,
+                       5, round(width * 0.08))
+                # Error
+                inmain(self.ui.resultsTable.setColumnWidth,
+                       6, round(width * 0.3))
 
     def _filter(self, filter_text) -> None:
         table = self.ui.resultsTable
