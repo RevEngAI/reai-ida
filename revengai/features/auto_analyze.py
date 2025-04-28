@@ -983,7 +983,7 @@ class AutoAnalysisDialog(BaseDialog):
                 symbol = data[row][0].data
                 signature = data[row][3].data
 
-                nnfn = symbol['nearest_neighbor_function_name']
+                nnfn = symbol['nearest_neighbor_function_name_mangled']
                 original_addr = symbol['function_addr'] + self.base_addr
 
                 if IDAUtils.set_name(
