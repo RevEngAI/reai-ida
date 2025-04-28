@@ -885,13 +885,36 @@ class AutoAnalysisDialog(BaseDialog):
                 )
 
             # include binaries too
-            res: dict = RE_binaries_search(
-                query=query,
-                page=1,
-                page_size=1024,
-            ).json()
+            try:
+                logger.info(
+                    "Searching for binaries with '%s'", query or "N/A"
+                )
 
-            result_binaries = res.get("data", {}).get("results", [])
+                res: dict = RE_binaries_search(
+                    query=query,
+                    page=1,
+                    page_size=1024,
+                ).json()
+                logger.info(f"res: {res}")
+
+                result_binaries = res.get("data", {}).get("results", [])
+            except HTTPError as e:
+                # TODO: this must be changed when the API is fixed
+                resp = e.response.json()
+                errors = resp.get("errors", [])
+                if len(errors) == 0:
+                    detail = resp.get("detail", "Unknown error")
+                    if detail == "At least one filter must be provided":
+                        result_binaries = []
+                else:
+                    if len(errors) >= 1:
+                        error_code = errors[0].get("code", "unknown")
+                        if error_code == "missing":
+                            result_binaries = []
+                        else:
+                            raise e
+                    else:
+                        raise e
 
             logger.info(f"Found {len(result_binaries)} binaries")
 
@@ -960,7 +983,7 @@ class AutoAnalysisDialog(BaseDialog):
                 symbol = data[row][0].data
                 signature = data[row][3].data
 
-                nnfn = symbol['nearest_neighbor_function_name']
+                nnfn = symbol['nearest_neighbor_function_name_mangled']
                 original_addr = symbol['function_addr'] + self.base_addr
 
                 if IDAUtils.set_name(
@@ -984,7 +1007,7 @@ class AutoAnalysisDialog(BaseDialog):
             function_addr = symbol["function_addr"] + self.base_addr
             original_name = symbol["org_func_name"]
             original_id = symbol["origin_function_id"]
-            matched_name = symbol["nearest_neighbor_function_name"]
+            matched_name = symbol["nearest_neighbor_function_name_mangled"]
             confidence = symbol["confidence"]
             # nnfid = symbol["nearest_neighbor_id"]
             # nnbid = symbol["nearest_neighbor_binary_id"]
