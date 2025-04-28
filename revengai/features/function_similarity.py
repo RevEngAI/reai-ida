@@ -366,7 +366,7 @@ class FunctionSimilarityDialog(BaseDialog):
         el, row = checked_elements[0]
         symbol = el[0].data
         signature = el[3].data
-        nnfn = symbol['nearest_neighbor_function_name']
+        nnfn = symbol['nearest_neighbor_function_name_mangled']
         addr = symbol['function_addr']
 
         if IDAUtils.set_name(addr, nnfn):

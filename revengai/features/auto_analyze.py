@@ -1007,7 +1007,7 @@ class AutoAnalysisDialog(BaseDialog):
             function_addr = symbol["function_addr"] + self.base_addr
             original_name = symbol["org_func_name"]
             original_id = symbol["origin_function_id"]
-            matched_name = symbol["nearest_neighbor_function_name"]
+            matched_name = symbol["nearest_neighbor_function_name_mangled"]
             confidence = symbol["confidence"]
             # nnfid = symbol["nearest_neighbor_id"]
             # nnbid = symbol["nearest_neighbor_binary_id"]
