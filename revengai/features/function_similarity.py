@@ -452,13 +452,22 @@ class FunctionSimilarityDialog(BaseDialog):
                 )
 
             # include binaries too
-            res: dict = RE_binaries_search(
-                query=query,
-                page=1,
-                page_size=1024,
-            ).json()
+            try:
+                res: dict = RE_binaries_search(
+                    query=query,
+                    page=1,
+                    page_size=1024,
+                ).json()
 
-            result_binaries = res.get("data", {}).get("results", [])
+                result_binaries = res.get("data", {}).get("results", [])
+            except HTTPError as e:
+                resp = e.response.json()
+                errors = resp.get("errors", [{}])
+                error_code = errors[0].get("code", "unknown")
+                if error_code == "missing":
+                    result_binaries = []
+                else:
+                    raise e
 
             logger.info(f"Found {len(result_binaries)} binaries")
 
