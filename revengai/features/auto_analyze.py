@@ -886,21 +886,35 @@ class AutoAnalysisDialog(BaseDialog):
 
             # include binaries too
             try:
+                logger.info(
+                    "Searching for binaries with '%s'", query or "N/A"
+                )
+
                 res: dict = RE_binaries_search(
                     query=query,
                     page=1,
                     page_size=1024,
                 ).json()
+                logger.info(f"res: {res}")
 
                 result_binaries = res.get("data", {}).get("results", [])
             except HTTPError as e:
+                # TODO: this must be changed when the API is fixed
                 resp = e.response.json()
-                errors = resp.get("errors", [{}])
-                error_code = errors[0].get("code", "unknown")
-                if error_code == "missing":
-                    result_binaries = []
+                errors = resp.get("errors", [])
+                if len(errors) == 0:
+                    detail = resp.get("detail", "Unknown error")
+                    if detail == "At least one filter must be provided":
+                        result_binaries = []
                 else:
-                    raise e
+                    if len(errors) >= 1:
+                        error_code = errors[0].get("code", "unknown")
+                        if error_code == "missing":
+                            result_binaries = []
+                        else:
+                            raise e
+                    else:
+                        raise e
 
             logger.info(f"Found {len(result_binaries)} binaries")
 
