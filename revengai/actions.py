@@ -27,7 +27,8 @@ from reait.api import (
     RE_analysis_lookup,
     RE_poll_ai_decompilation,
     RE_begin_ai_decompilation,
-    RE_functions_data_types
+    RE_functions_data_types,
+    RE_functions_list,
 )
 
 from revengai import __version__
@@ -52,6 +53,9 @@ from revengai.manager import RevEngState
 from revengai.misc.qtutils import inthread, inmain
 from revengai.misc.utils import IDAUtils
 from revengai.wizard.wizard import RevEngSetupWizard
+
+from revengai.features.sync_functions import SyncOp
+from revengai.models import CheckableItem
 
 from idaapi import ASKBTN_YES, ask_buttons
 
@@ -780,10 +784,10 @@ def load_recent_analyses(state: RevEngState) -> None:
 
                     logger.info(f"Saving current analysis ID {analysis_id}")
 
-                    if state.project_cfg.get("auto_sync"):
-                        done, _ = is_analysis_complete(state, fpath)
-                        if done:
-                            inmain(sync_functions_name, state, fpath)
+                    # We always want to auto synchronize the functions names
+                    done, _ = is_analysis_complete(state, fpath)
+                    if done:
+                        inmain(sync_functions_name, state, fpath, analysis_id)
             except (HTTPError, RequestException) as e:
                 logger.error("Error getting recent analyses: %s", e)
 
@@ -793,54 +797,171 @@ def load_recent_analyses(state: RevEngState) -> None:
         inthread(bg_task)
 
 
-def sync_functions_name(state: RevEngState, fpath: str) -> None:
+def sync_functions_name(
+        state: RevEngState,
+        fpath: str,
+        analysis_id: int = 0
+) -> None:
     if state.config.is_valid() and fpath and isfile(fpath):
 
         def bg_task() -> None:
             try:
-                res: Response = RE_analyze_functions(
-                    fpath, state.config.get("binary_id", 0)
+                res: dict = RE_functions_list(analysis_id=analysis_id).json()
+
+                functions = res.get("data", {}).get("functions", [])
+                function_list = []
+                # for function in functions:
+                # we have 2 possibilities:
+                # 1. the function we received exists in Ghidra but not in IDA
+                #    in this case we will create a new function in IDA
+                # 2. the function we received exists in IDA too, but with a
+                #    different name
+                #    in this case 2 things can happen:
+                #    2.1 the function name in IDA begins with sub_ and we will
+                #        rename it with the remote name
+                #    2.2 the function name in IDA is different from the remote
+                #        name and we will rename it with the remote name
+                #    2.3 the function name in IDA is different but the remote
+                #        name is a sub_ function and we will rename it with
+                #        the local name
+
+                # first let's find all the remote functions which does not
+                # exist locally, to do so, just check all the functions in
+                # functions for which the function_vaddr is not in
+                # ida_functions
+
+                missing_functions = list(
+                    filter(
+                        lambda func: func["function_vaddr"] not in
+                        ida_functions.keys(),
+                        functions,
+                    )
                 )
 
-                data = []
-                for function in res.json()["functions"]:
-                    func_name = next(
+                for missing in missing_functions:
+                    missing_data = {
+                        "op": SyncOp.CREATE,
+                        "function_id": missing["function_id"],
+                        "function_name": missing["function_name"],
+                        "function_vaddr": missing["function_vaddr"],
+                    }
+                    reason = f"Function '{missing['function_name']}' is" \
+                        " missing in IDA but exists in RevEng.AI"
+                    function_list.append(
                         (
-                            func["name"]
-                            for func in functions
-                            if function["function_vaddr"] == func["start_addr"]
-                            and not func["name"].startswith("sub_")
-                        ),
-                        None,
+                            CheckableItem(
+                                data=missing_data,
+                                checked=True,
+                            ),
+                            missing["function_name"],
+                            "N/A",
+                            hex(missing["function_vaddr"] + base_addr),
+                            "LOCAL",
+                            reason
+                        )
                     )
 
-                    if func_name and func_name != function["function_name"]:
-                        function["function_vaddr"] += base_addr
-                        function["function_display"] = (
-                            f"{func_name}  ➡  {function['function_name']}"
+                # step 2 is to find all the functions which exist locally and
+                # remotely, and check if the name is different or not
+
+                different_functions = list(
+                    filter(
+                        lambda func: func["function_vaddr"] in
+                        ida_functions.keys() and
+                        ida_functions[func["function_vaddr"]] !=
+                        func["function_name"],
+                        functions,
+                    )
+                )
+
+                for different in different_functions:
+                    # in case 2.1 and 2.2 we will rename the function in IDA
+                    # with the remote name
+                    # in case 2.3 we will rename remote name with the local
+                    # name
+                    if different["function_name"].startswith("sub_"):
+                        # remote name is sub_ and we will rename it with the
+                        # local name
+                        different_data = {
+                            "op": SyncOp.UPDATE,
+                            "function_id": different["function_id"],
+                            "function_name": ida_functions[
+                                different["function_vaddr"]
+                            ],
+                            "function_vaddr": different["function_vaddr"],
+                        }
+                        new_name = ida_functions[
+                            different["function_vaddr"]
+                        ]
+                        old_name = different["function_name"]
+                        flavor = "REMOTE"
+                        reason = "Remote function " \
+                            f"'{different['function_name']}'"\
+                            " is anonymous while local one has " \
+                            f"'{ida_functions[different['function_vaddr']]}'"
+                    else:
+                        # local name is not updated with the remote name
+                        # we will rename it with the remote name in any case
+                        different_data = {
+                            "op": SyncOp.UPDATE,
+                            "function_id": different["function_id"],
+                            "function_name": different["function_name"],
+                            "function_vaddr": different["function_vaddr"],
+                        }
+                        new_name = different["function_name"]
+                        old_name = ida_functions[
+                            different["function_vaddr"]
+                        ]
+                        flavor = "LOCAL"
+                        reason = "Local function " \
+                            f"'{ida_functions[different['function_vaddr']]}'" \
+                            "is not in sync with remote one " \
+                            f"'{different['function_name']}'"
+
+                    function_list.append(
+                        (
+                            CheckableItem(
+                                data=different_data,
+                                checked=True,
+                            ),
+                            new_name,
+                            old_name,
+                            hex(different["function_vaddr"] + base_addr),
+                            flavor,
+                            reason
                         )
+                    )
 
-                        data.append(function)
-
-                if len(data):
-                    dialog = inmain(SyncFunctionsDialog, state, fpath, data)
+                if len(function_list):
+                    dialog = inmain(
+                        SyncFunctionsDialog,
+                        state,
+                        fpath,
+                        function_list
+                    )
                     inmain(dialog.exec_)
-            except RequestException as e:
-                logger.error("Error syncing functions: %s", e)
+            except HTTPError as e:
+                resp = e.response.json()
+                detail = resp.get("detail", [])
+                error = "Unexpected error occurred,"
+                " sorry for the inconvenience."
+                if len(detail) > 0:
+                    error = detail[0].get("msg", error)
+                logger.error(
+                    f"Error during function synchronization: {error}"
+                )
 
-        functions = []
+        ida_functions = {}
         base_addr = idaapi.get_imagebase()
 
         for func_ea in Functions():
-            functions.append(
-                {
-                    "name": IDAUtils.get_demangled_func_name(func_ea),
-                    "start_addr": idc.get_func_attr(
-                        func_ea,
-                        idc.FUNCATTR_START
-                    )
-                    - base_addr,
-                }
+            function_addr = idc.get_func_attr(
+                func_ea,
+                idc.FUNCATTR_START
+            ) - base_addr
+
+            ida_functions[function_addr] = IDAUtils.get_demangled_func_name(
+                func_ea
             )
 
         inthread(bg_task)
