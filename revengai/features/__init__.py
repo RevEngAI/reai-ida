@@ -268,11 +268,11 @@ class BaseDialog(QDialog):
                 except Exception as e:
                     logger.error("Exception raised: %s", e)
 
-            inmain(
-                idaapi.info,
-                "Completed batch renaming of functions. "
-                "Check the log for details."
-            )
+            # inmain(
+            #     idaapi.info,
+            #     "Completed batch renaming of functions. "
+            #     "Check the log for details."
+            # )
 
     def _function_breakdown(self, func_id: int) -> None:
         # Prevent circular import
