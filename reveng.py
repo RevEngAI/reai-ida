@@ -47,6 +47,13 @@ from reait.api import (
 
 from requests.exceptions import HTTPError
 
+from revengai.actions import (
+    #    push_function_names,
+    setup_wizard,
+)
+
+from genericpath import isfile
+
 
 logger = logging.getLogger("REAI")
 
@@ -69,6 +76,38 @@ class FunctionRenameHook(idaapi.IDP_Hooks):
         logger.info(
             f"FunctionRenameHook initialized with {len(self.last_names)}"
             " functions"
+        )
+
+        # I'm not sure this is really needed functions are uploaded right
+        # after the analysis completes
+        #
+        # fpath = idc.get_input_file_path()
+        # if is_condition_met(self.state, fpath):
+        #     def bg_task(state: RevEngState) -> None:
+        #         done, _ = is_analysis_complete(state, fpath)
+        #         if done:
+        #             push_function_names(self.state)
+
+        #     inthread(bg_task, self.state)
+
+    def is_condition_met(state: RevEngState, fpath: str) -> bool:
+        if not state.config.is_valid():
+            setup_wizard(state)
+        elif not fpath or not isfile(fpath):
+            idc.warning(
+                "The target file was not found on disk. Has it "
+                "been moved or renamed?"
+            )
+        else:
+            return True
+        return False
+
+    def _send_batch(self, batch: list[tuple[int, str]]) -> None:
+        """
+        Send a batch of function names to the platform.
+        """
+        logger.info(
+            f"Sending batch of {len(batch)} function names to the platform"
         )
 
     def _get_function_id(self, fpath: str,  ea: int) -> int:
