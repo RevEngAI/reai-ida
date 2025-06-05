@@ -15,6 +15,7 @@ from revengai.misc.datatypes import (
 )
 from revengai.ai_decompilation_view import AICodeViewer
 
+import traceback as tb
 
 from reait.api import (
     RE_upload,
@@ -170,7 +171,7 @@ def upload_binary(state: RevEngState) -> None:
                         )
 
                         # Periodically check the status of the uploaded binary
-                        periodic_check(fpath, analysis["binary_id"])
+                        periodic_check(state, fpath, analysis["binary_id"])
                 except RequestException as e:
                     logger.error(
                         "Error analyzing %s. Reason: %s",
@@ -248,7 +249,7 @@ def check_analyze(state: RevEngState) -> None:
                         "Queued",
                         "Processing",
                     ):
-                        periodic_check(fpath, bid)
+                        periodic_check(state, fpath, bid)
 
                     inmain(state.config.database.update_analysis, bid, status)
 
@@ -407,7 +408,7 @@ def push_function_names(state: RevEngState) -> None:
         for func_ea in Functions():
             ida_functions.append(
                 {
-                    "name": IDAUtils.get_demangled_func_name(func_ea),
+                    "name": IDAUtils.get_func_name(func_ea),
                     "start_addr": idc.get_func_attr(
                         func_ea,
                         idc.FUNCATTR_START
@@ -960,7 +961,7 @@ def sync_functions_name(
                 idc.FUNCATTR_START
             ) - base_addr
 
-            ida_functions[function_addr] = IDAUtils.get_demangled_func_name(
+            ida_functions[function_addr] = IDAUtils.get_func_name(
                 func_ea
             )
 
@@ -1261,7 +1262,8 @@ def ai_decompile(state: RevEngState) -> None:
 
                 # poll again the status
                 res = RE_poll_ai_decompilation(
-                    target_function["function_id"]
+                    target_function["function_id"],
+                    summarise=True,
                 ).json()
 
                 if not res.get("status", False):
@@ -1302,6 +1304,9 @@ def ai_decompile(state: RevEngState) -> None:
                 {}
             )
 
+            if function_mapping_full is None:
+                function_mapping_full = {}
+
             inverse_string_map: list = function_mapping_full.get(
                 "inverse_string_map",
                 []
@@ -1337,6 +1342,12 @@ def ai_decompile(state: RevEngState) -> None:
                 "An unexpected error occurred. Sorry for the inconvenience.",
             )
             return error_and_close_view(callback, error)
+        except ConnectionAbortedError:
+            error = "An unexpected error occurred. "\
+                "Sorry for the inconvenience."
+            logger.error(
+                f"Error during AI decompilation: {error}\n{tb.format_exc()}")
+            return error_and_close_view(callback, error)
 
     def handle_ai_decomp(decomp_data):
         if decomp_data is not None:
@@ -1345,7 +1356,6 @@ def ai_decompile(state: RevEngState) -> None:
                     c_code, summary = decomp_data
                     sv.set_code(c_code, summary)
             except Exception as e:
-                import traceback as tb
                 logger.info(f"Error: {e} \n{tb.format_exc()}")
         else:
             # An error happened, destroy the view
@@ -1653,7 +1663,7 @@ def update(_) -> None:
         )
 
 
-def periodic_check(fpath: str, binary_id: int) -> None:
+def periodic_check(state: RevEngState, fpath: str, binary_id: int) -> None:
     def _worker(bid: int, interval: float = 60):
         try:
             status = RE_status(fpath, bid).json()["status"]
@@ -1671,11 +1681,26 @@ def periodic_check(fpath: str, binary_id: int) -> None:
                             interval,
                         ),
                     ).start()
+
                     logger.info(
-                        "Scheduling binary analysis status for: %s [%d]",
+                        "Waiting for analysis completition for: %s [%d] check "
+                        "again in %d seconds",
                         basename(fpath),
                         bid,
+                        interval,
                     )
+            else:
+                logger.info(
+                    "Analysis status for: %s [%d] is %s",
+                    basename(fpath),
+                    bid,
+                    status,
+                )
+                logger.info("Pushing function names to platform")
+                inmain(
+                    push_function_names,
+                    state,
+                )
         except RequestException as ex:
             logger.error(
                 "Error getting binary analysis status. Reason: %s",

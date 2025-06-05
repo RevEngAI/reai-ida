@@ -151,12 +151,15 @@ class AutoUnstrip:
                         )
 
                         nnfn = symbol["nearest_neighbor_function_name"]
+                        nnfnm = symbol["nearest_neighbor_function_name_mangled"]
                         if nnfn != symbol["org_func_name"]:
                             symbol["function_addr"] = func_addr
 
                             results.append(
-                                {"target_func_addr": func_addr,
-                                    "new_name_str": nnfn}
+                                {
+                                    "target_func_addr": func_addr,
+                                    "new_name_str": nnfnm
+                                }
                             )
         return results
 
