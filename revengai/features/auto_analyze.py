@@ -970,6 +970,7 @@ class AutoAnalysisDialog(BaseDialog):
     def _rename_functions(self, *args):
         data = self.ui.resultsTable.model().get_datas()
 
+        # TODO: possibly add a progress bar here
         for row in range(len(data)):
             if (
                     isinstance(data[row][0], IconItem)
@@ -991,6 +992,9 @@ class AutoAnalysisDialog(BaseDialog):
                             original_addr,
                             self.ui.resultsTable,
                         )
+
+        # close the dialog
+        inmain(self.close)
 
     def _rename_function(self, selected, batches: list = None) -> None:
         if selected and len(selected) > 3 and isinstance(
