@@ -137,9 +137,16 @@ class Hooks(UI_Hooks):
                                 continue
                         elif action["id"] != "reai:wizard":
                             continue
-                        attach_action_to_popup(
-                            form, popup, action["id"], MENU, SETMENU_APP
-                        )
+                        if action["id"] == "reai:functions":
+                            for children in action["children"]:
+                                if children["id"] == "reai:ai_decompile":
+                                    attach_action_to_popup(
+                                        form, popup, children["id"], MENU, SETMENU_APP
+                                    )
+                        else:
+                            attach_action_to_popup(
+                                form, popup, action["id"], MENU, SETMENU_APP
+                            )
 
 
 class RevEngConfigForm_t(PluginForm):
