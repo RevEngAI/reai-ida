@@ -1309,18 +1309,19 @@ def ai_decompile(state: RevEngState) -> None:
 
             inverse_string_map: list = function_mapping_full.get(
                 "inverse_string_map",
-                []
+                {}
             )
 
             inverse_function_map: list = function_mapping_full.get(
                 "inverse_function_map",
-                []
+                {}
             )
 
             for key, value in inverse_string_map.items():
                 c_code = c_code.replace(key, value.get("string", key))
 
-            summary = decompilation_data.get("summary", "")
+            # use ai_summary rather than summary
+            summary = decompilation_data.get("ai_summary", "")
             if summary is None:
                 summary = ""
 
