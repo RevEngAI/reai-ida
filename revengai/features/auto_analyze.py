@@ -13,6 +13,7 @@ from requests import HTTPError, RequestException
 from reait.api import RE_nearest_symbols_batch
 from reait.api import RE_collections_search
 from reait.api import RE_binaries_search
+from reait.api import RE_name_score
 from revengai.features import BaseDialog
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
@@ -103,6 +104,7 @@ class AutoAnalysisDialog(BaseDialog):
                     "Matched Function Name",
                     "Signature",
                     "Matched Binary",
+                    "Similarity",
                     "Confidence",
                     "Error",
                 ],
@@ -442,8 +444,10 @@ class AutoAnalysisDialog(BaseDialog):
                             SimpleItem(text="N/A", data=None),
                             # Matched Binary
                             "N/A",
+                            # Similarity
+                            "N/A",
                             # Confidence
-                            "0.0%",
+                            "N/A",
                             # Error
                             "No Similar Function Found",
                         )
@@ -493,6 +497,23 @@ class AutoAnalysisDialog(BaseDialog):
                         )
 
                         matches = res.get("function_matches", [])
+
+                        functions = []
+                        for match in matches:
+                            functions.append({
+                                "function_id": match["origin_function_id"],
+                                "function_name": match["nearest_neighbor_function_name"],
+                            })
+                        
+                        
+                        response = RE_name_score(functions).json()["data"]
+                        for function in response:
+                            for match in matches:
+                                if match["origin_function_id"] == function["function_id"]:
+                                    match["real_confidence"] = function["box_plot"]["average"]
+                                    if match["real_confidence"] < (100 - (distance * 100)):
+                                        matches.remove(match)
+                                        break
 
                         if not matches:
                             logger.warning(
@@ -609,8 +630,10 @@ class AutoAnalysisDialog(BaseDialog):
                                             SimpleItem(text="N/A", data=None),
                                             # Matched Binary
                                             SimpleItem(text="N/A", data=None),
+                                            # Similarity
+                                            "N/A",
                                             # Confidence
-                                            "0.0%",
+                                            "N/A",
                                             # Error
                                             err_msg,
                                         )
@@ -682,8 +705,10 @@ class AutoAnalysisDialog(BaseDialog):
                                                 ),
                                                 # Matched Binary
                                                 nnbn,
+                                                # Similarity
+                                                "N/A",
                                                 # Confidence
-                                                "0.0%",
+                                                "N/A",
                                                 # Error
                                                 "Same Function Name Found",
                                             ))
@@ -692,20 +717,24 @@ class AutoAnalysisDialog(BaseDialog):
                                                 Analysis.SUCCESSFUL.value
                                             ] += 1
 
-                                            confidence = symbol[
+                                            similarity = symbol[
                                                 "confidence"
                                             ] * 100
+                                            confidence = symbol[
+                                                "real_confidence"
+                                            ] 
 
                                             logger.info(
                                                 f"Found similar function "
                                                 f"'{nnfn}' with a confidence"
                                                 " level of "
-                                                f"'{confidence:#.02f}'"
+                                                f"'{similarity:#.02f}'"
                                             )
 
                                             symbol["function_addr"] = func_addr
                                             success = "success.png"
 
+                                            
                                             resultsData.append(
                                                 (
                                                     # Successful
@@ -726,6 +755,8 @@ class AutoAnalysisDialog(BaseDialog):
                                                     ),
                                                     # Matched Binary
                                                     nnbn,
+                                                    # Similarity
+                                                    f"{similarity:#.02f}%",
                                                     # Confidence
                                                     f"{confidence:#.02f}%",
                                                     # Error
@@ -737,6 +768,51 @@ class AutoAnalysisDialog(BaseDialog):
                         inmain(self.ui.progressBar.setProperty, "value", pos)
 
             resultsData.sort(key=lambda tup: tup[1])
+
+            # Call RE_name_score to get confidence scores for successful results
+            try:
+                # Collect data for RE_name_score call
+                name_score_data = []
+                successful_indices = []
+                
+                for idx, result in enumerate(resultsData):
+                    icon_item = result[0]
+                    if isinstance(icon_item, IconItem) and icon_item.text == "Yes" and icon_item.data:
+                        symbol = icon_item.data
+                        function_id = symbol.get("origin_function_id")
+                        mangled_name = symbol.get("nearest_neighbor_function_name_mangled", "")
+                        
+                        if function_id and mangled_name:
+                            name_score_data.append({
+                                "function_id": function_id,
+                                "function_name": mangled_name
+                            })
+                            successful_indices.append(idx)
+                
+                # Call RE_name_score if we have data
+                if name_score_data:
+                    logger.info(f"Calling RE_name_score for {len(name_score_data)} functions")
+                    
+                    try:
+                        name_score_response = RE_name_score(name_score_data).json()
+                        name_scores = name_score_response.get("scores", [])
+                        
+                        # Update confidence column with name scores
+                        for i, (data_idx, score) in enumerate(zip(successful_indices, name_scores)):
+                            if data_idx < len(resultsData):
+                                # Convert the tuple to a list, update the confidence column (index 6), then back to tuple
+                                result_list = list(resultsData[data_idx])
+                                result_list[6] = f"{score:.2f}" if isinstance(score, (int, float)) else str(score)
+                                resultsData[data_idx] = tuple(result_list)
+                                
+                    except HTTPError as e:
+                        logger.error(f"Error calling RE_name_score: {e}")
+                        # Keep "N/A" in confidence column if API call fails
+                    except Exception as e:
+                        logger.error(f"Unexpected error calling RE_name_score: {e}")
+                        
+            except Exception as e:
+                logger.error(f"Error processing name scores: {e}")
 
             # self._analysis[Analysis.TOTAL.value] = len(resultsData)
 
@@ -774,12 +850,15 @@ class AutoAnalysisDialog(BaseDialog):
                 # Matched Binary
                 inmain(self.ui.resultsTable.setColumnWidth,
                        4, round(width * 0.2))
+                # Similarity
+                inmain(self.ui.resultsTable.setColumnWidth,
+                       5, round(width * 0.1))
                 # Confidence
                 inmain(self.ui.resultsTable.setColumnWidth,
-                       5, round(width * 0.08))
+                       6, round(width * 0.08))
                 # Error
                 inmain(self.ui.resultsTable.setColumnWidth,
-                       6, round(width * 0.3))
+                       7, round(width * 0.3))
 
     def _filter(self, filter_text) -> None:
         table = self.ui.resultsTable
@@ -843,22 +922,13 @@ class AutoAnalysisDialog(BaseDialog):
                 "Searching for collections with '%s'", query or "N/A"
             )
 
-            try:
-                res: dict = RE_collections_search(
-                    query=query,
-                    page=1,
-                    page_size=1024,
-                ).json()
+            res: dict = RE_collections_search(
+                query=query,
+                page=1,
+                page_size=1024,
+            ).json()
 
-                result_collections = res.get("data", {}).get("results", [])
-            except HTTPError as e:
-                resp = e.response.json()
-                errors = resp.get("errors", [{}])
-                error_code = errors[0].get("code", "unknown")
-                if error_code == "missing":
-                    result_collections = []
-                else:
-                    raise e
+            result_collections = res.get("data", {}).get("results", [])
 
             logger.info(f"Found {len(result_collections)} collections")
 
@@ -895,20 +965,35 @@ class AutoAnalysisDialog(BaseDialog):
 
             # include binaries too
             try:
+                logger.info(
+                    "Searching for binaries with '%s'", query or "N/A"
+                )
+
                 res: dict = RE_binaries_search(
                     query=query,
                     page=1,
                     page_size=1024,
                 ).json()
+                logger.info(f"res: {res}")
+
                 result_binaries = res.get("data", {}).get("results", [])
             except HTTPError as e:
+                # TODO: this must be changed when the API is fixed
                 resp = e.response.json()
-                errors = resp.get("errors", [{}])
-                error_code = errors[0].get("code", "unknown")
-                if error_code == "missing":
-                    result_binaries = []
+                errors = resp.get("errors", [])
+                if len(errors) == 0:
+                    detail = resp.get("detail", "Unknown error")
+                    if detail == "At least one filter must be provided":
+                        result_binaries = []
                 else:
-                    raise e
+                    if len(errors) >= 1:
+                        error_code = errors[0].get("code", "unknown")
+                        if error_code == "missing":
+                            result_binaries = []
+                        else:
+                            raise e
+                    else:
+                        raise e
 
             logger.info(f"Found {len(result_binaries)} binaries")
 
@@ -947,14 +1032,13 @@ class AutoAnalysisDialog(BaseDialog):
                 round(inmain(self.ui.collectionsTable.width) * 0.1),
             )
         except HTTPError as e:
-            resp = e.response.json()
-            message = resp.get(
-                "error",
-                "An unexpected error occurred. Sorry for the inconvenience.",
-            )
-            logger.error(
-                f"Getting collections failed. Reason: {message}"
-            )
+            if e.response.status_code != 400:
+                message = e.json().get("error", "Unknown error")
+                logger.error(f"Getting collections failed. Reason: {message}")
+                Dialog.showError(
+                    "Auto Analysis",
+                    f"Auto Analysis Error: {message}"
+                )
         except RequestException as e:
             logger.error("An unexpected error has occurred. %s", e)
         finally:
