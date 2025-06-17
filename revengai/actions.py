@@ -139,7 +139,7 @@ def upload_binary(state: RevEngState) -> None:
                             skip_sbom=True,
                             skip_capabilities=True,
                             advanced_analysis=False,
-
+                            skip_cves=True
                         )
 
                         analysis = res.json()
