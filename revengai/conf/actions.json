@@ -70,6 +70,11 @@
 				"name": "View Function Breakdown",
 				"callback": "function_breakdown",
 				"shortcut": "Ctrl+Shift+B"
+			},
+			{Add commentMore actions
+				"id": "reai:view_function_in_portal",
+				"name": "View Function in Portal",
+				"callback": "view_function_in_portal"
 			}
 		]
 	},
