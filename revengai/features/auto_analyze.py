@@ -13,6 +13,7 @@ from requests import HTTPError, RequestException
 from reait.api import RE_nearest_symbols_batch
 from reait.api import RE_collections_search
 from reait.api import RE_binaries_search
+from reait.api import RE_name_score
 from revengai.features import BaseDialog
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
@@ -103,6 +104,7 @@ class AutoAnalysisDialog(BaseDialog):
                     "Matched Function Name",
                     "Signature",
                     "Matched Binary",
+                    "Similarity",
                     "Confidence",
                     "Error",
                 ],
@@ -442,6 +444,8 @@ class AutoAnalysisDialog(BaseDialog):
                             SimpleItem(text="N/A", data=None),
                             # Matched Binary
                             "N/A",
+                            # Similarity
+                            "0.0%"
                             # Confidence
                             "0.0%",
                             # Error
@@ -493,6 +497,23 @@ class AutoAnalysisDialog(BaseDialog):
                         )
 
                         matches = res.get("function_matches", [])
+
+                        functions = []
+                        for match in matches:Add commentMore actions
+                            functions.append({
+                                "function_id": match["origin_function_id"],
+                                "function_name": match["nearest_neighbor_function_name"],
+                            })
+                        
+                        
+                        response = RE_name_score(functions).json()["data"]
+                        for function in response:
+                            for match in matches:
+                                if match["origin_function_id"] == function["function_id"]:
+                                    match["real_confidence"] = function["box_plot"]["average"]
+                                    if match["real_confidence"] < (100 - (distance * 100)):
+                                        matches.remove(match)
+                                        break
 
                         if not matches:
                             logger.warning(
@@ -609,6 +630,8 @@ class AutoAnalysisDialog(BaseDialog):
                                             SimpleItem(text="N/A", data=None),
                                             # Matched Binary
                                             SimpleItem(text="N/A", data=None),
+                                            # Similarity
+                                            "0.0%",
                                             # Confidence
                                             "0.0%",
                                             # Error
@@ -682,6 +705,8 @@ class AutoAnalysisDialog(BaseDialog):
                                                 ),
                                                 # Matched Binary
                                                 nnbn,
+                                                # Similarity
+                                                "0.0%",
                                                 # Confidence
                                                 "0.0%",
                                                 # Error
@@ -692,9 +717,12 @@ class AutoAnalysisDialog(BaseDialog):
                                                 Analysis.SUCCESSFUL.value
                                             ] += 1
 
-                                            confidence = symbol[
+                                            similarity = symbol[
                                                 "confidence"
                                             ] * 100
+                                            confidence = symbol[
+                                                "real_confidence"
+                                            ] 
 
                                             logger.info(
                                                 f"Found similar function "
@@ -726,6 +754,8 @@ class AutoAnalysisDialog(BaseDialog):
                                                     ),
                                                     # Matched Binary
                                                     nnbn,
+                                                    # Similarity
+                                                    f"{similarity:#.02f}%",
                                                     # Confidence
                                                     f"{confidence:#.02f}%",
                                                     # Error
@@ -774,12 +804,15 @@ class AutoAnalysisDialog(BaseDialog):
                 # Matched Binary
                 inmain(self.ui.resultsTable.setColumnWidth,
                        4, round(width * 0.2))
-                # Confidence
+                # Similarity
                 inmain(self.ui.resultsTable.setColumnWidth,
                        5, round(width * 0.08))
+                # Confidence
+                inmain(self.ui.resultsTable.setColumnWidth,
+                       6, round(width * 0.08))
                 # Error
                 inmain(self.ui.resultsTable.setColumnWidth,
-                       6, round(width * 0.3))
+                       7, round(width * 0.3))
 
     def _filter(self, filter_text) -> None:
         table = self.ui.resultsTable
