@@ -1725,3 +1725,25 @@ def toolbar(state: RevEngState) -> None:
     form = RevEngConfigForm_t(state)
     form.register_actions(False)
     del form
+    
+def view_function_in_portal(state: RevEngState):Add commentMore actions
+    try:
+        fpath = idc.get_input_file_path()
+        base_addr = idaapi.get_imagebase()
+        res: Response = RE_search(fpath)
+        binaries = res.json()["query_results"]
+        for binary in binaries:
+            analysis = RE_get_analysis_id_from_binary_id(binary["binary_id"]).json()
+            functions = RE_get_functions_from_analysis(analysis["analysis_id"]).json()["data"]["functions"]
+            found = False
+            for function in functions:
+                if function["function_vaddr"] == ida_funcs.get_func(idc.get_screen_ea()).start_ea - base_addr:
+                    found = True
+                    inmain(idaapi.open_url, f"{state.config.PORTAL}/function/{function['function_id']}")
+                    break
+            if found:
+                break
+        if not found:
+            Dialog.showInfo("Function URL", "Function not found in portal")
+    except Exception as e:
+        logger.error(f"Error getting function in portal: {e}")
