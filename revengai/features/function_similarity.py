@@ -9,6 +9,7 @@ from requests import HTTPError, RequestException
 from reait.api import RE_nearest_symbols_batch
 from reait.api import RE_collections_search
 from reait.api import RE_binaries_search
+from reait.api import RE_name_score
 from revengai.features import BaseDialog
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
@@ -100,6 +101,7 @@ class FunctionSimilarityDialog(BaseDialog):
                     "Matched Function Name",
                     "Signature",
                     "Matched Binary",
+                    "Similarity",
                     "Confidence",
                 ],
             )
@@ -268,11 +270,21 @@ class FunctionSimilarityDialog(BaseDialog):
             for function in matches:
 
                 nnbn = function["nearest_neighbor_binary_name"]
-                confidence = function["confidence"] * 100
+                similarity = function["confidence"] * 100
                 nnfn = function["nearest_neighbor_function_name"]
 
                 function["function_addr"] = self.v_addr + self.base_addr
                 function["function_id"] = function_id
+                try:
+                    logger.info(f"Getting name score for {distance}")
+                    name_score = RE_name_score([{"function_id": function_id, "function_name": nnfn}]).json()["data"]Add commentMore actions
+                    confidence = name_score[0]["box_plot"]["average"]
+                    if confidence < (100 - (distance * 100)):
+                        logger.info(f"Skipping {nnfn} because it's not similar enough to {nnfn}")
+                        continue
+                except Exception as e:
+                    confidence = 0
+                    logger.error(f"Error: {e}")
 
                 data.append(
                     (
@@ -287,6 +299,7 @@ class FunctionSimilarityDialog(BaseDialog):
                             data=None,
                         ),
                         nnbn,
+                        f"{similarity:.2f}%",
                         f"{confidence:.2f}%",
                     )
                 )
