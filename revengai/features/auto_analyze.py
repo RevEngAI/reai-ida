@@ -499,7 +499,7 @@ class AutoAnalysisDialog(BaseDialog):
                         matches = res.get("function_matches", [])
 
                         functions = []
-                        for match in matches:Add commentMore actions
+                        for match in matches:
                             functions.append({
                                 "function_id": match["origin_function_id"],
                                 "function_name": match["nearest_neighbor_function_name"],
