@@ -445,7 +445,7 @@ class AutoAnalysisDialog(BaseDialog):
                             # Matched Binary
                             "N/A",
                             # Similarity
-                            "0.0%"
+                            "0.0%",
                             # Confidence
                             "0.0%",
                             # Error
