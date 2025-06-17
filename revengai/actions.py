@@ -1612,7 +1612,7 @@ def is_file_supported(state: RevEngState, fpath: str) -> bool:
         pass
 
     idc.warning(
-        f"{basename(fpath)} file format is not currently supported by "
+        f"{file_format} file format is not currently supported by "
         "RevEng.AI"
     )
 
