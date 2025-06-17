@@ -58,6 +58,8 @@ from revengai.wizard.wizard import RevEngSetupWizard
 from revengai.features.sync_functions import SyncOp
 from revengai.models import CheckableItem
 
+from revengai.helpers.file import file_type_ida
+
 from idaapi import ASKBTN_YES, ask_buttons
 
 logger = logging.getLogger("REAI")
@@ -1588,7 +1590,7 @@ def is_file_supported(state: RevEngState, fpath: str) -> bool:
 
         logger.info(f"Checking file support: {fpath}")
 
-        file_format, isa_format = file_type(fpath)
+        file_format, isa_format = file_type_ida()
 
         logger.info(
             f"Underlying binary: {fpath} -> format: {file_format},"
@@ -1607,14 +1609,14 @@ def is_file_supported(state: RevEngState, fpath: str) -> bool:
             )
         ):
             return True
+        
+        idc.warning(
+            f"{file_format} file format is not currently supported by "
+            "RevEng.AI"
+        )
     except Exception as e:
         logger.error(f"Error checking file support: {e}")
         pass
-
-    idc.warning(
-        f"{file_format} file format is not currently supported by "
-        "RevEng.AI"
-    )
 
     return False
 
