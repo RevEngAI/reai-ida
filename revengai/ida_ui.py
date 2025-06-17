@@ -137,7 +137,7 @@ class Hooks(UI_Hooks):
                                 continue
                         elif action["id"] != "reai:wizard":
                             continue
-                         if action["id"] == "reai:functions":
+                        if action["id"] == "reai:functions":
                             for children in action["children"]:
                                 if children["id"] in ("reai:ai_decompile", "reai:view_function_in_portal", "reai:rename"):
                                     attach_action_to_popup(
