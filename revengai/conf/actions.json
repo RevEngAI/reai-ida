@@ -72,7 +72,7 @@
 				"shortcut": "Ctrl+Shift+B"
 			},
 			{
-				"id": "reai:view_function_in_portal",
+				"id": "reai:show_in_portal",
 				"name": "View Function in Portal",
 				"callback": "view_function_in_portal"
 			}
