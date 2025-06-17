@@ -1726,7 +1726,7 @@ def toolbar(state: RevEngState) -> None:
     form.register_actions(False)
     del form
     
-def view_function_in_portal(state: RevEngState):Add commentMore actions
+def view_function_in_portal(state: RevEngState):
     try:
         fpath = idc.get_input_file_path()
         base_addr = idaapi.get_imagebase()
