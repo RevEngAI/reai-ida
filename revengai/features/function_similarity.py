@@ -9,6 +9,7 @@ from requests import HTTPError, RequestException
 from reait.api import RE_nearest_symbols_batch
 from reait.api import RE_collections_search
 from reait.api import RE_binaries_search
+from reait.api import RE_name_score
 from revengai.features import BaseDialog
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
@@ -100,6 +101,7 @@ class FunctionSimilarityDialog(BaseDialog):
                     "Matched Function Name",
                     "Signature",
                     "Matched Binary",
+                    "Similarity",
                     "Confidence",
                 ],
             )
@@ -268,11 +270,21 @@ class FunctionSimilarityDialog(BaseDialog):
             for function in matches:
 
                 nnbn = function["nearest_neighbor_binary_name"]
-                confidence = function["confidence"] * 100
+                similarity = function["confidence"] * 100
                 nnfn = function["nearest_neighbor_function_name"]
 
                 function["function_addr"] = self.v_addr + self.base_addr
                 function["function_id"] = function_id
+                try:
+                    logger.info(f"Getting name score for {distance}")
+                    name_score = RE_name_score([{"function_id": function_id, "function_name": nnfn}]).json()["data"]
+                    confidence = name_score[0]["box_plot"]["average"]
+                    if confidence < (100 - (distance * 100)):
+                        logger.info(f"Skipping {nnfn} because it's not similar enough to {nnfn}")
+                        continue
+                except Exception as e:
+                    confidence = 0
+                    logger.error(f"Error: {e}")
 
                 data.append(
                     (
@@ -287,7 +299,8 @@ class FunctionSimilarityDialog(BaseDialog):
                             data=None,
                         ),
                         nnbn,
-                        f"{confidence:.2f}%",
+                        f"{similarity:.2f}%",
+                        f"{confidence:.2f}%" if confidence > 0 else "N/A",
                     )
                 )
 
@@ -410,22 +423,13 @@ class FunctionSimilarityDialog(BaseDialog):
                 "Searching for collections with '%s'", query or "N/A"
             )
 
-            try:
-                res: dict = RE_collections_search(
-                    query=query,
-                    page=1,
-                    page_size=1024,
-                ).json()
+            res: dict = RE_collections_search(
+                query=query,
+                page=1,
+                page_size=1024,
+            ).json()
 
-                result_collections = res.get("data", {}).get("results", [])
-            except HTTPError as e:
-                resp = e.response.json()
-                errors = resp.get("errors", [{}])
-                error_code = errors[0].get("code", "unknown")
-                if error_code == "missing":
-                    result_collections = []
-                else:
-                    raise e
+            result_collections = res.get("data", {}).get("results", [])
 
             logger.info(f"Found {len(result_collections)} collections")
 
@@ -515,14 +519,13 @@ class FunctionSimilarityDialog(BaseDialog):
                 round(inmain(self.ui.collectionsTable.width) * 0.1),
             )
         except HTTPError as e:
-            resp = e.response.json()
-            message = resp.get(
-                "error",
-                "An unexpected error occurred. Sorry for the inconvenience.",
-            )
-            logger.error(
-                f"Getting collections failed. Reason: {message}"
-            )
+            if e.response.status_code != 400:
+                message = e.json().get("error", "Unknown error")
+                logger.error(f"Getting collections failed. Reason: {message}")
+                Dialog.showError(
+                    "Auto Analysis",
+                    f"Auto Analysis Error: {message}"
+                )
         except RequestException as e:
             logger.error("An unexpected error has occurred. %s", e)
         finally:
