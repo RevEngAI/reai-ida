@@ -30,6 +30,8 @@ from reait.api import (
     RE_begin_ai_decompilation,
     RE_functions_data_types,
     RE_functions_list,
+    RE_get_analysis_id_from_binary_id,
+    RE_get_functions_from_analysis, 
 )
 
 from revengai import __version__
