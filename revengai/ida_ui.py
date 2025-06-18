@@ -115,7 +115,8 @@ class Hooks(UI_Hooks):
                     if action.get("enabled", True):
                         if self.state.config.is_valid():
                             if (
-                                    action["id"] == "reai:wizard"
+                                    action["id"] in ("reai:wizard", "reai:auto_unstrip", "reai:auto_analyze")
+                                   
                                     or (
                                     action["id"]
                                     in (
@@ -137,9 +138,17 @@ class Hooks(UI_Hooks):
                                 continue
                         elif action["id"] != "reai:wizard":
                             continue
-                        attach_action_to_popup(
-                            form, popup, action["id"], MENU, SETMENU_APP
-                        )
+                        if action["id"] == "reai:functions":
+                            for children in action["children"]:
+                                if children["id"] in ("reai:ai_decompile", "reai:show_in_portal", "reai:rename"):
+                                    attach_action_to_popup(
+                                        form, popup, children["id"], MENU, SETMENU_APP
+                                    )
+                        else:
+                            attach_action_to_popup(
+                                form, popup, action["id"], MENU, SETMENU_APP
+                            )
+
 
 
 class RevEngConfigForm_t(PluginForm):
