@@ -1,34 +1,81 @@
-# <img src="./revengai/resources/logo.png" width=20> RevEng.AI IDA Pro Plugin
+![header](assets/img/18.png)
 
-IDA Pro Plugin for [RevEng.AI](https://reveng.ai/).
+Official IDA Pro Plugin for [RevEng.AI](https://reveng.ai/).
 
 ### Features Supported
 
 Below a non-exhaustive list of the features supported by the plugin:
-- Uploading of binaries for analysis to RevEng.AI platform
-- Downloading logs for analysis from RevEng.AI platform
-- Removing analysis from RevEng.AI platform
-- Renaming of function names given with similar binaries
-- Generates AI summaries for the analysed function
-- Synchronise all functions with differing names between the local analysis and the RevEng.AI platform
-- Configuration and persistence of plugin configuration (personal API key, host and analysis)
-- …
+* **AI Decompiler**: RevEng.AI’s decompiler currently supports both ELF and PE files
+* **Auto-Unstrip**: A one-click operation to automatically unstrip stripped binaries within the plugin
+* **Function Name Recovery**: Renames unknown functions in stripped binaries to similar function names using RevEng’s BinNet® model
+* **Summaries**: Generates AI-powered summaries for analysed functions
+* **Synchronization**: Synchronises data types, function names, and more across different Software Reverse Engineering (SRE) suites
+* **Function Matching**: Matches functions across your RevEng.AI collections, libraries, and more
+* **Logs**: Provides full visibility into analyses through detailed logs
 
 # Installation & Running 🚀
 
-Install the required Python libraries: `pip install -r requirements.txt`. Copy `revengai` dir and `reveng.py` to the `plugins` dir inside IDA Pro installation dir (or `~/.idapro/plugins` on MacOS and Linux).
+## Step 1: Locate Your IDA Pro Plugins Directory
 
-### Details
+First, you need to find where IDA Pro stores its plugins.
 
-Check the version of Python your IDA Pro installation is using by opening IDA and running `sys.path` inside the Python console. You need to ensure that the dependencies are installed by the version of Python IDA is using. You can then run `{{path to python version}} -m pip install -r requirements.txt`. For example, `$ /Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/bin/python3.9 -m pip install -r requirements.txt`
+1. **Open IDA Pro**
+2. **Access the Python console** (usually under `File > Script command` or `Alt + F7`). This may already be docked in the lower-portion of your IDA instance
+3. **Run the following command:**
+   ```python
+   import idaapi
+   print(idaapi.get_user_idadir() + "/plugins")
+   ```
 
-### Development
+**Expected output locations:**
+- **Windows:** `%APPDATA%\Hex-Rays\IDA Pro\plugins`
+- **macOS/Linux:** `~/.idapro/plugins`
 
-Ensure the latest version of the [reait](https://github.com/RevEngAI/reait/releases) package is installed with the version of Python IDA is using.
+
+> 💡 **Tip:** Please copy this path - you'll need it in the next step!
+
+## Step 2: Download and Install the Plugin
+
+1. **Visit the releases page:** https://github.com/RevEngAI/reai-ida/releases
+2. **Download the latest release** (look for the most recent version)
+3. **Extract the downloaded archive** to your plugins directory from Step 1
+4. **Verify the folder structure:** The extracted folder should be named `revengai` and placed directly in your plugins directory
+
+Your final structure should look like:
+```
+[plugins directory]/
+└── revengai/
+    ├── [plugin files...]
+    └── requirements.txt
+```
+
+## Step 3: Install Plugin Dependencies
+
+Install the required Python packages directly from IDA Pro's Python console.
+
+1. **In IDA Pro's Python console** (the docked console you used in previous steps), run:
+   ```python
+   import subprocess
+   import sys
+   import os
+
+   python_path = os.path.join(sys.prefix, 'python.exe') if os.name == 'nt' else os.path.join(sys.prefix, 'bin', 'python3')
+   
+   plugins_dir = idaapi.get_user_idadir() + "/plugins/revengai"
+   requirements_path = os.path.join(plugins_dir, "requirements.txt")
+   
+   subprocess.check_call([python_path, "-m", "pip", "install", "-r", requirements_path])
+   ```
+
+## Verification
+
+1. **Restart IDA Pro** completely
+2. **Check the plugins menu** you should see the RevEng.AI plugin listed
+3. **Load a binary file** and try accessing the plugin features outlined below
 
 ## Setup & Usage 📦
 
-Open IDA and if the plugin has loaded successfully it should be visible under `RevEng.AI` menu.
+Open IDA, the plugin should be visible under `RevEng.AI` menu.
 
 ![menu](./assets/img/1.png)
 
@@ -128,3 +175,13 @@ Wait for the decompilation to finish, and the decompiled code will be displayed 
 
 RevEng.AI IDA uses:
 - [reait](https://github.com/RevEngAI/reait)
+- [libbs](https://github.com/binsync/libbs)
+- [tree-sitter](https://github.com/tree-sitter/tree-sitter)
+- [pygments](https://github.com/pygments/pygments)
+
+### Development
+
+Ensure the latest version of the [reait](https://github.com/RevEngAI/reait/releases) package is installed with the version of Python IDA is using.
+
+### Disclaimer
+The Hex-Rays name, logo, and trademarks are the property of Hex-Rays SA. This project is not affiliated with, endorsed by, or sponsored by Hex-Rays SA.
