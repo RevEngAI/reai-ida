@@ -224,4 +224,5 @@ class Ui_AutoAnalysisPanel(object):
             _translate("AutoAnalysisPanel", "Fetch Results"))
         self.fetchDataTypesButton.setText(_translate(
             "AutoAnalysisPanel", "Fetch Data Types"))
-        self.renameButton.setText(_translate("AutoAnalysisPanel", "Rename"))
+        self.renameButton.setText(_translate(
+            "AutoAnalysisPanel", "Apply Matches"))

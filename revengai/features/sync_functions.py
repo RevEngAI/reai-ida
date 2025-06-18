@@ -6,6 +6,9 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QCursor
 from PyQt5.QtWidgets import QMenu
 
+import ida_funcs
+import ida_name
+
 from revengai.features import BaseDialog
 from revengai.gui.dialog import Dialog
 from revengai.manager import RevEngState
@@ -193,15 +196,51 @@ class SyncFunctionsDialog(BaseDialog):
         logger.warning(
             "Function deletion is not implemented yet. "
         )
+        addr = function_data['function_vaddr'] + self.base_addr
+        if ida_funcs.del_func(addr):
+            logger.info(
+                "Deleted function at 0x%X",
+                addr,
+            )
+        else:
+            logger.error(
+                "Failed to delete function at 0x%X",
+                addr,
+            )
+
+    def _create_named_function(self, start_addr, func_name, end_addr=None):
+        # Create the function first
+        if end_addr:
+            success = ida_funcs.add_func(start_addr, end_addr)
+        else:
+            success = ida_funcs.add_func(start_addr)
+
+        if success:
+            # Set the function name
+            if ida_name.set_name(start_addr, func_name, ida_name.SN_NOCHECK):
+                return True
+            else:
+                print("Failed to set function name: %s at address: 0x%X" %
+                      (func_name, start_addr))
+                return True
+        else:
+            print("Function creation failed at address: 0x%X" % start_addr)
+            return False
 
     def _create_function(self, function_data, new_name: str) -> None:
-        # Prevent circular import
-        logger.warning(
-            "Function creation is not implemented yet. "
-            "Please create a function manually at "
-            f"{hex(function_data['function_vaddr'] + self.base_addr)} "
-            f"with the name {new_name}."
-        )
+        addr = function_data['function_vaddr'] + self.base_addr
+        if not self._create_named_function(addr, new_name):
+            logger.error(
+                "Failed to create function at %s with name %s",
+                hex(addr),
+                new_name,
+            )
+        else:
+            logger.info(
+                "Created function at %s with name %s",
+                hex(addr),
+                new_name,
+            )
 
     def _update_local_function(self, function_data, new_name: str) -> None:
         if IDAUtils.set_name(

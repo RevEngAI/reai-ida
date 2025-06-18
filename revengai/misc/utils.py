@@ -57,7 +57,7 @@ class IDAUtils(object):
             True - Add `_COUNTER` to the name (default IDA behaviour)
         """
         try:
-            return IDAUtils.is_in_valid_segment(func_ea) and (
+            return IDAUtils.is_in_exec_segment(func_ea) and (
                 idaapi.set_name(
                     func_ea, func_name, idaapi.SN_NOWARN | idaapi.SN_NOCHECK
                 )
@@ -69,7 +69,7 @@ class IDAUtils(object):
 
     @staticmethod
     def set_comment(func_ea: int, comment: str) -> None:
-        if IDAUtils.is_in_valid_segment(func_ea):
+        if IDAUtils.is_in_exec_segment(func_ea):
             try:
                 func = idaapi.get_func(func_ea)
                 if not func:
@@ -85,7 +85,7 @@ class IDAUtils(object):
     @staticmethod
     def decompile_func(func_ea: int) -> Optional[str]:
         if idaapi.init_hexrays_plugin() and \
-                IDAUtils.is_in_valid_segment(func_ea):
+                IDAUtils.is_in_exec_segment(func_ea):
             func = idaapi.get_func(func_ea)
             if not func:
                 logger.error(
@@ -109,7 +109,7 @@ class IDAUtils(object):
 
     @staticmethod
     def disasm_func(func_ea: int) -> str:
-        if IDAUtils.is_in_valid_segment(func_ea):
+        if IDAUtils.is_in_exec_segment(func_ea):
             func = idaapi.get_func(func_ea)
             if not func:
                 logger.error(
@@ -202,6 +202,29 @@ class IDAUtils(object):
                 )
             )
         ]
+
+        return (
+            any(seg and seg.start_ea <= func_ea <=
+                seg.end_ea for seg in segments)
+            if segments
+            else False
+        )
+
+    @staticmethod
+    def is_in_exec_segment(func_ea: int, segments: tuple[str] = None) -> bool:
+        if segments:
+            # If specific segments are provided, use them as before
+            segments = [
+                idaapi.get_segm_by_name(name)
+                for name in segments
+            ]
+        else:
+            # Find all segments with read-execute (r-x) flags
+            segments = []
+            for i in range(idaapi.get_segm_qty()):
+                seg = idaapi.getnseg(i)
+                if seg and (seg.perm & (idaapi.SEGPERM_READ | idaapi.SEGPERM_EXEC)) == (idaapi.SEGPERM_READ | idaapi.SEGPERM_EXEC):
+                    segments.append(seg)
 
         return (
             any(seg and seg.start_ea <= func_ea <=

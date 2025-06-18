@@ -37,7 +37,7 @@ class AutoUnstrip:
         functions = []
         for func_ea in Functions():
             start_addr = idc.get_func_attr(func_ea, idc.FUNCATTR_START)
-            if IDAUtils.is_in_valid_segment(start_addr):
+            if IDAUtils.is_in_exec_segment(start_addr):
                 functions.append(
                     {
                         "name": IDAUtils.get_demangled_func_name(func_ea),

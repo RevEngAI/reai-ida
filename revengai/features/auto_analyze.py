@@ -124,7 +124,9 @@ class AutoAnalysisDialog(BaseDialog):
 
         for func_ea in Functions():
             start_addr = idc.get_func_attr(func_ea, idc.FUNCATTR_START)
-            if IDAUtils.is_in_valid_segment(start_addr):
+            # why should we care if the function is in a valid segment?
+            # as long as IDA identifies it as a function, we MUST analyze it
+            if IDAUtils.is_in_exec_segment(start_addr):
                 # add only if the function name starts with sub_
                 name = IDAUtils.get_demangled_func_name(func_ea)
                 if name.startswith("sub_"):
@@ -386,9 +388,11 @@ class AutoAnalysisDialog(BaseDialog):
         )
 
     def _start_analysis(self) -> None:
+        logger.info("Starting auto analysis…")
         inthread(self._auto_analysis)
 
     def _auto_analysis(self) -> None:
+        logger.info("Auto analysis started")
         try:
             inmain(show_wait_box, "Getting results…")
 
@@ -407,6 +411,11 @@ class AutoAnalysisDialog(BaseDialog):
             if not self.analyzed_functions or \
                     len(self.analyzed_functions) == 0:
                 self._get_analyze_functions()
+
+            logger.info(
+                "Found %d functions to analyze",
+                len(self._functions)
+            )
 
             resultsData = []
             function_ids = []
@@ -780,6 +789,13 @@ class AutoAnalysisDialog(BaseDialog):
             )
         except RequestException as e:
             logger.error("An unexpected error has occurred. %s", e)
+        except Exception as e:
+            logger.error("An unexpected error has occurred. %s", e)
+            Dialog.showError(
+                "Auto Analysis",
+                f"Unexpected error: {e}"
+            )
+            inmain(idaapi.warning, f"Unexpected error: {e}")
         finally:
             inmain(hide_wait_box)
             inmain(self.ui.fetchResultsButton.setEnabled, True)
@@ -1003,6 +1019,7 @@ class AutoAnalysisDialog(BaseDialog):
     def _rename_functions(self, *args):
         data = self.ui.resultsTable.model().get_datas()
 
+        # TODO: possibly add a progress bar here
         for row in range(len(data)):
             if (
                     isinstance(data[row][0], IconItem)
@@ -1024,6 +1041,9 @@ class AutoAnalysisDialog(BaseDialog):
                             original_addr,
                             self.ui.resultsTable,
                         )
+
+        # close the dialog
+        inmain(self.close)
 
     def _rename_function(self, selected, batches: list = None) -> None:
         if selected and len(selected) > 3 and isinstance(

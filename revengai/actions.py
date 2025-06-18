@@ -108,7 +108,6 @@ def upload_binary(state: RevEngState) -> None:
                     )
 
                     res: Response = RE_upload(fpath)
-
                     upload = res.json()
 
                     logger.info(
@@ -176,16 +175,21 @@ def upload_binary(state: RevEngState) -> None:
 
                         # Periodically check the status of the uploaded binary
                         periodic_check(state, fpath, analysis["binary_id"])
-                except RequestException as e:
-                    logger.error(
-                        "Error analyzing %s. Reason: %s",
-                        basename(fpath),
-                        e
+                except HTTPError as e:
+                    resp = e.response.json()
+                    errors = resp.get("errors", [])
+                    err_msg = (
+                        errors[0]["msg"]
+                        if len(errors) > 0
+                        else "An unexpected error occurred. Sorry for the"
+                        " inconvenience."
                     )
 
-                    err_msg = ""
-                    if isinstance(e, HTTPError):
-                        err_msg = f"\nReason: {e.response.json()['error']}"
+                    logger.error(
+                        "Error analysing %s: %s",
+                        basename(fpath),
+                        err_msg,
+                    )
 
                     inmain(
                         idc.warning,
@@ -779,20 +783,25 @@ def load_recent_analyses(state: RevEngState) -> None:
                             sha_256_hash,
                         ),
                     )
+                    bin_id = state.config.get("binary_id", 0)
 
-                    resp = RE_analysis_lookup(
-                        state.config.get("binary_id", 0)
-                    ).json()
+                    if bin_id > 0:
+                        resp = RE_analysis_lookup(
+                            bin_id
+                        ).json()
 
-                    analysis_id = resp.get("analysis_id", 0)
-                    state.config.set("analysis_id", analysis_id)
+                        analysis_id = resp.get("analysis_id", 0)
+                        state.config.set("analysis_id", analysis_id)
 
-                    logger.info(f"Saving current analysis ID {analysis_id}")
+                        logger.info(
+                            f"Saving current analysis ID {analysis_id}")
 
-                    # We always want to auto synchronize the functions names
-                    done, _ = is_analysis_complete(state, fpath)
-                    if done:
-                        inmain(sync_functions_name, state, fpath, analysis_id)
+                        # We always want to auto synchronize the functions
+                        # names
+                        done, _ = is_analysis_complete(state, fpath)
+                        if done:
+                            inmain(sync_functions_name,
+                                   state, fpath, analysis_id)
             except (HTTPError, RequestException) as e:
                 logger.error("Error getting recent analyses: %s", e)
 
@@ -1313,18 +1322,19 @@ def ai_decompile(state: RevEngState) -> None:
 
             inverse_string_map: list = function_mapping_full.get(
                 "inverse_string_map",
-                []
+                {}
             )
 
             inverse_function_map: list = function_mapping_full.get(
                 "inverse_function_map",
-                []
+                {}
             )
 
             for key, value in inverse_string_map.items():
                 c_code = c_code.replace(key, value.get("string", key))
 
-            summary = decompilation_data.get("summary", "")
+            # use ai_summary rather than summary
+            summary = decompilation_data.get("ai_summary", "")
             if summary is None:
                 summary = ""
 
