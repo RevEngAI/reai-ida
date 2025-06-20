@@ -37,6 +37,8 @@ from libbs.artifacts import (
 
 import idaapi
 
+from PyQt5.QtCore import QTimer
+
 logger = logging.getLogger("REAI")
 
 
@@ -142,6 +144,10 @@ class AutoAnalysisDialog(BaseDialog):
         self.ui.progressBar.setProperty(
             "maximum", 2 + (len(self._functions) << 1))
 
+        self._fetch_timer = None
+        self._fetch_executor = None
+        self._fetch_future = None
+
     def showEvent(self, event):
         super(AutoAnalysisDialog, self).showEvent(event)
 
@@ -230,97 +236,167 @@ class AutoAnalysisDialog(BaseDialog):
         item.text = "Yes"
         model.dataChanged.emit(index, index)
 
-    @wait_box_decorator(
-        "HIDECANCEL\nGetting data types…"
-    )
     def _fetch_data_types(self, *args) -> None:
+        """Non-blocking version using ThreadPoolExecutor"""
         try:
             # get the model from the result table
             data = self.ui.resultsTable.model().get_datas()
-            # loop all rows in the table
             function_ids = []
+
             for element in data:
-                icon_item: IconItem = element[0]
+                icon_item = element[0]
                 is_succeed = icon_item.text == "Yes"
                 if is_succeed:
-                    # get the function id from the table
                     function_id = icon_item.data.get(
-                        "nearest_neighbor_id",
-                        None
-                    )
+                        "nearest_neighbor_id", None)
                     if function_id:
                         function_ids.append(function_id)
 
-            completed_items = fetch_data_types(
-                function_ids=function_ids,
-            )
-
-            if len(completed_items) == 0:
-                logger.info(
-                    "No data types found for the specified functions."
-                )
+            if not function_ids:
+                logger.info("No functions selected for data type fetching.")
                 return
 
-            logger.info(
-                f"Applying signatures for {len(completed_items)} functions"
+            # Show progress and disable UI
+            show_wait_box("HIDECANCEL\nGetting data types…")
+            self.ui.progressBar.show()
+            self.ui.progressBar.setProperty("value", 0)
+            self.ui.fetchDataTypesButton.setEnabled(False)
+
+            # Create executor and submit task
+            self._fetch_executor = ThreadPoolExecutor(
+                max_workers=1, thread_name_prefix="fetch-datatypes")
+
+            def fetch_task():
+                """The actual fetch operation running in background thread"""
+                return fetch_data_types(
+                    function_ids=function_ids,
+                    progress_cb=self._fetch_progress_callback,
+                    # We'll handle completion in the main thread
+                    complete_cb=None,
+                )
+
+            # Submit the task
+            self._fetch_future = self._fetch_executor.submit(fetch_task)
+
+            # Start timer to check completion
+            self._fetch_timer = QTimer()
+            self._fetch_timer.timeout.connect(self._check_fetch_completion)
+            self._fetch_timer.start(100)  # Check every 100ms
+
+        except Exception as e:
+            logger.error(f"Error starting fetch_data_types: {e}")
+            self._cleanup_fetch_operation()
+
+    def _fetch_progress_callback(self, progress: int) -> None:
+        """
+        Progress callback that runs on background thread but updates UI safely
+        """
+        logger.info(f"Fetch progress: {progress}%")
+        inmain(self.ui.progressBar.setProperty, "value", progress)
+        if progress >= 100:
+            inmain(self.ui.progressBar.hide)
+
+    def _check_fetch_completion(self) -> None:
+        """Timer callback to check if fetch operation is complete"""
+        if not self._fetch_future:
+            self._cleanup_fetch_operation()
+            return
+
+        logger.info(f"user_cancelled() check: {user_cancelled()}")
+        if user_cancelled():
+            self._cancel_fetch_operation()
+            return
+
+        logger.info(
+            f"Checking fetch_data_types completion:  {self._fetch_future.done()}")
+        if self._fetch_future.done():
+            try:
+                completed_items = self._fetch_future.result()
+                self._process_fetch_results(completed_items)
+            except Exception as e:
+                logger.error(f"Error in fetch_data_types: {e}")
+                if isinstance(e, HTTPError):
+                    resp = e.response.json()
+                    error = resp.get("message", "Unexpected error occurred.")
+                    logger.error(f"Error while fetching data types: {error}")
+            finally:
+                self._cleanup_fetch_operation()
+
+    def _process_fetch_results(self, completed_items: list) -> None:
+        """Process the results from fetch_data_types"""
+        logger.info(f"Processing {len(completed_items)} fetched data types")
+        if len(completed_items) == 0:
+            logger.info("No data types found for the specified functions.")
+            return
+
+        logger.info(
+            f"Applying signatures for {len(completed_items)} functions")
+
+        model = self.ui.resultsTable.model()
+        data = model.get_datas()
+
+        for row in range(len(data)):
+            row_data = data[row]
+            icon_item = row_data[0]
+
+            # skip failed items
+            if icon_item.data is None:
+                continue
+
+            function_id = icon_item.data.get("nearest_neighbor_id", 0)
+            logger.info(f"Applying signature for fid: {function_id}")
+
+            match_data_types = next(
+                (item for item in completed_items if item.get(
+                    "function_id", 0) == function_id),
+                None
             )
 
-            model = self.ui.resultsTable.model()
-            data = model.get_datas()
-            for row in range(len(data)):
-                row_data = data[row]
-                icon_item: IconItem = row_data[0]
+            if match_data_types is None:
+                continue
 
-                # skip failed items
-                if icon_item.data is None:
-                    continue
+            logger.info(f"Found matching data types for fid: {function_id}")
 
-                function_id = icon_item.data.get(
-                    "nearest_neighbor_id",
-                    0
-                )
+            func_types = match_data_types.get("func_types", None)
+            func_deps = match_data_types.get("func_deps", [])
 
-                logger.info(
-                    f"Applying signature for fid: {function_id}"
-                )
-
-                match_data_types = next(
-                    (
-                        item for item in completed_items
-                        if item.get("function_id", 0) == function_id
-                    ),
-                    None
-                )
-
-                if match_data_types is None:
-                    # skip unmatched items
-                    continue
-
-                logger.info(
-                    f"Found matching data types for fid: {function_id}"
-                )
-
-                func_types = match_data_types.get("func_types", {})
-                func_deps = match_data_types.get("func_deps", [])
-
-                if func_types is not None:
-                    fnc: Function = _art_from_dict(func_types)
-                    logger.info(
-                        f"Applying signature for {fnc.name}"
+            if func_types is not None:
+                from libbs.artifacts import _art_from_dict, Function
+                fnc: Function = _art_from_dict(func_types)
+                if fnc.name is None:
+                    logger.warning(
+                        f"Function {function_id} has no name, skipping signature application."
                     )
-                    apply_signature(row, fnc, func_deps, self.ui.resultsTable)
-                else:
-                    logger.error(
-                        "Failed to get function data types for functionId"
-                        f" {function_id}."
-                    )
-        except HTTPError as e:
-            resp = e.response.json()
-            error = resp.get("message", "Unexpected error occurred.")
-            logger.error(
-                "Error while fetching data types for the specified function:"
-                f"{error}"
-            )
+                    continue
+                logger.info(f"Applying signature for {fnc.name}")
+                apply_signature(row, fnc, func_deps, self.ui.resultsTable)
+            else:
+                logger.error(
+                    f"Failed to get function data types for functionId {function_id}.")
+
+    def _cancel_fetch_operation(self) -> None:
+        """Cancel the ongoing fetch operation"""
+        if self._fetch_future:
+            self._fetch_future.cancel()
+        logger.info("Fetch data types operation cancelled")
+        self._cleanup_fetch_operation()
+
+    def _cleanup_fetch_operation(self) -> None:
+        """Clean up fetch operation resources"""
+        if self._fetch_timer:
+            self._fetch_timer.stop()
+            self._fetch_timer = None
+
+        if self._fetch_executor:
+            self._fetch_executor.shutdown(wait=False)
+            self._fetch_executor = None
+
+        self._fetch_future = None
+
+        # Re-enable UI and hide progress
+        hide_wait_box()
+        self.ui.progressBar.hide()
+        self.ui.fetchDataTypesButton.setEnabled(True)
 
     @wait_box_decorator(
         "HIDECANCEL\nGetting data types for function…"
