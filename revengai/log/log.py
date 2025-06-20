@@ -23,5 +23,6 @@ def configure_loggers(log_dir: str) -> None:
 
     fileConfig(
         fname=log_conf_file.as_posix(),
-        defaults={"default_log_filename": log_main_file.as_posix()},
+        defaults={"default_log_filename": log_main_file.as_posix().format(
+            date=datetime.datetime.now().strftime("%Y%m%d%H%M%S"))},
     )
