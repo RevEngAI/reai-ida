@@ -21,7 +21,7 @@ First, you need to find where IDA Pro stores its plugins.
 
 1. **Open IDA Pro**
 2. **Access the Python console** (usually under `File > Script command` or `Alt + F7`). This may already be docked in the lower-portion of your IDA instance
-3. **Run the following command:**
+3. **Run the following command (make sure to change the scripting language to Python):**
    ```python
    import idaapi
    print(idaapi.get_user_idadir() + "/plugins")
