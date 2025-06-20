@@ -39,14 +39,16 @@ First, you need to find where IDA Pro stores its plugins.
 1. **Visit the releases page:** https://github.com/RevEngAI/reai-ida/releases
 2. **Download the latest release** (look for the most recent version)
 3. **Extract the downloaded archive** to your plugins directory from Step 1
-4. **Verify the folder structure:** The extracted folder should be named `revengai` and placed directly in your plugins directory
+4. **Verify the folder structure:** The extracted folder should be named `revengai` and placed directly in your plugins directory next to the `reveng.py` file.
+
+For example, if your plugins directory is `C:\Users\YourUser\AppData\Hex-Rays\IDA Pro\plugins`, the structure should look like this:
 
 Your final structure should look like:
 ```
-[plugins directory]/
-└── revengai/
-    ├── [plugin files...]
-    └── requirements.txt
+C:\Users\YourUser\AppData\Hex-Rays\IDA Pro\plugins/
+   └── revengai/
+      └── [plugin files...]
+   └── reveng.py
 ```
 
 ## Step 3: Install Plugin Dependencies
