@@ -308,7 +308,10 @@ class AutoAnalysisDialog(BaseDialog):
             return
 
         logger.info(
-            f"Checking fetch_data_types completion:  {self._fetch_future.done()}")
+            "Checking fetch_data_types completion: "
+            f"{self._fetch_future.done()}"
+        )
+
         if self._fetch_future.done():
             try:
                 completed_items = self._fetch_future.result()
@@ -365,14 +368,17 @@ class AutoAnalysisDialog(BaseDialog):
                 fnc: Function = _art_from_dict(func_types)
                 if fnc.name is None:
                     logger.warning(
-                        f"Function {function_id} has no name, skipping signature application."
+                        f"Function {function_id} has no name, "
+                        "skipping signature application."
                     )
                     continue
                 logger.info(f"Applying signature for {fnc.name}")
                 apply_signature(row, fnc, func_deps, self.ui.resultsTable)
             else:
                 logger.error(
-                    f"Failed to get function data types for functionId {function_id}.")
+                    "Failed to get function data types "
+                    f"for functionId {function_id}."
+                )
 
     def _cancel_fetch_operation(self) -> None:
         """Cancel the ongoing fetch operation"""

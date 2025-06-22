@@ -231,9 +231,12 @@ def fetch_data_types(
         completed = all(
             item.get("completed", False) for item in items
         )
+        percentage = int(
+            (total_count / total_data_types) * 100
+        )
 
         if progress_cb is not None and callable(progress_cb):
-            progress_cb(0)
+            progress_cb(percentage)
 
         while total_count != total_data_types or not completed:
             time.sleep(1)
