@@ -17,6 +17,7 @@ from libbs.artifacts import (
     Struct,
     Typedef,
 )
+from revengai.misc.utils import IDAUtils
 
 import idaapi
 import logging
@@ -150,12 +151,65 @@ def _load_many_artifacts_from_list(artifacts: list[dict]) -> list:
     return _artifacts
 
 
+def apply_multiple_data_types(
+        to_process: list[dict],
+        deci: DecompilerInterface = None,
+        progress_cb: callable = None,
+        complete_cb: callable = None,
+) -> None | str:
+    if not deci:
+        deci = DecompilerInterface.discover(force_decompiler="ida")
+    if not deci:
+        logger.error("Libbs: Unable to find a decompiler")
+        return "Unable to find a decompiler"
+
+    if not to_process:
+        logger.warning("No data types to process.")
+        return "No data types to process"
+
+    if not isinstance(to_process, list):
+        logger.error("to_process must be a list of dictionaries.")
+        return "to_process must be a list of dictionaries"
+
+    if progress_cb is not None and callable(progress_cb):
+        progress_cb(0)
+
+    for i in range(len(to_process)):
+        item = to_process[i]
+        original_addr = item["original_addr"]
+        nnfn = item["nnfn"]
+        row = item["row"]
+        signature = item["signature"]
+        if IDAUtils.set_name(
+            original_addr,
+            nnfn,
+        ):
+            if signature is not None:
+                apply_data_types(
+                    row,
+                    original_addr,
+                    signature,
+                    deci=deci
+                )
+            if progress_cb is not None and callable(progress_cb):
+                progress_cb(
+                    int((i + 1) / len(to_process) * 100)
+                )
+
+    if progress_cb is not None and callable(progress_cb):
+        progress_cb(100)
+
+    if complete_cb is not None and callable(complete_cb):
+        complete_cb()
+
+
 def apply_data_types(
         row: int,
         function_addr: int = 0,
         resultsTable=None,
+        deci: DecompilerInterface = None,
 ):
-    deci = DecompilerInterface.discover(force_decompiler="ida")
+    # deci = DecompilerInterface.discover(force_decompiler="ida")
     if not deci:
         logger.error("Libbs: Unable to find a decompiler")
         return

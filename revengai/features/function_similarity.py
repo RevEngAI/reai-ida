@@ -277,10 +277,12 @@ class FunctionSimilarityDialog(BaseDialog):
                 function["function_id"] = function_id
                 try:
                     logger.info(f"Getting name score for {distance}")
-                    name_score = RE_name_score([{"function_id": function_id, "function_name": nnfn}]).json()["data"]
+                    name_score = RE_name_score(
+                        [{"function_id": function_id, "function_name": nnfn}]).json()["data"]
                     confidence = name_score[0]["box_plot"]["average"]
                     if confidence < (100 - (distance * 100)):
-                        logger.info(f"Skipping {nnfn} because it's not similar enough to {nnfn}")
+                        logger.info(
+                            f"Skipping {nnfn} because it's not similar enough to {nnfn}")
                         continue
                 except Exception as e:
                     confidence = 0
