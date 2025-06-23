@@ -33,6 +33,8 @@ from reait.api import (
     RE_users_me,
     RE_recent_analysis_v2,
     RE_models,
+    RE_get_analysis_id_from_binary_id,
+    RE_get_functions_from_analysis, 
 )
 
 from revengai import __version__
@@ -59,6 +61,8 @@ from revengai.wizard.wizard import RevEngSetupWizard
 
 from revengai.features.sync_functions import SyncOp
 from revengai.models import CheckableItem
+
+from revengai.helpers.file import file_type_ida
 
 from idaapi import ASKBTN_YES, ask_buttons
 
@@ -140,7 +144,7 @@ def upload_binary(state: RevEngState) -> None:
                             skip_sbom=True,
                             skip_capabilities=True,
                             advanced_analysis=False,
-
+                            skip_cves=True
                         )
 
                         analysis = res.json()
@@ -1668,7 +1672,7 @@ def is_file_supported(state: RevEngState, fpath: str) -> bool:
 
         logger.info(f"Checking file support: {fpath}")
 
-        file_format, isa_format = file_type(fpath)
+        file_format, isa_format = file_type_ida()
 
         logger.info(
             f"Underlying binary: {fpath} -> format: {file_format},"
@@ -1687,14 +1691,14 @@ def is_file_supported(state: RevEngState, fpath: str) -> bool:
             )
         ):
             return True
+        
+        idc.warning(
+            f"{file_format} file format is not currently supported by "
+            "RevEng.AI"
+        )
     except Exception as e:
         logger.error(f"Error checking file support: {e}")
         pass
-
-    idc.warning(
-        f"{basename(fpath)} file format is not currently supported by "
-        "RevEng.AI"
-    )
 
     return False
 
@@ -1805,3 +1809,25 @@ def toolbar(state: RevEngState) -> None:
     form = RevEngConfigForm_t(state)
     form.register_actions(False)
     del form
+    
+def view_function_in_portal(state: RevEngState):
+    try:
+        fpath = idc.get_input_file_path()
+        base_addr = idaapi.get_imagebase()
+        res: Response = RE_search(fpath)
+        binaries = res.json()["query_results"]
+        for binary in binaries:
+            analysis = RE_get_analysis_id_from_binary_id(binary["binary_id"]).json()
+            functions = RE_get_functions_from_analysis(analysis["analysis_id"]).json()["data"]["functions"]
+            found = False
+            for function in functions:
+                if function["function_vaddr"] == ida_funcs.get_func(idc.get_screen_ea()).start_ea - base_addr:
+                    found = True
+                    inmain(idaapi.open_url, f"{state.config.PORTAL}/function/{function['function_id']}")
+                    break
+            if found:
+                break
+        if not found:
+            Dialog.showInfo("Function URL", "Function not found in portal")
+    except Exception as e:
+        logger.error(f"Error getting function in portal: {e}")
