@@ -205,7 +205,9 @@ def apply_data_types(
 
 def fetch_data_types(
         function_ids: list[int],
-) -> list[dict]:
+        progress_cb: callable = None,
+        complete_cb: callable = None,
+) -> None:
     try:
         logging.info(
             "Fetching data types for the specified functions..."
@@ -229,10 +231,12 @@ def fetch_data_types(
         completed = all(
             item.get("completed", False) for item in items
         )
-
-        logger.info(
-            f"Generation completed: {completed}"
+        percentage = int(
+            (total_count / total_data_types) * 100
         )
+
+        if progress_cb is not None and callable(progress_cb):
+            progress_cb(percentage)
 
         while total_count != total_data_types or not completed:
             time.sleep(1)
@@ -242,10 +246,27 @@ def fetch_data_types(
             data = res.get("data", {})
             total_count = data.get("total_count", 0)
             total_data_types = data.get("total_data_types_count", 0)
+            logger.info(f"Total count: {total_count}, \n"
+                        f"Total data types: {total_data_types}, \n")
+            # calculate the percentage of completion
+            percentage = int(
+                (total_count / total_data_types) * 100
+            )
+            if progress_cb is not None and callable(progress_cb):
+                progress_cb(percentage)
             items = data.get("items", [])
             completed = all(
                 item.get("completed", False) for item in items
             )
+            if completed:
+                logger.info(
+                    "All data types have been fetched and processed."
+                )
+                break
+
+        # notify the callback if provided that the process is done
+        if progress_cb is not None and callable(progress_cb):
+            progress_cb(100)
 
         logger.info(
             "Data types generation completed."
@@ -273,7 +294,14 @@ def fetch_data_types(
             )
         )
 
-        return completed_items
+        if complete_cb is not None and callable(complete_cb):
+            complete_cb(completed_items)
+        else:
+            logger.info(
+                f"Fetched {len(completed_items)} data types for the "
+                f"specified functions."
+            )
+            return completed_items
     except HTTPError as e:
         resp = e.response.json()
         error = resp.get("message", "Unexpected error occurred.")

@@ -30,6 +30,9 @@ from reait.api import (
     RE_begin_ai_decompilation,
     RE_functions_data_types,
     RE_functions_list,
+    RE_users_me,
+    RE_recent_analysis_v2,
+    RE_models,
     RE_get_analysis_id_from_binary_id,
     RE_get_functions_from_analysis, 
 )
@@ -38,7 +41,6 @@ from revengai import __version__
 from revengai.api import (
     RE_functions_dump,
     RE_search,
-    RE_recent_analysis,
     RE_generate_summaries,
 )
 from revengai.features.auto_analyze import AutoAnalysisDialog
@@ -108,7 +110,6 @@ def upload_binary(state: RevEngState) -> None:
                     )
 
                     res: Response = RE_upload(fpath)
-
                     upload = res.json()
 
                     logger.info(
@@ -176,16 +177,21 @@ def upload_binary(state: RevEngState) -> None:
 
                         # Periodically check the status of the uploaded binary
                         periodic_check(state, fpath, analysis["binary_id"])
-                except RequestException as e:
-                    logger.error(
-                        "Error analyzing %s. Reason: %s",
-                        basename(fpath),
-                        e
+                except HTTPError as e:
+                    resp = e.response.json()
+                    errors = resp.get("errors", [])
+                    err_msg = (
+                        errors[0]["msg"]
+                        if len(errors) > 0
+                        else "An unexpected error occurred. Sorry for the"
+                        " inconvenience."
                     )
 
-                    err_msg = ""
-                    if isinstance(e, HTTPError):
-                        err_msg = f"\nReason: {e.response.json()['error']}"
+                    logger.error(
+                        "Error analysing %s: %s",
+                        basename(fpath),
+                        err_msg,
+                    )
 
                     inmain(
                         idc.warning,
@@ -647,12 +653,20 @@ def analysis_history(state: RevEngState) -> None:
 
         def bg_task() -> None:
             try:
-                res: Response = RE_search(fpath)
+                sha_256_hash = inmain(
+                    idaapi.retrieve_input_file_sha256).hex()
+                res: Response = RE_users_me()
+                my_user = res.json().get("data", {}).get("username", "")
+                res: Response = RE_recent_analysis_v2(
+                    search=sha_256_hash, users=[my_user]
+                )
+
+                results = res.json().get("data", {}).get("results", [])
 
                 results = list(
                     filter(
-                        lambda binary: binary["sha_256_hash"] == sha_256_hash,
-                        res.json()["query_results"],
+                        lambda analysis: analysis["is_owner"],
+                        results,
                     )
                 )
 
@@ -663,19 +677,25 @@ def analysis_history(state: RevEngState) -> None:
                     reverse=True,
                 )
 
+                models: Response = RE_models()
+                models = models.json().get("models", [])
+                models_mapper = {}
+                for model in models:
+                    models_mapper[model["model_id"]] = model["model_name"]
+
                 binaries = []
                 today = date.today()
 
-                for binary in results:
+                for analysis in results:
                     creation = datetime.fromisoformat(
-                        binary["creation"]
+                        analysis["creation"]
                     ).astimezone()
 
                     binaries.append(
                         (
-                            binary.get("binary_name"),
-                            str(binary["binary_id"]),
-                            binary["status"],
+                            analysis.get("binary_name"),
+                            str(analysis["binary_id"]),
+                            analysis["status"],
                             (
                                 creation.strftime("Today at %H:%M:%S")
                                 if creation.date() == today
@@ -689,16 +709,16 @@ def analysis_history(state: RevEngState) -> None:
                                     )
                                 )
                             ),
-                            binary["model_name"],
+                            models_mapper[analysis["model_id"]],
                         )
                     )
 
                     inmain(
                         state.config.database.add_analysis,
-                        binary["sha_256_hash"],
-                        binary["binary_id"],
-                        binary["status"],
-                        binary["creation"],
+                        analysis["sha_256_hash"],
+                        analysis["binary_id"],
+                        analysis["status"],
+                        analysis["creation"],
                     )
 
                 if len(binaries):
@@ -724,7 +744,6 @@ def analysis_history(state: RevEngState) -> None:
                     f"Failed to obtain binary analysis history: {error}",
                 )
 
-        sha_256_hash = idaapi.retrieve_input_file_sha256().hex()
         inthread(bg_task)
 
 
@@ -733,9 +752,27 @@ def load_recent_analyses(state: RevEngState) -> None:
 
         def bg_task() -> None:
             try:
-                res: Response = RE_recent_analysis()
+                res: Response = RE_users_me()
+                my_user = res.json().get("data", {}).get("username", "")
+                res: Response = RE_recent_analysis_v2(
+                    search=sha_256_hash, users=[my_user])
 
-                for analysis in res.json()["analysis"]:
+                results = res.json().get("data", {}).get("results", [])
+
+                results = list(
+                    filter(
+                        lambda analysis: analysis["is_owner"],
+                        results,
+                    )
+                )
+
+                models: Response = RE_models()
+                models = models.json().get("models", [])
+                models_mapper = {}
+                for model in models:
+                    models_mapper[model["model_id"]] = model["model_name"]
+
+                for analysis in results:
                     inmain(
                         state.config.database.add_upload,
                         analysis["binary_name"],
@@ -747,52 +784,94 @@ def load_recent_analyses(state: RevEngState) -> None:
                         analysis["binary_id"],
                         analysis["status"],
                         analysis["creation"],
-                        analysis["model_name"],
+                        models_mapper[analysis["model_id"]],
                     )
 
-                params = [sha_256_hash]
-
-                binaries = list(
-                    filter(
-                        lambda binary: binary["sha_256_hash"] == sha_256_hash,
-                        RE_search(fpath).json()["query_results"],
+                if len(results) > 0:
+                    # sort results by creation date and get the most recent
+                    results.sort(
+                        key=lambda binary: datetime.fromisoformat(
+                            binary["creation"]
+                        ).timestamp(),
+                        reverse=True,
                     )
-                )
 
-                if len(binaries) == 0:
-                    state.config.set("binary_id", None)
-                else:
-                    params += [binary["binary_id"] for binary in binaries]
-
-                    inmain(
-                        state.config.database.execute_sql,
-                        f"DELETE FROM analysis WHERE sha_256_hash = ? AND "
-                        "binary_id NOT IN "
-                        f"({('?, ' * len(binaries))[:-2]})",
-                        tuple(params),
-                    )
+                    most_recent = results[0]
 
                     state.config.set(
                         "binary_id",
-                        inmain(
-                            state.config.database.get_last_analysis,
-                            sha_256_hash,
-                        ),
+                        most_recent["binary_id"]
                     )
 
-                    resp = RE_analysis_lookup(
-                        state.config.get("binary_id", 0)
-                    ).json()
-
-                    analysis_id = resp.get("analysis_id", 0)
+                    analysis_id = most_recent.get("analysis_id", 0)
                     state.config.set("analysis_id", analysis_id)
 
-                    logger.info(f"Saving current analysis ID {analysis_id}")
+                    logger.info(
+                        f"Saving current analysis ID {analysis_id}"
+                    )
 
-                    # We always want to auto synchronize the functions names
+                    # We always want to auto synchronize the functions
+                    # names
                     done, _ = is_analysis_complete(state, fpath)
                     if done:
-                        inmain(sync_functions_name, state, fpath, analysis_id)
+                        inmain(
+                            sync_functions_name,
+                            state,
+                            fpath,
+                            analysis_id
+                        )
+                else:
+                    state.config.set("binary_id", None)
+                    state.config.set("analysis_id", None)
+
+                # params = [sha_256_hash]
+
+                # binaries = list(
+                #     filter(
+                #         lambda binary: binary["sha_256_hash"] == sha_256_hash,
+                #         RE_search(fpath).json()["query_results"],
+                #     )
+                # )
+
+                # if len(binaries) == 0:
+                #     state.config.set("binary_id", None)
+                # else:
+                #     params += [binary["binary_id"] for binary in binaries]
+
+                #     inmain(
+                #         state.config.database.execute_sql,
+                #         f"DELETE FROM analysis WHERE sha_256_hash = ? AND "
+                #         "binary_id NOT IN "
+                #         f"({('?, ' * len(binaries))[:-2]})",
+                #         tuple(params),
+                #     )
+
+                #     state.config.set(
+                #         "binary_id",
+                #         inmain(
+                #             state.config.database.get_last_analysis,
+                #             sha_256_hash,
+                #         ),
+                #     )
+                #     bin_id = state.config.get("binary_id", 0)
+
+                #     if bin_id > 0:
+                #         resp = RE_analysis_lookup(
+                #             bin_id
+                #         ).json()
+
+                #         analysis_id = resp.get("analysis_id", 0)
+                #         state.config.set("analysis_id", analysis_id)
+
+                #         logger.info(
+                #             f"Saving current analysis ID {analysis_id}")
+
+                #         # We always want to auto synchronize the functions
+                #         # names
+                #         done, _ = is_analysis_complete(state, fpath)
+                #         if done:
+                #             inmain(sync_functions_name,
+                #                    state, fpath, analysis_id)
             except (HTTPError, RequestException) as e:
                 logger.error("Error getting recent analyses: %s", e)
 
@@ -1313,18 +1392,19 @@ def ai_decompile(state: RevEngState) -> None:
 
             inverse_string_map: list = function_mapping_full.get(
                 "inverse_string_map",
-                []
+                {}
             )
 
             inverse_function_map: list = function_mapping_full.get(
                 "inverse_function_map",
-                []
+                {}
             )
 
             for key, value in inverse_string_map.items():
                 c_code = c_code.replace(key, value.get("string", key))
 
-            summary = decompilation_data.get("summary", "")
+            # use ai_summary rather than summary
+            summary = decompilation_data.get("ai_summary", "")
             if summary is None:
                 summary = ""
 
