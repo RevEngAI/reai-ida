@@ -1,4 +1,4 @@
-reait==1.2.3
+reait==1.2.4
 libbs==2.15.1
 tree-sitter==0.24.0
 tree-sitter-c==0.23.4
