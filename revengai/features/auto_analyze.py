@@ -202,15 +202,16 @@ class AutoAnalysisDialog(BaseDialog):
                 )
             )
 
-            applyDataTypesAction = menu.addAction("Apply Data Types")
-            applyDataTypesAction.triggered.connect(
-                lambda: self._function_import_symbol_datatypes(
-                    # row
-                    rows[0],
-                    # selected function addr
-                    func_addr,
+            if selected[3].data is not None:
+                applyDataTypesAction = menu.addAction("Apply Data Types")
+                applyDataTypesAction.triggered.connect(
+                    lambda: self._function_import_symbol_datatypes(
+                        # signature
+                        selected[3].data,
+                        # function address
+                        func_addr,
+                    )
                 )
-            )
 
             excludeRowAction = menu.addAction("Exclude")
             excludeRowAction.triggered.connect(
@@ -300,7 +301,6 @@ class AutoAnalysisDialog(BaseDialog):
         """
         Progress callback that runs on background thread but updates UI safely
         """
-        logger.info(f"Fetch progress: {progress}%")
         inmain(self.ui.progressBar.setProperty, "value", progress)
         if progress >= 100:
             inmain(self.ui.progressBar.hide)
@@ -311,15 +311,9 @@ class AutoAnalysisDialog(BaseDialog):
             self._cleanup_fetch_operation()
             return
 
-        logger.info(f"user_cancelled() check: {user_cancelled()}")
         if user_cancelled():
             self._cancel_fetch_operation()
             return
-
-        logger.info(
-            "Checking fetch_data_types completion: "
-            f"{self._fetch_future.done()}"
-        )
 
         if self._fetch_future.done():
             try:
@@ -340,23 +334,19 @@ class AutoAnalysisDialog(BaseDialog):
             self._cleanup_apply_types_operation()
             return
 
-        logger.info(f"user_cancelled() check: {user_cancelled()}")
         if user_cancelled():
             self._cancel_apply_types_operation()
             return
 
-        logger.info(
-            "Checking apply_data_types completion: "
-            f"{self._apply_types_future.done()}"
-        )
-
         if self._apply_types_future.done():
             try:
                 success = self._apply_types_future.result()
-                if success:
-                    logger.info("Data types applied successfully.")
+                if success is not None:
+                    logger.error("Data types application failed: %s", success)
                 else:
-                    logger.error("Data types application failed.")
+                    logger.info(
+                        "Data types application completed successfully."
+                    )
             except Exception as e:
                 logger.error(f"Error in apply_data_types: {e}")
                 if isinstance(e, HTTPError):
@@ -392,7 +382,6 @@ class AutoAnalysisDialog(BaseDialog):
 
     def _process_fetch_results(self, completed_items: list) -> None:
         """Process the results from fetch_data_types"""
-        logger.info(f"Processing {len(completed_items)} fetched data types")
         if len(completed_items) == 0:
             logger.info("No data types found for the specified functions.")
             return
@@ -523,13 +512,14 @@ class AutoAnalysisDialog(BaseDialog):
     )
     def _function_import_symbol_datatypes(
         self,
-        row: int,
+        signature=None,
         function_addr: int = 0,
     ) -> None:
+        deci = DecompilerInterface.discover(force_decompiler="ida")
         apply_data_types(
-            row=row,
-            function_addr=function_addr,
-            resultsTable=self.ui.resultsTable,
+            function_addr,
+            signature,
+            deci=deci,
         )
 
     def _start_analysis(self) -> None:
@@ -656,15 +646,23 @@ class AutoAnalysisDialog(BaseDialog):
                         for match in matches:
                             functions.append({
                                 "function_id": match["origin_function_id"],
-                                "function_name": match["nearest_neighbor_function_name"],
+                                "function_name": match[
+                                    "nearest_neighbor_function_name"
+                                ],
                             })
 
                         response = RE_name_score(functions).json()["data"]
                         for function in response:
                             for match in matches:
-                                if match["origin_function_id"] == function["function_id"]:
-                                    match["real_confidence"] = function["box_plot"]["average"]
-                                    if match["real_confidence"] < (100 - (distance * 100)):
+                                if match["origin_function_id"] == function[
+                                    "function_id"
+                                ]:
+                                    match["real_confidence"] = function[
+                                        "box_plot"
+                                    ]["average"]
+                                    if match["real_confidence"] < (
+                                            100 - (distance * 100)
+                                    ):
                                         matches.remove(match)
                                         break
 
@@ -1195,9 +1193,10 @@ class AutoAnalysisDialog(BaseDialog):
         self._apply_types_executor = ThreadPoolExecutor(
             max_workers=1, thread_name_prefix="fetch-datatypes")
 
+        deci = DecompilerInterface.discover(force_decompiler="ida")
+
         def apply_task() -> None:
             """Apply the function rename and data types"""
-            deci = DecompilerInterface.discover(force_decompiler="ida")
             return apply_multiple_data_types(
                 to_process,
                 deci=deci,

@@ -27,6 +27,7 @@ from libbs.artifacts import _art_from_dict
 from libbs.artifacts import (
     Function,
 )
+from libbs.api import DecompilerInterface
 
 from revengai.misc.datatypes import (
     fetch_data_types,
@@ -386,10 +387,11 @@ class FunctionSimilarityDialog(BaseDialog):
 
         if IDAUtils.set_name(addr, nnfn):
             if signature:
+                deci = DecompilerInterface.discover(force_decompiler="ida")
                 apply_data_types(
-                    row,
                     addr,
-                    self.ui.resultsTable
+                    signature,
+                    deci
                 )
             else:
                 logger.info(
