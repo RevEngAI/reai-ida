@@ -35,7 +35,7 @@ from revengai.misc.datatypes import (
     apply_signature,
     wait_box_decorator,
 )
-
+import idaapi
 from PyQt5.QtCore import QTimer
 
 logger = logging.getLogger("REAI")
@@ -654,11 +654,71 @@ class FunctionSimilarityDialog(BaseDialog):
             breakdownAction.triggered.connect(
                 lambda: self._function_breakdown(func_id))
 
+            matched_func_id = selected[0].data["nearest_neighbor_id"]
+            fetchDataTypesAction = menu.addAction("Fetch Data Types")
+            fetchDataTypesAction.triggered.connect(
+                lambda: self._function_get_datatypes(
+                    # row
+                    rows[0],
+                    # matched function id
+                    matched_func_id,
+                )
+            )
+
             # summariesAction = menu.addAction("Generate AI Summaries")
             # summariesAction.triggered.connect(
             # lambda: self._generate_summaries(func_id))
 
             menu.exec_(QCursor.pos())
+
+    @wait_box_decorator(
+        "HIDECANCEL\nGetting data types for function…"
+    )
+    def _function_get_datatypes(
+            self,
+            row: int,
+            matched_func_id: int = 0,
+    ) -> None:
+        try:
+
+            completed_items = fetch_data_types(
+                function_ids=[matched_func_id],
+            )
+
+            if len(completed_items) == 0:
+                logger.info(
+                    "No data types found for the specified function."
+                )
+                return
+
+            logger.info(
+                "Data types generation completed."
+            )
+
+            data_types = completed_items[0]
+
+            func_types = data_types.get("func_types", None)
+            func_deps = data_types.get("func_deps", None)
+
+            fnc: Function = _art_from_dict(func_types)
+
+            apply_signature(row, fnc, func_deps, self.ui.resultsTable)
+
+        except HTTPError as e:
+            errors = e.response.json().get(
+                "errors",
+                [{
+                    "message": f"An unexpected error occurred. Sorry for the "
+                    f"inconvenience. {e.response.status_code}"
+                }],
+            )
+
+            logger.error(
+                "Error while importing data types for the specified function:"
+                f"{errors[0]['message']}"
+            )
+
+            inmain(idaapi.warning, errors[0]["message"])
 
     def _selected_collections(self) -> dict:
         collections = []
