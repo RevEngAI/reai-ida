@@ -388,7 +388,7 @@ class AutoAnalysisDialog(BaseDialog):
         # Re-enable UI and hide progress
         hide_wait_box()
         self.ui.progressBar.hide()
-        self.ui.fetchDataTypesButton.setEnabled(True)
+        self.ui.renameButton.setEnabled(True)
 
     def _process_fetch_results(self, completed_items: list) -> None:
         """Process the results from fetch_data_types"""
@@ -1198,7 +1198,7 @@ class AutoAnalysisDialog(BaseDialog):
         def apply_task() -> None:
             """Apply the function rename and data types"""
             deci = DecompilerInterface.discover(force_decompiler="ida")
-            apply_multiple_data_types(
+            return apply_multiple_data_types(
                 to_process,
                 deci=deci,
                 progress_cb=self._fetch_progress_callback,
