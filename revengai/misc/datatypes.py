@@ -17,6 +17,7 @@ from libbs.artifacts import (
     Struct,
     Typedef,
 )
+from revengai.misc.utils import IDAUtils
 
 import idaapi
 import logging
@@ -135,7 +136,7 @@ def apply_types(
         artifacts: list
 ) -> None | str:
     for artifact in artifacts:
-        error = apply_type(deci, artifact, soft_skip=True)
+        error = inmain(apply_type, deci, artifact, True)
         if error is not None:
             return error
     return None
@@ -150,51 +151,91 @@ def _load_many_artifacts_from_list(artifacts: list[dict]) -> list:
     return _artifacts
 
 
+def apply_multiple_data_types(
+        to_process: list[dict],
+        deci: DecompilerInterface = None,
+        progress_cb: callable = None,
+        complete_cb: callable = None,
+) -> None | str:
+    if not deci:
+        logger.error("Libbs: Unable to find a decompiler")
+        return "Unable to find a decompiler"
+
+    if not to_process:
+        logger.warning("No data types to process.")
+        return "No data types to process"
+
+    if not isinstance(to_process, list):
+        logger.error("to_process must be a list of dictionaries.")
+        return "to_process must be a list of dictionaries"
+
+    if progress_cb is not None and callable(progress_cb):
+        progress_cb(0)
+
+    el_count = len(to_process)
+    cur_count = 0
+
+    for item in to_process:
+        cur_count += 1
+        progress = int(
+            (cur_count / el_count) * 100
+        )
+        original_addr = item["original_addr"]
+        nnfn = item["nnfn"]
+        signature = item["signature"]
+
+        if inmain(IDAUtils.set_name, original_addr, nnfn):
+            if signature is not None:
+                apply_data_types(
+                    original_addr,
+                    signature,
+                    deci
+                )
+            if progress_cb is not None and callable(progress_cb):
+                progress_cb(progress)
+
+    if progress_cb is not None and callable(progress_cb):
+        progress_cb(100)
+
+    if complete_cb is not None and callable(complete_cb):
+        complete_cb()
+
+
 def apply_data_types(
-        row: int,
         function_addr: int = 0,
-        resultsTable=None,
+        signature=None,
+        deci: DecompilerInterface = None,
 ):
-    deci = DecompilerInterface.discover(force_decompiler="ida")
+    # deci = DecompilerInterface.discover(force_decompiler="ida")
     if not deci:
         logger.error("Libbs: Unable to find a decompiler")
         return
 
     try:
-        model = resultsTable.model()
-        index = model.index(row, 3)
-        data = model.getModelData(index)
+        # get the function signature from the table
+        function: Function = signature.get("function")
+        deps = signature.get("deps")
+
+        function.addr = function_addr
+
+        # fisrt apply the dependencies
+        res = apply_types(deci, _load_many_artifacts_from_list(deps))
+        if res is not None:
+            logger.error(
+                f"Failed to apply function dependencies: {res}")
+            return
+
+        # then apply the function signature
+        res = inmain(apply_type, deci, function)
+        if res is not None:
+            logger.error(f"Failed to apply function signature: {res}")
+            return
+
+        # show success message
         logger.info(
-            f"Data: {data}"
+            "Successfully applied function signature and dependencies"
         )
-        if isinstance(data, SimpleItem) and data.data is not None:
-            # get the function signature from the table
-            function: Function = data.data.get("function")
-            deps = data.data.get("deps")
 
-            function.addr = function_addr
-
-            # fisrt apply the dependencies
-            res = apply_types(deci, _load_many_artifacts_from_list(deps))
-            if res is not None:
-                logger.error(
-                    f"Failed to apply function dependencies: {res}")
-                return
-
-            # then apply the function signature
-            res = apply_type(deci, function)
-            if res is not None:
-                logger.error(f"Failed to apply function signature: {res}")
-                return
-
-            # show success message
-            logger.info(
-                "Successfully applied function signature and dependencies"
-            )
-        else:
-            logger.warning(
-                "Failed to get function signature from the table."
-            )
     except Exception as e:
         import traceback as tb
         logger.error(f"Error: {e} \n{tb.format_exc()}")
@@ -231,33 +272,41 @@ def fetch_data_types(
         completed = all(
             item.get("completed", False) for item in items
         )
-        percentage = int(
-            (total_count / total_data_types) * 100
+        n_items = len(items)
+        n_completed = sum(
+            1 for item in items if item.get("completed", False)
         )
+        percentage = int(
+            (n_completed / n_items) * 100
+        ) if n_items > 0 else 0
 
         if progress_cb is not None and callable(progress_cb):
             progress_cb(percentage)
 
         while total_count != total_data_types or not completed:
-            time.sleep(1)
+            time.sleep(0.1)
             res = RE_functions_data_types_poll(
                 function_ids=function_ids,
             ).json()
             data = res.get("data", {})
-            total_count = data.get("total_count", 0)
-            total_data_types = data.get("total_data_types_count", 0)
-            logger.info(f"Total count: {total_count}, \n"
-                        f"Total data types: {total_data_types}, \n")
-            # calculate the percentage of completion
-            percentage = int(
-                (total_count / total_data_types) * 100
+            items = data.get("items", [])
+
+            n_items = len(items)
+            n_completed = sum(
+                1 for item in items if item.get("completed", False)
             )
+
+            percentage = int(
+                (n_completed / n_items) * 100
+            ) if n_items > 0 else 0
+
             if progress_cb is not None and callable(progress_cb):
                 progress_cb(percentage)
-            items = data.get("items", [])
+
             completed = all(
                 item.get("completed", False) for item in items
             )
+
             if completed:
                 logger.info(
                     "All data types have been fetched and processed."

@@ -25,6 +25,7 @@ from revengai.models.table_model import RevEngTableModel
 from revengai.ui.auto_analysis_panel import Ui_AutoAnalysisPanel
 from datetime import datetime
 from revengai.misc.datatypes import (
+    apply_multiple_data_types,
     apply_data_types,
     fetch_data_types,
     wait_box_decorator,
@@ -35,6 +36,7 @@ from libbs.artifacts import _art_from_dict
 from libbs.artifacts import (
     Function,
 )
+from libbs.api import DecompilerInterface
 
 import idaapi
 
@@ -150,6 +152,10 @@ class AutoAnalysisDialog(BaseDialog):
         self._fetch_executor = None
         self._fetch_future = None
 
+        self._apply_types_timer = None
+        self._apply_types_executor = None
+        self._apply_types_future = None
+
     def showEvent(self, event):
         super(AutoAnalysisDialog, self).showEvent(event)
 
@@ -196,15 +202,16 @@ class AutoAnalysisDialog(BaseDialog):
                 )
             )
 
-            applyDataTypesAction = menu.addAction("Apply Data Types")
-            applyDataTypesAction.triggered.connect(
-                lambda: self._function_import_symbol_datatypes(
-                    # row
-                    rows[0],
-                    # selected function addr
-                    func_addr,
+            if selected[3].data is not None:
+                applyDataTypesAction = menu.addAction("Apply Data Types")
+                applyDataTypesAction.triggered.connect(
+                    lambda: self._function_import_symbol_datatypes(
+                        # signature
+                        selected[3].data,
+                        # function address
+                        func_addr,
+                    )
                 )
-            )
 
             excludeRowAction = menu.addAction("Exclude")
             excludeRowAction.triggered.connect(
@@ -261,6 +268,7 @@ class AutoAnalysisDialog(BaseDialog):
             # Show progress and disable UI
             show_wait_box("HIDECANCEL\nGetting data types…")
             self.ui.progressBar.show()
+            self.ui.progressBar.setProperty("maximum", 100)
             self.ui.progressBar.setProperty("value", 0)
             self.ui.fetchDataTypesButton.setEnabled(False)
 
@@ -293,7 +301,6 @@ class AutoAnalysisDialog(BaseDialog):
         """
         Progress callback that runs on background thread but updates UI safely
         """
-        logger.info(f"Fetch progress: {progress}%")
         inmain(self.ui.progressBar.setProperty, "value", progress)
         if progress >= 100:
             inmain(self.ui.progressBar.hide)
@@ -304,15 +311,9 @@ class AutoAnalysisDialog(BaseDialog):
             self._cleanup_fetch_operation()
             return
 
-        logger.info(f"user_cancelled() check: {user_cancelled()}")
         if user_cancelled():
             self._cancel_fetch_operation()
             return
-
-        logger.info(
-            "Checking fetch_data_types completion: "
-            f"{self._fetch_future.done()}"
-        )
 
         if self._fetch_future.done():
             try:
@@ -327,9 +328,60 @@ class AutoAnalysisDialog(BaseDialog):
             finally:
                 self._cleanup_fetch_operation()
 
+    def _check_apply_types_completion(self) -> None:
+        """Timer callback to check if apply_data_types operation is complete"""
+        if not self._apply_types_future:
+            self._cleanup_apply_types_operation()
+            return
+
+        if user_cancelled():
+            self._cancel_apply_types_operation()
+            return
+
+        if self._apply_types_future.done():
+            try:
+                success = self._apply_types_future.result()
+                if success is not None:
+                    logger.error("Data types application failed: %s", success)
+                else:
+                    logger.info(
+                        "Data types application completed successfully."
+                    )
+            except Exception as e:
+                logger.error(f"Error in apply_data_types: {e}")
+                if isinstance(e, HTTPError):
+                    resp = e.response.json()
+                    error = resp.get("message", "Unexpected error occurred.")
+                    logger.error(f"Error while applying data types: {error}")
+            finally:
+                self._cleanup_apply_types_operation()
+
+    def _cancel_apply_types_operation(self) -> None:
+        """Cancel the ongoing apply operation"""
+        if self._apply_types_future:
+            self._apply_types_future.cancel()
+        logger.info("Apply data types operation cancelled")
+        self._cleanup_apply_types_operation()
+
+    def _cleanup_apply_types_operation(self) -> None:
+        """Clean up apply operation resources"""
+        if self._apply_types_timer:
+            self._apply_types_timer.stop()
+            self._apply_types_timer = None
+
+        if self._apply_types_executor:
+            self._apply_types_executor.shutdown(wait=False)
+            self._apply_types_executor = None
+
+        self._apply_types_future = None
+
+        # Re-enable UI and hide progress
+        hide_wait_box()
+        self.ui.progressBar.hide()
+        self.ui.renameButton.setEnabled(True)
+
     def _process_fetch_results(self, completed_items: list) -> None:
         """Process the results from fetch_data_types"""
-        logger.info(f"Processing {len(completed_items)} fetched data types")
         if len(completed_items) == 0:
             logger.info("No data types found for the specified functions.")
             return
@@ -460,13 +512,14 @@ class AutoAnalysisDialog(BaseDialog):
     )
     def _function_import_symbol_datatypes(
         self,
-        row: int,
+        signature=None,
         function_addr: int = 0,
     ) -> None:
+        deci = DecompilerInterface.discover(force_decompiler="ida")
         apply_data_types(
-            row=row,
-            function_addr=function_addr,
-            resultsTable=self.ui.resultsTable,
+            function_addr,
+            signature,
+            deci=deci,
         )
 
     def _start_analysis(self) -> None:
@@ -593,16 +646,23 @@ class AutoAnalysisDialog(BaseDialog):
                         for match in matches:
                             functions.append({
                                 "function_id": match["origin_function_id"],
-                                "function_name": match["nearest_neighbor_function_name"],
+                                "function_name": match[
+                                    "nearest_neighbor_function_name"
+                                ],
                             })
-                        
-                        
+
                         response = RE_name_score(functions).json()["data"]
                         for function in response:
                             for match in matches:
-                                if match["origin_function_id"] == function["function_id"]:
-                                    match["real_confidence"] = function["box_plot"]["average"]
-                                    if match["real_confidence"] < (100 - (distance * 100)):
+                                if match["origin_function_id"] == function[
+                                    "function_id"
+                                ]:
+                                    match["real_confidence"] = function[
+                                        "box_plot"
+                                    ]["average"]
+                                    if match["real_confidence"] < (
+                                            100 - (distance * 100)
+                                    ):
                                         matches.remove(match)
                                         break
 
@@ -813,7 +873,7 @@ class AutoAnalysisDialog(BaseDialog):
                                             ] * 100
                                             confidence = symbol[
                                                 "real_confidence"
-                                            ] 
+                                            ]
 
                                             logger.info(
                                                 f"Found similar function "
@@ -1101,6 +1161,8 @@ class AutoAnalysisDialog(BaseDialog):
     def _rename_functions(self, *args):
         data = self.ui.resultsTable.model().get_datas()
 
+        to_process = []
+
         # TODO: possibly add a progress bar here
         for row in range(len(data)):
             if (
@@ -1113,16 +1175,47 @@ class AutoAnalysisDialog(BaseDialog):
                 nnfn = symbol['nearest_neighbor_function_name_mangled']
                 original_addr = symbol['function_addr'] + self.base_addr
 
-                if IDAUtils.set_name(
-                        original_addr,
-                        nnfn,
-                ):
-                    if signature is not None:
-                        apply_data_types(
-                            row,
-                            original_addr,
-                            self.ui.resultsTable,
-                        )
+                to_process.append({
+                    "row": row,
+                    "nnfn": nnfn,
+                    "original_addr": original_addr,
+                    "signature": signature,
+                })
+
+        # Show progress and disable UI
+        show_wait_box("HIDECANCEL\nGetting data types…")
+        self.ui.progressBar.show()
+        self.ui.progressBar.setProperty("maximum", 100)
+        self.ui.progressBar.setProperty("value", 0)
+        self.ui.renameButton.setEnabled(False)
+
+        # Create executor and submit task
+        self._apply_types_executor = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="fetch-datatypes")
+
+        deci = DecompilerInterface.discover(force_decompiler="ida")
+
+        def apply_task() -> None:
+            """Apply the function rename and data types"""
+            return apply_multiple_data_types(
+                to_process,
+                deci=deci,
+                progress_cb=self._fetch_progress_callback,
+                # We will handle completion in the main thread
+                complete_cb=None
+            )
+
+        # Submit the task
+        self._apply_types_future = self._apply_types_executor.submit(
+            apply_task
+        )
+
+        # Start timer to check completion
+        self._apply_types_timer = QTimer()
+        self._apply_types_timer.timeout.connect(
+            self._check_apply_types_completion
+        )
+        self._apply_types_timer.start(100)  # Check every 100ms
 
         # close the dialog
         inmain(self.close)
