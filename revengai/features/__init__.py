@@ -1,5 +1,6 @@
 import abc
 import logging
+import re
 from concurrent.futures import as_completed, ThreadPoolExecutor
 from itertools import islice
 from os.path import dirname, join
@@ -65,103 +66,34 @@ class BaseDialog(QDialog):
         return all(value is None for value in query.values())
 
     def _parse_search_query(self, query):
-        """
-        Parse a search query with special selectors.
-
-        Args:
-            query (str): The search query string to parse
-
-        Returns:
-            dict: A dictionary containing parsed query components
-
-        Raises:
-            ValueError: If multiple non-tag selectors or a selector with raw
-                        query are used
-        """
-        # Initialize the result dictionary with default empty values
-        result = {
-            'query': None,
-            'sha_256_hash': None,
-            'tags': None,
-            'binary_name': None,
-            'collection_name': None,
-            'function_name': None,
-            'model_name': None
-        }
-
-        # List of possible selectors (excluding 'tag')
-        single_selectors = [
-            'sha_256_hash',
-            'binary_name',
-            'collection_name',
-            'function_name',
-            'model_name'
+        patterns = [
+            "sha_256_hash",
+            "tag",
+            "binary_name",
+            "collection_name",
+            "function_name",
+            "model_name"
         ]
 
-        # Parse selector-based queries
-        def extract_selector_value(query, selector):
-            """Helper function to extract selector value"""
-            selector_pattern = f"{selector}:"
-            selector_match = query.find(selector_pattern)
+        key_regex = "|".join(re.escape(p) for p in patterns)
+        regex = rf'\b({key_regex}):\s*([^:]+?)(?=,\s*(?:{key_regex}):|$)'
 
-            if selector_match != -1:
-                # Extract the value after the selector
-                start = selector_match + len(selector_pattern)
-                end = query.find(' ', start)
+        matches = re.findall(regex, query)
 
-                # If no space found, take till the end of string
-                if end == -1:
-                    end = len(query)
+        result = {key: None for key in patterns + ["query"]}
 
-                # Extract the value and the full selector part
-                value = query[start:end].strip()
-                full_selector_part = query[selector_match:end].strip()
+        for key, value in matches:
+            values = [v.strip() for v in value.split(',')]
+            result[key] = values if len(values) > 1 or key == "tag" else values[0]
 
-                return value, full_selector_part
+        if not any(value is not None for value in result.values()):
+            result["query"] = query
 
-            return None, None
+        if result["tag"]:
+            result["tags"] = result["tag"]
+            del result["tag"]
 
-        # Process tags first (can be multiple)
-        def process_tags(query):
-            tags = []
-            while True:
-                tag_value, tag_part = extract_selector_value(query, 'tag')
-                if not tag_value:
-                    break
-                tags.append(tag_value)
-                query = query.replace(tag_part, '').strip()
-            if len(tags) == 0:
-                tags = None
-            return tags, query
-
-        # Process tags
-        result['tags'], query = process_tags(query)
-
-        # Process other single selectors
-        for selector in single_selectors:
-            value, selector_part = extract_selector_value(query, selector)
-
-            if value:
-                # Check if this selector was already set
-                if result[selector] is not None:
-                    raise ValueError(
-                        f"Only one {selector} selector can be used.")
-
-                result[selector] = value
-                query = query.replace(selector_part, '').strip()
-
-        # Validation checks for additional text
-        query = query.strip()
-        if query:
-            # If query is not empty after removing selectors
-            if any(result[selector] is not None for selector in
-                   single_selectors):
-                raise ValueError(
-                    "Selector cannot be used with additional text.")
-            # If no other selectors, treat as raw query
-            result['query'] = query
-
-        return result
+        return result   
 
     def showEvent(self, event):
         super(BaseDialog, self).showEvent(event)
