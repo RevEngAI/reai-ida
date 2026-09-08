@@ -140,7 +140,17 @@ class AuthService:
             if hasattr(self.sdk_config, "user_agent"):
                 api_client.user_agent = self.sdk_config.user_agent
             try:
-                self._user = IAMUsersApi(api_client).get_me()
+                # The generated IAM operation advertises bearerAuth only, but
+                # the plugin authenticates with the API key accepted by
+                # /v2/config. Pass that configured auth setting explicitly so
+                # /v2/iam/me receives the same Authorization header.
+                api_key_auth = self.sdk_config.auth_settings().get("APIKey")
+                if api_key_auth:
+                    self._user = IAMUsersApi(api_client).get_me(
+                        _request_auth=api_key_auth
+                    )
+                else:
+                    self._user = IAMUsersApi(api_client).get_me()
             except Exception as e:
                 logger.error(f"RevEng.AI: Failed to fetch current user: {e}")
                 self._user = None
