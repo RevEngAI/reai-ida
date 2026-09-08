@@ -7,18 +7,14 @@ from revengai.exceptions import NotFoundException
 from loguru import logger
 
 from reai_toolkit.app.core.netstore_service import SimpleNetStore
-from revengai import (
-    FunctionsDataTypesApi,
-    FunctionDataTypesList,
-    BaseResponseFunctionDataTypesList
-)
+from revengai import FunctionDataTypesList
 
 from reai_toolkit.app.interfaces.thread_service import IThreadService
+from reai_toolkit.app.services.data_types.v3_data_types import (
+    list_function_signatures,
+    to_legacy_function_data_types,
+)
 from reai_toolkit.app.transformations.import_data_types import ImportDataTypes
-
-
-FUNCTION_IDS_BATCH_SIZE = 50
-
 
 @dataclass
 class DataTypesImportResult:
@@ -60,12 +56,11 @@ class ImportDataTypesService(IThreadService):
             logger.error(f"RevEng.AI: failed to sync function data types: {e}")
             return DataTypesImportResult(error=f"Failed to sync function data types: {e}")
 
-        present_ids: set[int] = (
-            {item.function_id for item in response.items if item.data_types is not None}
-            if response
-            else set()
-        )
-        remote_absent_ids: set[int] = set(matched_function_ids) - present_ids
+        # The v3 API distinguishes "no extracted signature" from a missing
+        # function.  A missing signature is not a reason to send the old v2
+        # data-type blob back to the server, so do not turn it into a local
+        # push candidate.
+        remote_absent_ids: set[int] = set()
 
         apply_failed_ids: set[int] = set()
         if response:
@@ -82,15 +77,11 @@ class ImportDataTypesService(IThreadService):
         if not function_ids:
             return None
 
-        items = []
         with self.yield_api_client(sdk_config=self.sdk_config) as api_client:
-            client = FunctionsDataTypesApi(api_client=api_client)
-            for start in range(0, len(function_ids), FUNCTION_IDS_BATCH_SIZE):
-                chunk = function_ids[start:start + FUNCTION_IDS_BATCH_SIZE]
-                response: BaseResponseFunctionDataTypesList = (
-                    client.list_function_data_types_for_functions(function_ids=chunk)  # type: ignore
-                )
-                if response.status and response.data:
-                    items.extend(response.data.items)
+            response = list_function_signatures(
+                api_client,
+                function_ids,
+                include_data_types=True,
+            )
 
-        return FunctionDataTypesList(items=items)
+        return to_legacy_function_data_types(response)

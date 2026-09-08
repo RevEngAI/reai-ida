@@ -10,14 +10,9 @@ from loguru import logger
 
 from revengai import (
     FunctionArgument,
-    BaseResponseFunctionDataTypesList,
-    BatchUpdateDataTypesInputBody,
-    BatchUpdateDataTypesItem,
-    BatchUpdateDataTypesOutputBody,
     Configuration,
     FunctionDependency,
     FunctionInfo,
-    FunctionsDataTypesApi,
     FunctionType,
 )
 from revengai import ApiException
@@ -26,6 +21,11 @@ from revengai.models.function_stack_variable import FunctionStackVariable as Sdk
 
 from reai_toolkit.app.core.netstore_service import SimpleNetStore
 from reai_toolkit.app.interfaces.thread_service import IThreadService
+from reai_toolkit.app.services.data_types.v3_data_types import (
+    build_signature_update,
+    list_function_signatures,
+    update_function_signature,
+)
 
 
 @execute_read
@@ -62,8 +62,6 @@ class VariableSyncService(IThreadService):
     _q: queue.Queue[Tuple[int, int, object]] = queue.Queue()
     _last_ts: dict[tuple, float] = {}
     _debounce_ms: int = 400
-    _max_retries: int = 3
-    _type_batch_size: int = 50
 
     def __init__(self, netstore_service: SimpleNetStore, sdk_config: Configuration):
         super().__init__(netstore_service=netstore_service, sdk_config=sdk_config)
@@ -118,49 +116,44 @@ class VariableSyncService(IThreadService):
             logger.debug("RevEng.AI: no analysis id; skipping data types push")
             return
 
-        for _ in range(self._max_retries):
-            fetched = self._fetch_function_info(function_id)
-            if fetched is None:
-                # First write for this function: build the object from current state.
-                info = self._build_function_info(func_addr)
-                if info is None:
-                    logger.debug(f"RevEng.AI: could not build data types for function {function_id}; skipping push")
-                    return
-                version = 0
-            else:
-                info, version = fetched
-                if not self._patch(info, artifact):
-                    logger.debug(f"RevEng.AI: no data types change for function {function_id}; skipping push")
-                    return
-
-            status: str = self._push(function_id, analysis_id, info, version)
-            # A concurrent edit moved the stored version on; re-fetch and reapply.
-            if status == "version_conflict":
-                time.sleep(0.2)
-                continue
-            if status == "updated":
-                logger.info(f"RevEng.AI: pushed data types for function {function_id}")
-            else:
-                logger.warning(
-                    f"RevEng.AI: data types update for function {function_id} returned {status}"
-                )
+        # The v3 API has no equivalent of the old opaque function-data-types
+        # blob or its optimistic version field.  It does support full function
+        # signature updates, but stack-variable edits have no v3 write
+        # endpoint.  Do not send a false success for those edits.
+        if isinstance(artifact, StackVariable):
+            logger.debug(
+                "RevEng.AI: v3 API has no stack-variable write endpoint; "
+                f"skipping local stack variable sync for function {function_id}"
+            )
             return
 
-    def _fetch_function_info(self, function_id: int) -> Optional[Tuple[FunctionInfo, int]]:
-        with self.yield_api_client(sdk_config=self.sdk_config) as api_client:
-            client = FunctionsDataTypesApi(api_client)
-            resp: BaseResponseFunctionDataTypesList = (
-                client.list_function_data_types_for_functions(function_ids=[function_id])  # type: ignore
-            )
+        info = self._build_function_info(func_addr)
+        if info is None:
+            logger.debug(f"RevEng.AI: could not build signature for function {function_id}; skipping push")
+            return
 
-        if not resp.status or not resp.data:
-            return None
+        try:
+            with self.yield_api_client(sdk_config=self.sdk_config) as api_client:
+                response = list_function_signatures(
+                    api_client,
+                    [function_id],
+                    include_data_types=True,
+                )
+                body = build_signature_update(response, function_id, function_info=info)
+                if body is None:
+                    logger.debug(
+                        f"RevEng.AI: no v3 signature available for function {function_id}; skipping push"
+                    )
+                    return
+                update_function_signature(api_client, analysis_id, function_id, body)
+        except ApiException as e:
+            logger.error(f"RevEng.AI: failed to push function signature: HTTP {e.status} {e.reason}")
+            return
+        except Exception as e:
+            logger.error(f"RevEng.AI: failed to push function signature: {e}")
+            return
 
-        for item in resp.data.items:
-            if item.function_id == function_id and item.data_types is not None:
-                return item.data_types, (item.data_types_version or 0)
-
-        return None
+        logger.info(f"RevEng.AI: pushed function signature for function {function_id}")
 
     def _build_function_info(self, func_addr: int) -> Optional[FunctionInfo]:
         if self._deci is None:
@@ -259,27 +252,6 @@ class VariableSyncService(IThreadService):
         tokens = [tok for tok in cleaned.split() if tok not in keywords]
         return tokens[-1] if tokens else None
 
-    def _push(self, function_id: int, analysis_id: int, info: FunctionInfo, version: int) -> str:
-        body = BatchUpdateDataTypesInputBody(
-            functions=[
-                BatchUpdateDataTypesItem(
-                    function_id=function_id,
-                    data_types=info.to_dict(),
-                    data_types_version=version,
-                )
-            ]
-        )
-        with self.yield_api_client(sdk_config=self.sdk_config) as api_client:
-            client = FunctionsDataTypesApi(api_client)
-            out: BatchUpdateDataTypesOutputBody = client.batch_update_function_data_types(
-                analysis_id=analysis_id,
-                batch_update_data_types_input_body=body,
-            )
-
-        if out.results:
-            return out.results[0].status
-        return "error"
-
     def _patch(self, info: FunctionInfo, artifact: object) -> bool:
         ft = info.func_types
         if ft is None:
@@ -339,74 +311,30 @@ class VariableSyncService(IThreadService):
                 return 0
 
         base: int = self._deci.binary_base_addr
-        infos: dict[int, FunctionInfo] = {}
+        updated = 0
         for function_id, ea in targets.items():
             try:
                 info = self._build_function_info(ea - base)
+                if info is None:
+                    continue
+                with self.yield_api_client(sdk_config=self.sdk_config) as api_client:
+                    response = list_function_signatures(
+                        api_client,
+                        [function_id],
+                        include_data_types=True,
+                    )
+                    body = build_signature_update(response, function_id, function_info=info)
+                    if body is None:
+                        continue
+                    update_function_signature(api_client, analysis_id, function_id, body)
+                updated += 1
+            except ApiException as e:
+                logger.warning(
+                    f"RevEng.AI: skipped v3 signature push for function {function_id}: "
+                    f"HTTP {e.status} {e.reason}"
+                )
             except Exception as e:
-                logger.debug(f"RevEng.AI: could not build local types for function {function_id}: {e}")
-                continue
-            if info is not None:
-                infos[function_id] = info
-
-        if not infos:
-            return 0
-
-        versions: dict[int, int] = self._fetch_type_versions(list(infos.keys()))
-        pending: dict[int, FunctionInfo] = dict(infos)
-        updated: int = 0
-
-        for _ in range(self._max_retries):
-            if not pending:
-                break
-            conflicts: dict[int, FunctionInfo] = {}
-            items = list(pending.items())
-            for start in range(0, len(items), self._type_batch_size):
-                chunk = items[start:start + self._type_batch_size]
-                for result in self._push_types_batch(analysis_id, chunk, versions):
-                    if result.status == "updated":
-                        updated += 1
-                    elif result.status == "version_conflict":
-                        conflicts[result.function_id] = infos[result.function_id]
-                    else:
-                        logger.warning(
-                            f"RevEng.AI: type push for function {result.function_id} returned {result.status}"
-                        )
-            pending = conflicts
-            if pending:
-                versions.update(self._fetch_type_versions(list(pending.keys())))
-
+                logger.warning(
+                    f"RevEng.AI: skipped v3 signature push for function {function_id}: {e}"
+                )
         return updated
-
-    def _fetch_type_versions(self, function_ids: list[int]) -> dict[int, int]:
-        versions: dict[int, int] = {}
-        with self.yield_api_client(sdk_config=self.sdk_config) as api_client:
-            client = FunctionsDataTypesApi(api_client)
-            for start in range(0, len(function_ids), self._type_batch_size):
-                chunk = function_ids[start:start + self._type_batch_size]
-                resp: BaseResponseFunctionDataTypesList = (
-                    client.list_function_data_types_for_functions(function_ids=chunk)  # type: ignore
-                )
-                if resp.status and resp.data:
-                    for item in resp.data.items:
-                        versions[item.function_id] = item.data_types_version or 0
-        return versions
-
-    def _push_types_batch(self, analysis_id: int, items: list, versions: dict[int, int]) -> list:
-        body = BatchUpdateDataTypesInputBody(
-            functions=[
-                BatchUpdateDataTypesItem(
-                    function_id=function_id,
-                    data_types=info.to_dict(),
-                    data_types_version=versions.get(function_id, 0),
-                )
-                for function_id, info in items
-            ]
-        )
-        with self.yield_api_client(sdk_config=self.sdk_config) as api_client:
-            client = FunctionsDataTypesApi(api_client)
-            out: BatchUpdateDataTypesOutputBody = client.batch_update_function_data_types(
-                analysis_id=analysis_id,
-                batch_update_data_types_input_body=body,
-            )
-        return out.results or []
