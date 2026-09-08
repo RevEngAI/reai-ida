@@ -121,6 +121,16 @@ def test_get_me_returns_user_and_caches(service, iam_api):
     iam_api.get_me.assert_called_once()
 
 
+def test_get_me_uses_configured_api_key_auth(service, iam_api):
+    iam_api.get_me.return_value = _user("ENTHUSIAST")
+
+    service.get_me()
+
+    iam_api.get_me.assert_called_once_with(
+        _request_auth=service.sdk_config.auth_settings()["APIKey"]
+    )
+
+
 def test_get_me_force_refresh_refetches(service, iam_api):
     iam_api.get_me.side_effect = [_user("ENTHUSIAST"), _user("REVERSER")]
 
