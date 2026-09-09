@@ -1,31 +1,48 @@
 import queue
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from libbs.artifacts import Function, FunctionArgument, FunctionHeader, StackVariable
-from revengai import (
-    Argument,
-    FunctionInfo,
-    FunctionType,
+from libbs.artifacts import (
+    Function,
+    FunctionArgument,
+    FunctionHeader,
+    StackVariable,
+    Struct,
+    StructMember,
+    Typedef,
 )
-from revengai.models.function_header import FunctionHeader as SdkFunctionHeader
-from revengai.models.stack_variable import StackVariable as SdkStackVariable
+from revengai.exceptions import NotFoundException
 
 from reai_toolkit.app.services.variable_sync import variable_sync_service as svc_mod
 from reai_toolkit.app.services.variable_sync.variable_sync_service import (
     VariableSyncService,
 )
 
+ANALYSIS = 7
+
 
 @pytest.fixture
 def netstore():
-    return MagicMock()
+    store = MagicMock()
+    store.get_analysis_id.return_value = ANALYSIS
+    return store
 
 
 @pytest.fixture
-def service(netstore):
-    svc = VariableSyncService(netstore_service=netstore, sdk_config=MagicMock())
+def catalogue():
+    cat = MagicMock()
+    cat.ensure.return_value = {}
+    cat.resolve.return_value = None
+    return cat
+
+
+@pytest.fixture
+def service(netstore, catalogue):
+    svc = VariableSyncService(
+        netstore_service=netstore,
+        sdk_config=MagicMock(),
+        data_types_catalogue=catalogue,
+    )
     VariableSyncService._q = queue.Queue()
     VariableSyncService._last_ts = {}
     return svc
@@ -34,376 +51,196 @@ def service(netstore):
 @pytest.fixture
 def sdk(mocker):
     mocker.patch.object(VariableSyncService, "yield_api_client")
-    api_class = mocker.patch.object(svc_mod, "FunctionsDataTypesApi")
-    api_inst = MagicMock()
-    api_class.return_value = api_inst
-    return api_inst
+    api_class = mocker.patch.object(svc_mod, "DataTypesApi")
+    api = MagicMock()
+    api_class.return_value = api
+    return api
 
 
-def _sdk_stack_var(offset: int, name: str, type_: str) -> SdkStackVariable:
-    return SdkStackVariable.model_construct(
-        last_change=None, offset=offset, name=name, type=type_, size=8, addr=0x1000
-    )
-
-
-def _sdk_arg(offset: int, name: str, type_: str) -> Argument:
-    return Argument.model_construct(
-        last_change=None, offset=offset, name=name, type=type_, size=8
-    )
-
-
-def _function_info(stack_vars=None, args=None, ret_type="void") -> FunctionInfo:
-    header = SdkFunctionHeader.model_construct(
-        last_change=None,
-        name="f",
+def _function(args=None, ret="int", stack_vars=None):
+    return Function(
         addr=0x1000,
-        type=ret_type,
-        args=args or {},
-    )
-    func_types = FunctionType.model_construct(
-        last_change=None,
-        addr=0x1000,
-        size=10,
-        header=header,
+        header=FunctionHeader(name="f", addr=0x1000, type_=ret, args=args or {}),
         stack_vars=stack_vars or {},
-        name="f",
-        type=ret_type,
-        artifact_type="Function",
-    )
-    return FunctionInfo.model_construct(func_types=func_types, func_deps=[])
-
-
-def test_patch_stack_var_matches_by_offset(service):
-    info = _function_info(stack_vars={"-0x20": _sdk_stack_var(-32, "local_20", "char")})
-
-    changed = service._patch(info, StackVariable(stack_offset=-32, name="counter", type_="int", size=4, addr=0x0))
-
-    assert changed is True
-    entry = info.func_types.stack_vars["-0x20"]
-    assert entry.name == "counter"
-    assert entry.type == "int"
-
-
-def test_patch_stack_var_no_offset_match_is_noop(service):
-    info = _function_info(stack_vars={"-0x20": _sdk_stack_var(-32, "local_20", "char")})
-
-    changed = service._patch(info, StackVariable(stack_offset=-99, name="x", type_="int", size=4, addr=0x0))
-
-    assert changed is False
-    assert info.func_types.stack_vars["-0x20"].name == "local_20"
-
-
-def test_patch_header_updates_arg_and_return_type(service):
-    info = _function_info(args={"0x0": _sdk_arg(0, "a1", "int")}, ret_type="void")
-    fheader = FunctionHeader(
-        name="f", addr=0x0, type_="int", args={0: FunctionArgument(offset=0, name="count", type_="size_t", size=8)}
     )
 
-    changed = service._patch(info, fheader)
 
-    assert changed is True
-    assert info.func_types.header.args["0x0"].name == "count"
-    assert info.func_types.header.args["0x0"].type == "size_t"
-    assert info.func_types.header.type == "int"
-    assert info.func_types.type == "int"
+def _arg(offset, name, type_):
+    return FunctionArgument(offset=offset, name=name, type_=type_, size=8)
 
 
-def test_push_local_types_batch_noop_without_targets_or_analysis(service):
-    service._deci = MagicMock()
-    assert service.push_local_function_types_batch({}, analysis_id=1) == 0
-    assert service.push_local_function_types_batch({1: 0x1000}, analysis_id=None) == 0
-
-
-def test_push_local_types_batch_uses_version_zero_when_absent(service, sdk, mocker):
-    service._deci = MagicMock()
-    service._deci.binary_base_addr = 0x400000
-    build = mocker.patch.object(service, "_build_function_info", return_value=_function_info())
-    sdk.list_function_data_types_for_functions.return_value = MagicMock(
-        status=True, data=MagicMock(items=[])
-    )
-    out = MagicMock()
-    out.results = [SimpleNamespace(function_id=1, status="updated", data_types_version=1)]
-    sdk.batch_update_function_data_types.return_value = out
-
-    updated = service.push_local_function_types_batch({1: 0x401000}, analysis_id=9)
-
-    assert updated == 1
-    build.assert_called_once_with(0x401000 - 0x400000)
-    body = sdk.batch_update_function_data_types.call_args.kwargs[
-        "batch_update_data_types_input_body"
-    ]
-    assert body.functions[0].function_id == 1
-    assert body.functions[0].data_types_version == 0
-
-
-def test_push_local_types_batch_overwrites_with_remote_version(service, sdk, mocker):
-    service._deci = MagicMock()
-    service._deci.binary_base_addr = 0
-    mocker.patch.object(service, "_build_function_info", return_value=_function_info())
-    sdk.list_function_data_types_for_functions.return_value = MagicMock(
-        status=True,
-        data=MagicMock(items=[SimpleNamespace(function_id=1, data_types_version=5)]),
-    )
-    out = MagicMock()
-    out.results = [SimpleNamespace(function_id=1, status="updated", data_types_version=6)]
-    sdk.batch_update_function_data_types.return_value = out
-
-    service.push_local_function_types_batch({1: 0x1000}, analysis_id=9)
-
-    body = sdk.batch_update_function_data_types.call_args.kwargs[
-        "batch_update_data_types_input_body"
-    ]
-    assert body.functions[0].data_types_version == 5
-
-
-def test_push_local_types_batch_retries_on_version_conflict(service, sdk, mocker):
-    service._deci = MagicMock()
-    service._deci.binary_base_addr = 0
-    mocker.patch.object(service, "_build_function_info", return_value=_function_info())
-    sdk.list_function_data_types_for_functions.side_effect = [
-        MagicMock(
-            status=True,
-            data=MagicMock(items=[SimpleNamespace(function_id=1, data_types_version=1)]),
-        ),
-        MagicMock(
-            status=True,
-            data=MagicMock(items=[SimpleNamespace(function_id=1, data_types_version=2)]),
-        ),
-    ]
-    conflict = MagicMock()
-    conflict.results = [
-        SimpleNamespace(function_id=1, status="version_conflict", data_types_version=None)
-    ]
-    ok = MagicMock()
-    ok.results = [SimpleNamespace(function_id=1, status="updated", data_types_version=3)]
-    sdk.batch_update_function_data_types.side_effect = [conflict, ok]
-
-    updated = service.push_local_function_types_batch({1: 0x1000}, analysis_id=9)
-
-    assert updated == 1
-    assert sdk.batch_update_function_data_types.call_count == 2
-
-
-def test_resolve_type_builds_valid_function_info_dependency(service, mocker):
-    from libbs.artifacts import Typedef
-    from revengai import FunctionDependency, FunctionInfo
-
-    mocker.patch.object(
-        svc_mod, "_read_named_type", return_value=Typedef(name="u32", type_="unsigned int")
-    )
-
-    dep, referenced = service._resolve_type("u32")
-
-    assert isinstance(dep, FunctionDependency)
-    assert referenced == ["unsigned int"]
-    info = FunctionInfo(func_types=None, func_deps=[dep])
-    assert info.to_dict()["func_deps"][0] == {
-        "artifact_type": "Typedef",
-        "name": "u32",
-        "type": "unsigned int",
-    }
-
-
-def test_patch_stack_var_type_change_keeps_name(service):
-    info = _function_info(stack_vars={"-0x20": _sdk_stack_var(-32, "local_20", "char")})
-
-    changed = service._patch(info, StackVariable(stack_offset=-32, name=None, type_="int", size=4, addr=0x0))
-
-    assert changed is True
-    entry = info.func_types.stack_vars["-0x20"]
-    assert entry.name == "local_20"
-    assert entry.type == "int"
-
-
-def test_patch_header_arg_type_change_keeps_name(service):
-    info = _function_info(args={"0x0": _sdk_arg(0, "oldfile", "char *")}, ret_type="int")
-    fheader = FunctionHeader(
-        name=None, addr=0x0, type_=None, args={0: FunctionArgument(offset=0, name=None, type_="wchar_t *", size=8)}
-    )
-
-    changed = service._patch(info, fheader)
-
-    assert changed is True
-    assert info.func_types.header.args["0x0"].name == "oldfile"
-    assert info.func_types.header.args["0x0"].type == "wchar_t *"
-
-
-def test_patch_header_identical_is_noop(service):
-    info = _function_info(args={"0x0": _sdk_arg(0, "a1", "int")}, ret_type="void")
-    fheader = FunctionHeader(
-        name="f", addr=0x0, type_="void", args={0: FunctionArgument(offset=0, name="a1", type_="int", size=8)}
-    )
-
-    assert service._patch(info, fheader) is False
-
-
-def test_push_change_fetches_patches_and_pushes(service, sdk, netstore):
-    netstore.get_analysis_id.return_value = 7
-    info = _function_info(stack_vars={"-0x20": _sdk_stack_var(-32, "local_20", "char")})
-    fetched = MagicMock()
-    fetched.status = True
-    fetched.data.items = [
-        MagicMock(function_id=42, data_types=info, data_types_version=3)
-    ]
-    sdk.list_function_data_types_for_functions.return_value = fetched
-    sdk.batch_update_function_data_types.return_value = MagicMock(
-        results=[MagicMock(status="updated")]
-    )
-
-    service._push_change(42, 0x2668, StackVariable(stack_offset=-32, name="n", type_="int", size=4, addr=0x0))
-
-    sdk.batch_update_function_data_types.assert_called_once()
-    body = sdk.batch_update_function_data_types.call_args.kwargs[
-        "batch_update_data_types_input_body"
-    ]
-    item = body.functions[0]
-    assert item.function_id == 42
-    assert item.data_types_version == 3
-
-
-def test_push_change_skips_push_when_unchanged(service, sdk, netstore):
-    netstore.get_analysis_id.return_value = 7
-    info = _function_info(stack_vars={"-0x20": _sdk_stack_var(-32, "local_20", "char")})
-    fetched = MagicMock()
-    fetched.status = True
-    fetched.data.items = [
-        MagicMock(function_id=42, data_types=info, data_types_version=3)
-    ]
-    sdk.list_function_data_types_for_functions.return_value = fetched
-
-    service._push_change(42, 0x2668, StackVariable(stack_offset=-999, name="n", type_="int", size=4, addr=0x0))
-
-    sdk.batch_update_function_data_types.assert_not_called()
-
-
-def test_push_change_retries_on_version_conflict(service, sdk, netstore):
-    netstore.get_analysis_id.return_value = 7
-
-    def fresh_response():
-        info = _function_info(stack_vars={"-0x20": _sdk_stack_var(-32, "local_20", "char")})
-        resp = MagicMock()
-        resp.status = True
-        resp.data.items = [MagicMock(function_id=42, data_types=info, data_types_version=3)]
-        return resp
-
-    sdk.list_function_data_types_for_functions.side_effect = lambda function_ids: fresh_response()
-    sdk.batch_update_function_data_types.side_effect = [
-        MagicMock(results=[MagicMock(status="version_conflict")]),
-        MagicMock(results=[MagicMock(status="updated")]),
-    ]
-
-    service._push_change(42, 0x2668, StackVariable(stack_offset=-32, name="n", type_="int", size=4, addr=0x0))
-
-    assert sdk.batch_update_function_data_types.call_count == 2
-
-
-def test_push_change_builds_object_when_no_stored_types(service, sdk, netstore, mocker):
-    netstore.get_analysis_id.return_value = 7
-    empty = MagicMock()
-    empty.status = True
-    empty.data.items = []
-    sdk.list_function_data_types_for_functions.return_value = empty
-    sdk.batch_update_function_data_types.return_value = MagicMock(
-        results=[MagicMock(status="updated")]
-    )
-
-    func = Function(
-        addr=0x2668,
-        size=10,
-        name="relink",
-        header=FunctionHeader(
-            name="relink",
-            addr=0x2668,
-            type_="int",
-            args={0: FunctionArgument(offset=0, name="oldfile", type_="wchar_t *", size=8)},
-        ),
-        stack_vars={-32: StackVariable(stack_offset=-32, name="v2", type_="dev_t", size=8, addr=0x2668)},
-    )
+def _attach(service, mocker, func):
     service.attach_decompiler(MagicMock())
     mocker.patch.object(svc_mod, "_read_decompiler_function", return_value=func)
-
-    service._push_change(
-        2015112411,
-        0x2668,
-        FunctionHeader(name=None, addr=0x2668, type_=None, args={0: FunctionArgument(offset=0, name=None, type_="wchar_t *", size=8)}),
-    )
-
-    sdk.batch_update_function_data_types.assert_called_once()
-    body = sdk.batch_update_function_data_types.call_args.kwargs[
-        "batch_update_data_types_input_body"
-    ]
-    item = body.functions[0]
-    assert item.function_id == 2015112411
-    assert item.data_types_version == 0
-    assert item.data_types["func_types"]["header"]["args"]["0x0"]["name"] == "oldfile"
-    assert item.data_types["func_types"]["header"]["args"]["0x0"]["type"] == "wchar_t *"
-    assert item.data_types["func_types"]["stack_vars"]["-0x20"]["name"] == "v2"
-
-
-def test_push_change_skips_build_when_no_decompiler(service, sdk, netstore):
-    netstore.get_analysis_id.return_value = 7
-    empty = MagicMock()
-    empty.status = True
-    empty.data.items = []
-    sdk.list_function_data_types_for_functions.return_value = empty
-
-    service._push_change(42, 0x2668, StackVariable(stack_offset=-32, name="n", type_="int", size=4, addr=0x0))
-
-    sdk.batch_update_function_data_types.assert_not_called()
-
-
-def test_collect_func_deps_resolves_typedef_chain(service, mocker):
-    from libbs.artifacts import Typedef
-
-    service.attach_decompiler(MagicMock())
-    func_type = _function_info(args={"0x0": _sdk_arg(0, "d", "dev_t")}, ret_type="int").func_types
-
-    chain = {
-        "dev_t": Typedef(name="dev_t", type_="__dev_t"),
-        "__dev_t": Typedef(name="__dev_t", type_="unsigned long"),
-    }
-    mocker.patch.object(svc_mod, "_read_named_type", side_effect=lambda deci, name: chain.get(name))
-
-    deps = service._collect_func_deps(func_type)
-
-    assert sorted(d.name for d in deps) == ["__dev_t", "dev_t"]
-    assert all(d.artifact_type == "Typedef" for d in deps)
-
-
-def test_collect_func_deps_resolves_struct_members(service, mocker):
-    from libbs.artifacts import Struct, StructMember, Typedef
-
-    service.attach_decompiler(MagicMock())
-    func_type = _function_info(args={"0x0": _sdk_arg(0, "p", "mystruct *")}, ret_type="int").func_types
-
-    types = {
-        "mystruct": Struct(
-            name="mystruct", size=8, members={0: StructMember(name="x", offset=0, type_="myint", size=4)}
-        ),
-        "myint": Typedef(name="myint", type_="int"),
-    }
-    mocker.patch.object(svc_mod, "_read_named_type", side_effect=lambda deci, name: types.get(name))
-
-    deps = service._collect_func_deps(func_type)
-
-    by_name = {d.name: d for d in deps}
-    assert set(by_name) == {"mystruct", "myint"}
-    assert by_name["mystruct"].members["0x0"]["type"] == "myint"
 
 
 def test_push_change_no_analysis_id_does_nothing(service, sdk, netstore):
     netstore.get_analysis_id.return_value = None
 
-    service._push_change(42, 0x2668, StackVariable(stack_offset=-32, name="n", type_="int", size=4, addr=0x0))
+    service._push_change(1, 0x1000)
 
-    sdk.list_function_data_types_for_functions.assert_not_called()
+    sdk.v3_update_function_signature.assert_not_called()
+
+
+def test_push_change_skips_when_no_decompiler(service, sdk):
+    service._push_change(1, 0x1000)
+
+    sdk.v3_update_function_signature.assert_not_called()
+
+
+def test_push_change_puts_signature(service, sdk, mocker, catalogue):
+    catalogue.resolve.side_effect = lambda _a, name: {"int": 1, "char *": 2}.get(name)
+    _attach(service, mocker, _function(args={0: _arg(0, "count", "int")}, ret="int"))
+
+    service._push_change(42, 0x1000)
+
+    call = sdk.v3_update_function_signature.call_args.kwargs
+    assert call["analysis_id"] == ANALYSIS
+    assert call["function_id"] == 42
+    body = call["update_function_signature_input_body"]
+    assert body["return_data_type_id"] == 1
+    assert body["parameters"] == [{"ordinal": 0, "name": "count", "data_type_id": 1}]
+
+
+def test_parameter_ordinals_match_list_index(service, sdk, mocker, catalogue):
+    catalogue.resolve.return_value = 1
+    args = {2: _arg(2, "c", "int"), 0: _arg(0, "a", "int"), 1: _arg(1, "b", "int")}
+    _attach(service, mocker, _function(args=args))
+
+    service._push_change(42, 0x1000)
+
+    body = sdk.v3_update_function_signature.call_args.kwargs[
+        "update_function_signature_input_body"
+    ]
+    assert [p["ordinal"] for p in body["parameters"]] == [0, 1, 2]
+    assert [p["name"] for p in body["parameters"]] == ["a", "b", "c"]
+
+
+def test_unresolved_type_is_sent_as_none(service, sdk, mocker, catalogue):
+    catalogue.resolve.return_value = None
+    _attach(service, mocker, _function(args={0: _arg(0, "x", "MysteryType")}, ret=None))
+
+    service._push_change(42, 0x1000)
+
+    body = sdk.v3_update_function_signature.call_args.kwargs[
+        "update_function_signature_input_body"
+    ]
+    assert body["parameters"][0]["data_type_id"] is None
+    assert body["return_data_type_id"] is None
+
+
+def test_not_found_is_treated_as_nothing_to_edit(service, sdk, mocker, caplog):
+    sdk.v3_update_function_signature.side_effect = NotFoundException(
+        status=404, reason="Not Found"
+    )
+    _attach(service, mocker, _function())
+
+    service._push_change(42, 0x1000)
+
+    assert sdk.v3_update_function_signature.called
+
+
+def test_ensure_is_given_the_local_type_closure(service, sdk, mocker, catalogue):
+    node = Struct(
+        name="Node",
+        size=8,
+        members={0: StructMember(name="next", offset=0, type_="Alias", size=8)},
+    )
+    alias = Typedef(name="Alias", type_="int")
+    named = {"Node": node, "Alias": alias}
+    mocker.patch.object(
+        svc_mod, "_read_named_type", side_effect=lambda _d, name: named.get(name)
+    )
+    _attach(service, mocker, _function(args={0: _arg(0, "n", "Node *")}, ret="int"))
+
+    service._push_change(42, 0x1000)
+
+    passed = catalogue.ensure.call_args.args[1]
+    assert set(passed) == {"Node", "Alias"}
+
+
+def test_stack_variable_types_reach_the_catalogue(service, sdk, mocker, catalogue):
+    local = Struct(name="Local", size=4, members={})
+    mocker.patch.object(
+        svc_mod, "_read_named_type", side_effect=lambda _d, name: {"Local": local}.get(name)
+    )
+    stack_vars = {
+        0: StackVariable(stack_offset=0, name="v", type_="Local", size=4, addr=0x1000)
+    }
+    _attach(service, mocker, _function(stack_vars=stack_vars, ret=None))
+
+    service._push_change(42, 0x1000)
+
+    passed = catalogue.ensure.call_args.args[1]
+    assert "Local" in passed
+
+
+def test_type_closure_is_capped(service, sdk, mocker, catalogue):
+    def endless(_deci, name):
+        index = int(name[1:]) if name[1:].isdigit() else 0
+        return Typedef(name=name, type_=f"T{index + 1}")
+
+    mocker.patch.object(svc_mod, "_read_named_type", side_effect=endless)
+    _attach(service, mocker, _function(args={0: _arg(0, "x", "T0")}, ret=None))
+
+    service._push_change(42, 0x1000)
+
+    passed = catalogue.ensure.call_args.args[1]
+    assert len(passed) == svc_mod.MAX_TYPE_DEPENDENCIES
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("Foo *", "Foo"),
+        ("const struct Bar *", "Bar"),
+        ("unsigned int", "int"),
+        ("char[16]", "char"),
+        ("", None),
+        (None, None),
+    ],
+)
+def test_base_type_name(raw, expected):
+    assert VariableSyncService._base_type_name(raw) == expected
+
+
+def test_push_local_types_batch_noop_without_targets_or_analysis(service, sdk):
+    assert service.push_local_function_types_batch({}, ANALYSIS) == 0
+    assert service.push_local_function_types_batch({1: 0x1000}, None) == 0
+    sdk.v3_update_function_signature.assert_not_called()
+
+
+def test_push_local_types_batch_counts_successful_puts(service, sdk, mocker, catalogue):
+    catalogue.resolve.return_value = 1
+    deci = MagicMock()
+    deci.binary_base_addr = 0
+    service.attach_decompiler(deci)
+    mocker.patch.object(svc_mod, "_read_decompiler_function", return_value=_function())
+
+    assert service.push_local_function_types_batch({1: 0x1000, 2: 0x2000}, ANALYSIS) == 2
+    assert sdk.v3_update_function_signature.call_count == 2
+
+
+def test_push_local_types_batch_skips_functions_without_a_stored_signature(
+    service, sdk, mocker, catalogue
+):
+    sdk.v3_update_function_signature.side_effect = [
+        None,
+        NotFoundException(status=404, reason="Not Found"),
+    ]
+    deci = MagicMock()
+    deci.binary_base_addr = 0
+    service.attach_decompiler(deci)
+    mocker.patch.object(svc_mod, "_read_decompiler_function", return_value=_function())
+
+    assert service.push_local_function_types_batch({1: 0x1000, 2: 0x2000}, ANALYSIS) == 1
 
 
 def test_enqueue_change_debounces_rapid_duplicates(service, mocker):
-    mocker.patch.object(service, "_start_worker_if_needed")
-    svar = StackVariable(stack_offset=-32, name="a", type_="int", size=4, addr=0x0)
+    mocker.patch.object(VariableSyncService, "_start_worker_if_needed")
+    header = FunctionHeader(name="f", addr=0x1000)
 
-    service.enqueue_change(42, 0x2668, svar)
-    service.enqueue_change(42, 0x2668, svar)
+    service.enqueue_change(1, 0x1000, header)
+    service.enqueue_change(1, 0x1000, header)
 
     assert service._q.qsize() == 1
