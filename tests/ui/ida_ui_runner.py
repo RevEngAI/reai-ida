@@ -25,7 +25,6 @@ def _add_paths() -> None:
 
 
 def _run(report: dict) -> None:
-    from types import SimpleNamespace
     from unittest.mock import MagicMock
 
     import ida_hexrays
@@ -33,21 +32,13 @@ def _run(report: dict) -> None:
     import idautils
     import idc
 
-    from revengai import (
-        FunctionArgument,
-        FunctionDataTypesList,
-        FunctionDataTypesListItem,
-        FunctionHeader,
-        FunctionInfo,
-        FunctionType,
-        Structure,
-        StructureMember,
-    )
-
     from reai_toolkit.app.services.variable_sync.variable_sync_service import (
         _read_decompiler_function,
     )
-    from reai_toolkit.app.transformations.import_data_types import ImportDataTypes
+    from reai_toolkit.app.transformations.import_data_types import (
+        FunctionSignatures,
+        ImportDataTypes,
+    )
 
     if not ida_hexrays.init_hexrays_plugin():
         report["errors"].append("hexrays unavailable")
@@ -84,36 +75,47 @@ def _run(report: dict) -> None:
     recorder.hook()
     report["screen_ea_before"] = idc.get_screen_ea()
     try:
-        struct_dep = Structure(
-            name="ReaiUiTestStruct",
-            size=8,
-            members={"0x0": StructureMember(name="field0", offset=0, type="int", size=4)},
-        )
+        data_types = {
+            "1": {"data_type_id": 1, "name": "int", "kind": "BASE", "size": 4},
+            "2": {
+                "data_type_id": 2,
+                "name": "ReaiUiTestStruct",
+                "kind": "STRUCT",
+                "size": 8,
+                "definition": {
+                    "members": [
+                        {"name": "field0", "offset": 0, "size": 4, "data_type_id": 1}
+                    ]
+                },
+            },
+            "3": {
+                "data_type_id": 3,
+                "name": "ReaiUiTestStruct *",
+                "kind": "POINTER",
+                "size": 8,
+                "definition": {"pointee_data_type_id": 2},
+            },
+        }
         items = []
         mapping: dict[int, int] = {}
         for fid, ea in enumerate(targets, start=1):
-            args = {
-                "0x0": FunctionArgument(name="a", offset=0, size=4, type="int"),
-                "0x1": FunctionArgument(name="b", offset=1, size=8, type="ReaiUiTestStruct *"),
-            }
-            header = FunctionHeader(addr=ea, args=args, name=f"reai_ui_{fid}", type="int")
-            func_types = FunctionType(
-                addr=ea, header=header, name=f"reai_ui_{fid}", size=16, type="int"
-            )
             items.append(
-                FunctionDataTypesListItem.model_construct(
-                    function_id=fid,
-                    data_types=FunctionInfo.model_construct(
-                        func_deps=[SimpleNamespace(actual_instance=struct_dep)],
-                        func_types=func_types,
-                    ),
-                )
+                {
+                    "function_id": fid,
+                    "function_name": f"reai_ui_{fid}",
+                    "has_signature": True,
+                    "parameters": [
+                        {"ordinal": 0, "name": "a", "data_type_id": 1},
+                        {"ordinal": 1, "name": "b", "data_type_id": 3},
+                    ],
+                    "return_data_type_id": 1,
+                }
             )
             mapping[fid] = ea
 
         started = time.monotonic()
         failed = ImportDataTypes().execute(
-            FunctionDataTypesList.model_construct(items=items),
+            FunctionSignatures(items=items, data_types=data_types),
             matched_function_mapping=mapping,
         )
         report["import_seconds"] = round(time.monotonic() - started, 3)

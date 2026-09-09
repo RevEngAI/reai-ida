@@ -276,9 +276,7 @@ class ChatCoordinator(BaseCoordinator):
                 matches[fid] = ea
         if not matches:
             return
-        result = self.app.data_types_service.import_data_types(
-            matches, apply_stack_vars=True
-        )
+        result = self.app.data_types_service.import_data_types(matches)
         if result.error:
             self.log.warning(f"Failed to sync data types: {result.error}")
             return
