@@ -1,3 +1,4 @@
+import ast
 import json
 import pathlib
 import threading
@@ -749,4 +750,39 @@ def test_view_writing_callbacks_stay_marshalled_onto_the_ui_thread(callback):
     assert f"    @execute_ui\n    def {callback}(" in source, (
         f"{callback} writes to the Qt view from a stream/poll worker thread, "
         "so it must keep @execute_ui"
+    )
+
+
+def _keyword_calls(tree, func_name):
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        target = node.func
+        name = target.attr if isinstance(target, ast.Attribute) else getattr(target, "id", None)
+        if name == func_name:
+            yield node
+
+
+@pytest.mark.parametrize("dialog", ["show_info_dialog", "show_error_dialog"])
+def test_coordinators_name_dialog_arguments_the_way_base_coordinator_declares_them(dialog):
+    coordinators = pathlib.Path("reai_toolkit/app/coordinators")
+    base = ast.parse((coordinators / "base_coordinator.py").read_text())
+    declared = {
+        arg.arg
+        for node in ast.walk(base)
+        if isinstance(node, ast.FunctionDef) and node.name == dialog
+        for arg in node.args.args[1:]
+    }
+    assert declared
+
+    offenders = [
+        f"{path.name}:{call.lineno}"
+        for path in coordinators.glob("*.py")
+        for call in _keyword_calls(ast.parse(path.read_text()), dialog)
+        if any(kw.arg is not None and kw.arg not in declared for kw in call.keywords)
+    ]
+
+    assert offenders == [], (
+        f"BaseCoordinator.{dialog} takes {sorted(declared)}; any other keyword raises "
+        f"TypeError instead of showing the dialog: {offenders}"
     )

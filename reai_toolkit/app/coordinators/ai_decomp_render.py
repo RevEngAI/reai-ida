@@ -19,7 +19,27 @@ if TYPE_CHECKING:
 
 
 _IDENT_RE = re.compile(r"[A-Za-z_]\w*")
-_RENAMED_ELSEWHERE_FIELDS = ("data_type_id", "function_id", "imported_function_id")
+
+RENAME_NOT_READY = "The AI decompilation is still loading — try again once it finishes."
+RENAME_NOT_DECOMP_LINE = "This line is not part of the AI decompilation."
+RENAME_NOT_CODE_LINE = (
+    "Only identifiers in the decompiled code can be renamed, not comments."
+)
+RENAME_NOT_ON_LINE = "'{word}' is not an identifier on this line."
+RENAME_IS_DATA_TYPE = (
+    "'{word}' is a data type — rename the type itself, not the AI decompilation."
+)
+RENAME_IS_FUNCTION = (
+    "'{word}' is a function — rename it in the disassembly and it will sync."
+)
+RENAME_IS_IMPORTED_FUNCTION = "'{word}' is an imported function and cannot be renamed."
+RENAME_UNRESOLVED = "'{word}' is not a renameable variable or type."
+
+_RENAMED_ELSEWHERE: tuple[tuple[str, str], ...] = (
+    ("data_type_id", RENAME_IS_DATA_TYPE),
+    ("function_id", RENAME_IS_FUNCTION),
+    ("imported_function_id", RENAME_IS_IMPORTED_FUNCTION),
+)
 
 
 @dataclass
@@ -29,6 +49,13 @@ class RenderModel:
     comment_by_source: dict[int, str]
     display_source: list[Optional[int]]
     display_is_code: list[bool]
+
+
+@dataclass
+class RenameTarget:
+    placeholder: Optional[str] = None
+    kind: Optional[str] = None
+    reason: Optional[str] = None
 
 
 def render_view(
@@ -240,8 +267,15 @@ def find_token(
     return None
 
 
+def renamed_elsewhere_reason(token: "RenderedToken", word: str) -> Optional[str]:
+    for name, reason in _RENAMED_ELSEWHERE:
+        if getattr(token, name, None) is not None:
+            return reason.format(word=word)
+    return None
+
+
 def is_renameable(token: "RenderedToken") -> bool:
-    return all(getattr(token, name, None) is None for name in _RENAMED_ELSEWHERE_FIELDS)
+    return all(getattr(token, name, None) is None for name, _ in _RENAMED_ELSEWHERE)
 
 
 def resolve_token(
@@ -257,3 +291,34 @@ def resolve_token(
     if not is_renameable(token):
         return None
     return placeholder, token.kind
+
+
+def resolve_rename_target(
+    model: RenderModel,
+    tokens: "GetTokensResponse",
+    display_line: int,
+    word: str,
+) -> RenameTarget:
+    if not (0 <= display_line < len(model.display_is_code)):
+        return RenameTarget(reason=RENAME_NOT_DECOMP_LINE)
+    if not model.display_is_code[display_line]:
+        return RenameTarget(reason=RENAME_NOT_CODE_LINE)
+
+    source_line = model.display_source[display_line]
+    if source_line is None:
+        return RenameTarget(reason=RENAME_NOT_DECOMP_LINE)
+
+    source_index = source_line - 1
+    ident_index = index_of_identifier(model.code_lines[source_index], word)
+    if ident_index < 0:
+        return RenameTarget(reason=RENAME_NOT_ON_LINE.format(word=word))
+
+    found = find_token(tokens, source_index, ident_index, word)
+    if found is None:
+        return RenameTarget(reason=RENAME_UNRESOLVED.format(word=word))
+
+    placeholder, token = found
+    reason = renamed_elsewhere_reason(token, word)
+    if reason is not None:
+        return RenameTarget(reason=reason)
+    return RenameTarget(placeholder=placeholder, kind=token.kind)

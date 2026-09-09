@@ -10,6 +10,13 @@ from revengai.models.token import Token
 from revengai.models.workflow_progress import WorkflowProgress
 
 from reai_toolkit.app.coordinators.ai_decomp_render import (
+    RENAME_IS_DATA_TYPE,
+    RENAME_IS_FUNCTION,
+    RENAME_IS_IMPORTED_FUNCTION,
+    RENAME_NOT_CODE_LINE,
+    RENAME_NOT_DECOMP_LINE,
+    RENAME_NOT_ON_LINE,
+    RENAME_UNRESOLVED,
     effective_values,
     find_token,
     index_of_identifier,
@@ -18,6 +25,7 @@ from reai_toolkit.app.coordinators.ai_decomp_render import (
     render_stream,
     render_view,
     render_view_with_map,
+    resolve_rename_target,
     resolve_token,
 )
 from reai_toolkit.app.services.ai_decomp.stream import PROSE_TAIL, StreamState
@@ -205,6 +213,80 @@ def test_find_token_returns_tokens_renamed_elsewhere_even_though_resolve_decline
     placeholder, token = find_token(tokens, 0, 0, "Foo")
     assert placeholder == "@@X@@"
     assert token.data_type_id == 12
+
+
+def _model(code=CODE, summary=None, comments=None):
+    _, model = render_view_with_map(_dd(code), summary, comments)
+    return model
+
+
+def test_rename_target_resolves_a_variable_on_a_code_line():
+    target = resolve_rename_target(_model(), _tokens(rendered=_VARS), 1, "v5")
+
+    assert target.placeholder == "@@V_v5@@"
+    assert target.kind == "local"
+    assert target.reason is None
+
+
+def test_rename_target_declines_a_line_outside_the_view():
+    for display_line in (-1, 99):
+        target = resolve_rename_target(_model(), _tokens(rendered=_VARS), display_line, "v5")
+        assert target.placeholder is None
+        assert target.reason == RENAME_NOT_DECOMP_LINE
+
+
+def test_rename_target_declines_an_inline_comment_line():
+    model = _model(comments=_comments([(2, "note")]))
+    target = resolve_rename_target(model, _tokens(rendered=_VARS), 1, "note")
+
+    assert target.reason == RENAME_NOT_CODE_LINE
+
+
+def test_rename_target_declines_a_summary_line():
+    model = _model(summary=_summary("Adds one."))
+    target = resolve_rename_target(model, _tokens(rendered=_VARS), 0, "Adds")
+
+    assert target.reason == RENAME_NOT_CODE_LINE
+
+
+def test_rename_target_declines_a_word_that_is_not_on_that_source_line():
+    target = resolve_rename_target(_model(), _tokens(rendered=_VARS), 2, "a1")
+
+    assert target.reason == RENAME_NOT_ON_LINE.format(word="a1")
+
+
+def test_rename_target_declines_an_identifier_with_no_token():
+    target = resolve_rename_target(_model(), _tokens(rendered=_VARS), 1, "int")
+
+    assert target.reason == RENAME_UNRESOLVED.format(word="int")
+
+
+@pytest.mark.parametrize(
+    "field,reason",
+    [
+        ("data_type_id", RENAME_IS_DATA_TYPE),
+        ("function_id", RENAME_IS_FUNCTION),
+        ("imported_function_id", RENAME_IS_IMPORTED_FUNCTION),
+    ],
+)
+def test_rename_target_says_where_a_token_renamed_elsewhere_belongs(field, reason):
+    tokens = _tokens(tok="@@X@@ *x;", rendered={"@@X@@": _rt("Foo", kind="type", **{field: 12})})
+    target = resolve_rename_target(_model(code="Foo *x;"), tokens, 0, "Foo")
+
+    assert target.placeholder is None
+    assert target.reason == reason.format(word="Foo")
+
+
+def test_every_declined_rename_carries_a_reason():
+    model = _model(summary=_summary("S."), comments=_comments([(2, "note")]))
+    tokens = _tokens(rendered=_VARS)
+
+    declines = [
+        resolve_rename_target(model, tokens, line, word)
+        for line, word in [(-1, "v5"), (0, "S"), (99, "v5"), (5, "int"), (5, "nope")]
+    ]
+
+    assert all(t.placeholder is None and t.reason for t in declines)
 
 
 def _pm(text, level="INFO", step="DECOMPILING", timestamp=None):

@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 from typing import Any, Callable, Optional
 from loguru import logger
@@ -11,6 +12,12 @@ from reai_toolkit.app.core.qt_compat import QtCore, QtGui, QtWidgets, Signal
 _WORD_UNDER_CURSOR = getattr(
     getattr(QtGui.QTextCursor, "SelectionType", QtGui.QTextCursor), "WordUnderCursor"
 )
+
+_IDENTIFIER_RE = re.compile(r"[A-Za-z_]\w*\Z")
+
+
+def _is_identifier(word: str) -> bool:
+    return bool(word) and _IDENTIFIER_RE.match(word) is not None
 
 
 def _thumb_icon(up: bool) -> Optional[QtGui.QIcon]:
@@ -38,7 +45,7 @@ class _DecompEditor(QtWidgets.QPlainTextEdit):
         super().mouseDoubleClickEvent(event)
         cursor = self.textCursor()
         word = cursor.selectedText()
-        if word:
+        if _is_identifier(word):
             self.renameRequested.emit(cursor.blockNumber(), word)
 
     def contextMenuEvent(self, event) -> None:
@@ -49,7 +56,7 @@ class _DecompEditor(QtWidgets.QPlainTextEdit):
 
         menu = self.createStandardContextMenu()
         menu.addSeparator()
-        act_rename = menu.addAction(f"Rename '{word}'…") if word else None
+        act_rename = menu.addAction(f"Rename '{word}'…") if _is_identifier(word) else None
         act_comment = menu.addAction("Add / edit comment…")
         act_remove = menu.addAction("Remove comment")
 
@@ -85,11 +92,15 @@ class AIDecompView(kw.PluginForm):
         self.on_remove_comment: Callable[[int], None] | None = None
         self.on_rate_up: Callable[[], None] | None = None
         self.on_rate_down: Callable[[], None] | None = None
+        self.on_use_predicted_name: Callable[[str], None] | None = None
         self._parent_window: QtWidgets.QWidget | None = None
         self._editor: _DecompEditor | None = None
         self._refresh_btn: QtWidgets.QPushButton | None = None
         self._rate_up_btn: QtWidgets.QPushButton | None = None
         self._rate_down_btn: QtWidgets.QPushButton | None = None
+        self._predicted_label: QtWidgets.QLabel | None = None
+        self._predicted_btn: QtWidgets.QPushButton | None = None
+        self._predicted_name: str | None = None
         self._highlighter: CppHighlighter | None = None
 
     def Create(self, title: Any) -> Any:
@@ -122,6 +133,19 @@ class AIDecompView(kw.PluginForm):
         header = QtWidgets.QHBoxLayout()
         title = QtWidgets.QLabel("RevEng.AI — AI Decomp", self._parent_window)
         header.addWidget(title)
+
+        self._predicted_label = QtWidgets.QLabel("", self._parent_window)
+        self._predicted_label.setVisible(False)
+        header.addWidget(self._predicted_label)
+
+        self._predicted_btn = QtWidgets.QPushButton(
+            "Use Predicted Name", self._parent_window
+        )
+        self._predicted_btn.setToolTip("Rename this function to the predicted name")
+        self._predicted_btn.setVisible(False)
+        self._predicted_btn.clicked.connect(self._on_use_predicted_name_clicked)
+        header.addWidget(self._predicted_btn)
+
         header.addStretch(1)
 
         up_icon = _thumb_icon(up=True)
@@ -190,6 +214,9 @@ class AIDecompView(kw.PluginForm):
         self._refresh_btn = None
         self._rate_up_btn = None
         self._rate_down_btn = None
+        self._predicted_label = None
+        self._predicted_btn = None
+        self._predicted_name = None
         self._parent_window = None
 
     def _on_refresh_clicked(self) -> None:
@@ -206,12 +233,28 @@ class AIDecompView(kw.PluginForm):
         if self.on_rate_down:
             self.on_rate_down()
 
+    def _on_use_predicted_name_clicked(self) -> None:
+        if self._predicted_name and self.on_use_predicted_name:
+            self.on_use_predicted_name(self._predicted_name)
+
     @execute_ui
     def set_rating(self, rating: Optional[str]) -> None:
         if self._rate_up_btn:
             self._rate_up_btn.setChecked(rating == "up")
         if self._rate_down_btn:
             self._rate_down_btn.setChecked(rating == "down")
+
+    @execute_ui
+    def set_predicted_name(self, name: Optional[str]) -> None:
+        self._predicted_name = name or None
+        has_name = self._predicted_name is not None
+        if self._predicted_label:
+            self._predicted_label.setText(
+                f"Predicted name: {self._predicted_name}" if has_name else ""
+            )
+            self._predicted_label.setVisible(has_name)
+        if self._predicted_btn:
+            self._predicted_btn.setVisible(has_name)
 
     def _on_rename_requested(self, line: int, word: str) -> None:
         if self.on_rename:

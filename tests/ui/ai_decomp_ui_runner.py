@@ -40,8 +40,15 @@ def _run(report: dict) -> None:
     from revengai.models.inline_comment import InlineComment
     from revengai.models.rendered_token import RenderedToken
 
-    from reai_toolkit.app.components.tabs.ai_decomp_tab import AIDecompView
+    from revengai.models.summary_data import SummaryData
+
+    from reai_toolkit.app.components.tabs.ai_decomp_tab import AIDecompView, _is_identifier
     from reai_toolkit.app.coordinators.ai_decomp_coordinator import AiDecompCoordinator
+    from reai_toolkit.app.coordinators.ai_decomp_render import (
+        RENAME_IS_DATA_TYPE,
+        RENAME_NOT_CODE_LINE,
+        RENAME_UNRESOLVED,
+    )
     from reai_toolkit.app.core.qt_compat import QtWidgets
     from reai_toolkit.app.core.shared_schema import GenericApiReturn
 
@@ -52,14 +59,14 @@ def _run(report: dict) -> None:
     ea = next(iter(idautils.Functions()), 0x1000)
 
     decomp = DecompilationData.model_construct(status="COMPLETED", decompilation=CODE)
-    def _rt(value, kind):
+    def _rt(value, kind, **ids):
         return RenderedToken.model_construct(
             value=value,
             kind=kind,
             vaddr=None,
-            data_type_id=None,
-            function_id=None,
-            imported_function_id=None,
+            data_type_id=ids.get("data_type_id"),
+            function_id=ids.get("function_id"),
+            imported_function_id=ids.get("imported_function_id"),
         )
 
     tokenised = GetTokensResponse.model_construct(
@@ -70,6 +77,16 @@ def _run(report: dict) -> None:
             "@@V@@": _rt("v5", "local"),
         },
         placeholder_to_user_override={},
+    )
+
+    typed = GetTokensResponse.model_construct(
+        ai_decomp="@@T@@ *x;",
+        analysis_id=1,
+        placeholder_to_rendered_token={"@@T@@": _rt("Foo", "type", data_type_id=7)},
+        placeholder_to_user_override={},
+    )
+    typed_decomp = DecompilationData.model_construct(
+        status="COMPLETED", decompilation="Foo *x;"
     )
 
     service = MagicMock()
@@ -99,6 +116,12 @@ def _run(report: dict) -> None:
         return
     report["view_created"] = True
     report["editor_read_only"] = view._editor.isReadOnly() is True
+    report["only_identifiers_offer_rename"] = (
+        _is_identifier("v5")
+        and not _is_identifier("   ")
+        and not _is_identifier(";")
+        and not _is_identifier("")
+    )
 
     def seed_plain() -> None:
         service.reset_mock()
@@ -152,6 +175,58 @@ def _run(report: dict) -> None:
     view._editor.renameRequested.emit(0, "int")
     pump()
     report["rename_non_token_info"] = not service.apply_overrides.called and len(infos) >= 1
+    report["rename_non_token_reason"] = infos[:1] == [
+        {"msg": RENAME_UNRESOLVED.format(word="int")}
+    ]
+
+    seed_with_comment()
+    infos.clear()
+    view._editor.renameRequested.emit(code_line_row("// hola"), "hola")
+    pump()
+    report["rename_comment_line_reason"] = infos[:1] == [{"msg": RENAME_NOT_CODE_LINE}]
+
+    seed_plain()
+    coord._current_decomp = typed_decomp
+    coord._current_tokenised = typed
+    coord._rerender()
+    pump()
+    infos.clear()
+    view._editor.renameRequested.emit(code_line_row("Foo *x;"), "Foo")
+    pump()
+    report["rename_data_type_reason"] = infos[:1] == [
+        {"msg": RENAME_IS_DATA_TYPE.format(word="Foo")}
+    ]
+
+    seed_plain()
+    report["predicted_hidden_without_a_prediction"] = view._predicted_btn.isHidden()
+    coord._on_summary_complete(
+        ea,
+        GenericApiReturn(
+            success=True,
+            data=SummaryData.model_construct(
+                ai_summary=None,
+                summary=None,
+                predicted_function_name="do_thing",
+                task_status="COMPLETED",
+            ),
+        ),
+    )
+    pump()
+    report["predicted_shown_with_a_prediction"] = (
+        not view._predicted_btn.isHidden()
+        and "do_thing" in view._predicted_label.text()
+    )
+
+    view._predicted_btn.click()
+    pump()
+    report["predicted_button_renames"] = (
+        service.update_function_name.call_args is not None
+        and service.update_function_name.call_args.args == (ea, "do_thing")
+    )
+
+    view.set_predicted_name(None)
+    pump()
+    report["predicted_hidden_when_cleared"] = view._predicted_btn.isHidden()
 
     seed_plain()
     answers["text"] = "hello"
@@ -198,10 +273,18 @@ def main() -> None:
         "errors": [],
         "view_created": False,
         "editor_read_only": False,
+        "only_identifiers_offer_rename": False,
         "render_shows_code": False,
         "rename_double_click_overrides": False,
         "rename_overrides_correct": False,
         "rename_non_token_info": False,
+        "rename_non_token_reason": False,
+        "rename_comment_line_reason": False,
+        "rename_data_type_reason": False,
+        "predicted_hidden_without_a_prediction": False,
+        "predicted_shown_with_a_prediction": False,
+        "predicted_button_renames": False,
+        "predicted_hidden_when_cleared": False,
         "comment_add_sets": False,
         "comment_add_args_correct": False,
         "comment_edit_empty_removes": False,

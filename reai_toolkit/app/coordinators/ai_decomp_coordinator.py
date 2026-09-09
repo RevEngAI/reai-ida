@@ -13,12 +13,12 @@ from revengai.models.workflow_progress import WorkflowProgress
 from reai_toolkit.app.app import App
 from reai_toolkit.app.components.tabs.ai_decomp_tab import AIDecompView
 from reai_toolkit.app.coordinators.ai_decomp_render import (
+    RENAME_NOT_READY,
     RenderModel,
-    index_of_identifier,
     render_progress,
     render_stream,
     render_view_with_map,
-    resolve_token,
+    resolve_rename_target,
 )
 from reai_toolkit.app.coordinators.base_coordinator import BaseCoordinator
 from reai_toolkit.app.core.shared_schema import GenericApiReturn
@@ -75,6 +75,7 @@ class AiDecompCoordinator(BaseCoordinator):
             self._decomp_view.on_remove_comment = self.request_remove_comment
             self._decomp_view.on_rate_up = self.rate_up
             self._decomp_view.on_rate_down = self.rate_down
+            self._decomp_view.on_use_predicted_name = self.apply_predicted_name
             self._decomp_view.Create(self._decomp_view.TITLE)
 
     def start_decompilation(self, ea: int) -> None:
@@ -90,6 +91,7 @@ class AiDecompCoordinator(BaseCoordinator):
         cached = self.ai_decomp_service.peek_decomp(ea)
         if self._decomp_view is not None:
             self._decomp_view.set_rating(None)
+            self._decomp_view.set_predicted_name(None)
             if cached is not None and cached.decompilation:
                 self._current_decomp = cached
                 self._rerender()
@@ -190,6 +192,8 @@ class AiDecompCoordinator(BaseCoordinator):
         if response.data is None:
             return
         self._current_summary = response.data
+        if self._decomp_view is not None:
+            self._decomp_view.set_predicted_name(response.data.predicted_function_name)
         self._rerender()
 
     def _on_comments_complete(
@@ -232,7 +236,7 @@ class AiDecompCoordinator(BaseCoordinator):
         if ea is None:
             return
         if self._current_decomp is None:
-            self.show_info_dialog(message="No AI decompilation to rate yet.")
+            self.show_info_dialog(msg="No AI decompilation to rate yet.")
             if self._decomp_view is not None:
                 self._decomp_view.set_rating(None)
             return
@@ -253,39 +257,45 @@ class AiDecompCoordinator(BaseCoordinator):
             if self._decomp_view is not None:
                 self._decomp_view.set_rating(None)
 
+    def apply_predicted_name(self, name: str) -> None:
+        ea = self._current_func_vaddr
+        if ea is None or not name:
+            return
+
+        if self.ai_decomp_service.update_function_name(ea, name):
+            self.ai_decomp_service.tag_function_as_renamed(name)
+            self.refresh_disassembly_view()
+            return
+
+        final = self.ai_decomp_service.apply_deduped_name(ea, name)
+        if final is None:
+            self.show_info_dialog(msg=f"Could not rename this function to '{name}'.")
+            return
+        self.ai_decomp_service.tag_function_as_renamed(final)
+        self.refresh_disassembly_view()
+
     def request_rename(self, display_line: int, word: str) -> None:
         ea = self._current_func_vaddr
-        if ea is None or self._baseline is None or self._current_tokenised is None:
+        if ea is None:
             return
-        if not (0 <= display_line < len(self._baseline.display_is_code)):
-            return
-        if not self._baseline.display_is_code[display_line]:
-            return
-
-        source_line = self._baseline.display_source[display_line]
-        if source_line is None:
-            return
-        source_index = source_line - 1
-        code_line = self._baseline.code_lines[source_index]
-        ident_index = index_of_identifier(code_line, word)
-        if ident_index < 0:
+        if self._baseline is None or self._current_tokenised is None:
+            self.show_info_dialog(msg=RENAME_NOT_READY)
             return
 
-        resolved = resolve_token(self._current_tokenised, source_index, ident_index, word)
-        if resolved is None:
-            self.show_info_dialog(
-                message=f"'{word}' is not a renameable variable or type."
-            )
+        target = resolve_rename_target(
+            self._baseline, self._current_tokenised, display_line, word
+        )
+        if target.placeholder is None:
+            self.show_info_dialog(msg=target.reason)
             return
 
-        token, _category = resolved
         new_name = ida_kernwin.ask_str(word, 0, f"Rename '{word}'")
         if not new_name or new_name == word:
             return
 
         self.ai_decomp_service.apply_overrides(
             ea=ea,
-            overrides={token: new_name},
+            overrides={target.placeholder: new_name},
             on_decomp=lambda response: self._on_decomp_complete(ea, response),
             on_tokenised=lambda response: self._on_tokenised_complete(ea, response),
         )
@@ -327,7 +337,7 @@ class AiDecompCoordinator(BaseCoordinator):
         if source_line is None:
             return
         if source_line not in self._baseline.comment_by_source:
-            self.show_info_dialog(message="No comment on this line.")
+            self.show_info_dialog(msg="No comment on this line.")
             return
         self.ai_decomp_service.remove_comment(
             ea=ea,
