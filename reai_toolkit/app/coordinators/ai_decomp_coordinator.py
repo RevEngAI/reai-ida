@@ -15,17 +15,20 @@ from reai_toolkit.app.components.tabs.ai_decomp_tab import AIDecompView
 from reai_toolkit.app.coordinators.ai_decomp_render import (
     RENAME_NOT_READY,
     RenderModel,
+    display_rows_for_source_lines,
     render_progress,
     render_stream,
     render_view_with_map,
     resolve_rename_target,
+    source_line_at,
 )
 from reai_toolkit.app.coordinators.base_coordinator import BaseCoordinator
 from reai_toolkit.app.core.shared_schema import GenericApiReturn
 from reai_toolkit.app.factory import DialogFactory
 from reai_toolkit.app.services.ai_decomp.ai_decomp_service import AiDecompService
+from reai_toolkit.app.services.ai_decomp.attribution import AttributionMap
 from reai_toolkit.app.services.ai_decomp.stream import StreamState
-from reai_toolkit.hooks.reactive import AiDecompFunctionViewHooks
+from reai_toolkit.hooks.reactive import AiDecompFunctionViewHooks, LineAttributionHooks
 
 
 class AiDecompCoordinator(BaseCoordinator):
@@ -46,6 +49,10 @@ class AiDecompCoordinator(BaseCoordinator):
         self._current_summary: SummaryData | None = None
         self._current_comments: CommentsData | None = None
         self._current_tokenised: GetTokensResponse | None = None
+        self._current_attributions: AttributionMap | None = None
+        self._attribution_hooks: LineAttributionHooks | None = None
+        self._lit_addresses: frozenset[int] = frozenset()
+        self._lit_rows: tuple[int, ...] = ()
         self._baseline: RenderModel | None = None
 
     def enable_function_tracking(self) -> None:
@@ -76,15 +83,21 @@ class AiDecompCoordinator(BaseCoordinator):
             self._decomp_view.on_rate_up = self.rate_up
             self._decomp_view.on_rate_down = self.rate_down
             self._decomp_view.on_use_predicted_name = self.apply_predicted_name
+            self._decomp_view.on_line_focus = self.focus_decomp_line
             self._decomp_view.Create(self._decomp_view.TITLE)
+        if self._attribution_hooks is None:
+            self._attribution_hooks = LineAttributionHooks(self)
+            self._attribution_hooks.hook()
 
     def start_decompilation(self, ea: int) -> None:
         self._current_decomp = None
         self._current_summary = None
         self._current_comments = None
         self._current_tokenised = None
+        self._current_attributions = None
         self._baseline = None
         self._current_func_vaddr = ea
+        self._clear_attribution_highlights()
 
         self.run_dialog()
 
@@ -128,6 +141,7 @@ class AiDecompCoordinator(BaseCoordinator):
             on_tokenised=lambda response: self._on_tokenised_complete(ea, response),
             on_progress=lambda progress: self._on_progress(ea, progress),
             on_stream=lambda state: self._on_stream(ea, state),
+            on_attributions=lambda mapping: self._on_attributions(ea, mapping),
         )
 
     @execute_ui
@@ -217,6 +231,52 @@ class AiDecompCoordinator(BaseCoordinator):
         if not response.success or response.data is None:
             return
         self._current_tokenised = response.data
+
+    @execute_ui
+    def _on_attributions(self, ea: int, mapping: AttributionMap) -> None:
+        if ea != self._current_func_vaddr:
+            return
+        self._current_attributions = None if mapping.is_empty() else mapping
+
+    def focus_decomp_line(self, display_line: int) -> None:
+        if self._current_attributions is None or self._baseline is None:
+            return
+        source_line = source_line_at(self._baseline, display_line)
+        addresses = (
+            ()
+            if source_line is None
+            else self._current_attributions.addresses_for_decomp_line(source_line - 1)
+        )
+        self._light_disassembly(addresses)
+
+    def on_disassembly_ea(self, ea: int) -> None:
+        if self._current_attributions is None or self._baseline is None:
+            return
+        decomp_lines = self._current_attributions.decomp_lines_for_address(ea)
+        self._light_decomp(
+            display_rows_for_source_lines(
+                self._baseline, [line + 1 for line in decomp_lines]
+            )
+        )
+
+    def _light_disassembly(self, addresses) -> None:
+        wanted = frozenset(addresses)
+        if self._attribution_hooks is None or wanted == self._lit_addresses:
+            return
+        self._lit_addresses = wanted
+        self._attribution_hooks.set_addresses(wanted)
+        self.refresh_disassembly_view()
+
+    def _light_decomp(self, rows) -> None:
+        wanted = tuple(rows)
+        if self._decomp_view is None or wanted == self._lit_rows:
+            return
+        self._lit_rows = wanted
+        self._decomp_view.set_highlighted_lines(wanted)
+
+    def _clear_attribution_highlights(self) -> None:
+        self._light_disassembly(())
+        self._light_decomp(())
 
     def refresh_current(self) -> None:
         ea = self._current_func_vaddr
@@ -375,8 +435,16 @@ class AiDecompCoordinator(BaseCoordinator):
             comments=self._current_comments,
         )
         self._decomp_view.update_view_content(rendered)
+        self._lit_rows = ()
 
     def _on_pane_closed(self) -> None:
         self._decomp_view = None
+        if self._attribution_hooks is not None:
+            self._attribution_hooks.unhook()
+            self._attribution_hooks = None
+            self.refresh_disassembly_view()
+        self._current_attributions = None
+        self._lit_addresses = frozenset()
+        self._lit_rows = ()
         self.disable_function_tracking()
         self.log.debug("AI Decomp view closed, reference cleared.")

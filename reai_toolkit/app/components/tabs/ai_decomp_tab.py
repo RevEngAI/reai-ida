@@ -15,6 +15,12 @@ _WORD_UNDER_CURSOR = getattr(
 
 _IDENTIFIER_RE = re.compile(r"[A-Za-z_]\w*\Z")
 
+_FULL_WIDTH_SELECTION = getattr(
+    getattr(QtGui.QTextFormat, "Property", QtGui.QTextFormat), "FullWidthSelection"
+)
+
+ATTRIBUTION_HIGHLIGHT_RGB = "#3d4a63"
+
 
 def _is_identifier(word: str) -> bool:
     return bool(word) and _IDENTIFIER_RE.match(word) is not None
@@ -93,6 +99,7 @@ class AIDecompView(kw.PluginForm):
         self.on_rate_up: Callable[[], None] | None = None
         self.on_rate_down: Callable[[], None] | None = None
         self.on_use_predicted_name: Callable[[str], None] | None = None
+        self.on_line_focus: Callable[[int], None] | None = None
         self._parent_window: QtWidgets.QWidget | None = None
         self._editor: _DecompEditor | None = None
         self._refresh_btn: QtWidgets.QPushButton | None = None
@@ -184,6 +191,7 @@ class AIDecompView(kw.PluginForm):
         self._editor.renameRequested.connect(self._on_rename_requested)
         self._editor.commentEditRequested.connect(self._on_edit_comment_requested)
         self._editor.commentRemoveRequested.connect(self._on_remove_comment_requested)
+        self._editor.cursorPositionChanged.connect(self._on_cursor_moved)
 
         # Monospace font tuned for IDA
         font = QtGui.QFont(
@@ -267,6 +275,34 @@ class AIDecompView(kw.PluginForm):
     def _on_remove_comment_requested(self, line: int) -> None:
         if self.on_remove_comment:
             self.on_remove_comment(line)
+
+    def _on_cursor_moved(self) -> None:
+        if self._editor and self.on_line_focus:
+            self.on_line_focus(self._editor.textCursor().blockNumber())
+
+    @execute_ui
+    def set_highlighted_lines(self, lines) -> None:
+        if not self._editor:
+            return
+
+        fmt = QtGui.QTextCharFormat()
+        fmt.setBackground(QtGui.QColor(ATTRIBUTION_HIGHLIGHT_RGB))
+        fmt.setProperty(_FULL_WIDTH_SELECTION, True)
+
+        document = self._editor.document()
+        selections = []
+        for line in sorted(lines):
+            block = document.findBlockByNumber(line)
+            if not block.isValid():
+                continue
+            selection = QtWidgets.QTextEdit.ExtraSelection()
+            selection.format = fmt
+            cursor = QtGui.QTextCursor(block)
+            cursor.clearSelection()
+            selection.cursor = cursor
+            selections.append(selection)
+
+        self._editor.setExtraSelections(selections)
 
     # --- public API ------------------------------------------------
     @execute_ui

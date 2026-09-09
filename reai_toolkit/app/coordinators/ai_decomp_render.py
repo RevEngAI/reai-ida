@@ -222,6 +222,25 @@ def index_of_identifier(line: str, word: str) -> int:
     return idents.index(word) if word in idents else -1
 
 
+def source_line_at(model: RenderModel, display_line: int) -> Optional[int]:
+    if not (0 <= display_line < len(model.display_source)):
+        return None
+    if not model.display_is_code[display_line]:
+        return None
+    return model.display_source[display_line]
+
+
+def display_rows_for_source_lines(model: RenderModel, source_lines) -> list[int]:
+    wanted = set(source_lines)
+    if not wanted:
+        return []
+    return [
+        row
+        for row, source in enumerate(model.display_source)
+        if source in wanted and model.display_is_code[row]
+    ]
+
+
 def effective_values(tokens: "GetTokensResponse") -> dict[str, str]:
     rendered = tokens.placeholder_to_rendered_token or {}
     overrides = tokens.placeholder_to_user_override or {}

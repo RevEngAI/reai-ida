@@ -4,9 +4,11 @@ Schema-shape assertions: fail loudly when the revengai SDK shape drifts.
 
 import inspect
 
-from revengai import FunctionsAIDecompilationApi
+from revengai import FunctionsAIDecompilationApi, FunctionsCoreApi
 from revengai.models.comments_data import CommentsData
 from revengai.models.create_ai_decomp_output_body import CreateAIDecompOutputBody
+from revengai.models.disassembly_output_body import DisassemblyOutputBody
+from revengai.models.line_attributions_data import LineAttributionsData
 from revengai.models.get_tokens_response import GetTokensResponse
 from revengai.models.inline_comment import InlineComment
 from revengai.models.patch_comment_body import PatchCommentBody
@@ -35,8 +37,34 @@ def test_ai_decomp_api_exposes_the_methods_the_plugin_calls():
         "upsert_ai_decompilation_rating",
         "v3_get_ai_decompilation_tokens",
         "v3_upsert_ai_decompilation_overrides",
+        "v3_get_ai_decompilation_line_attributions",
     ):
         assert callable(getattr(FunctionsAIDecompilationApi, method))
+
+
+def test_line_attributions_carry_the_correspondence_map():
+    assert "disassembly_line_number_to_ai_decompilation_line_numbers" in (
+        LineAttributionsData.model_fields
+    )
+
+
+def test_line_attributions_accepts_the_kwargs_the_plugin_passes():
+    params = inspect.signature(
+        FunctionsAIDecompilationApi.v3_get_ai_decompilation_line_attributions
+    ).parameters
+    assert "function_id" in params
+
+
+def test_the_v3_blocks_method_is_the_one_the_plugin_calls():
+    params = inspect.signature(FunctionsCoreApi.get_function_blocks_0).parameters
+    assert "function_id" in params
+
+    serialize = inspect.getsource(FunctionsCoreApi._get_function_blocks_0_serialize)
+    assert "/v3/functions/{function_id}/blocks" in serialize
+
+
+def test_blocks_response_exposes_basic_blocks():
+    assert "basic_blocks" in DisassemblyOutputBody.model_fields
 
 
 def test_v3_token_methods_accept_plugin_kwargs():

@@ -3,6 +3,7 @@ import json
 import pathlib
 import threading
 import time
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -428,6 +429,117 @@ def test_tokenised_phase_skipped_when_no_callback(service, sdk):
     sdk.v3_get_ai_decompilation_tokens.assert_not_called()
 
 
+@pytest.fixture
+def core_sdk(mocker):
+    api_class = mocker.patch.object(svc_mod, "FunctionsCoreApi")
+    api_inst = MagicMock()
+    api_class.return_value = api_inst
+    api_inst.get_function_blocks_0.return_value = SimpleNamespace(
+        basic_blocks=[{"min_addr": 0x1000, "asm": ["0x1000 push rbp", "0x1004 ret"]}]
+    )
+    return api_inst
+
+
+def _attributions(forward):
+    return SimpleNamespace(
+        disassembly_line_number_to_ai_decompilation_line_numbers=forward
+    )
+
+
+def _start_attribution(service, on_attributions):
+    service.start_ai_decomp_task(
+        ea=4096,
+        on_decomp=MagicMock(),
+        on_summary=MagicMock(),
+        on_comments=MagicMock(),
+        on_attributions=on_attributions,
+    )
+    _wait(service)
+
+
+def test_attribution_phase_builds_and_caches_the_map(service, sdk, core_sdk):
+    sdk.get_ai_decompilation.return_value = _dd(code="ok")
+    sdk.v3_get_ai_decompilation_line_attributions.return_value = _attributions({"0": [2]})
+
+    on_attributions = MagicMock()
+    _start_attribution(service, on_attributions)
+
+    on_attributions.assert_called_once()
+    mapping = on_attributions.call_args[0][0]
+    assert mapping.addresses_for_decomp_line(2) == [0x1004]
+    assert mapping.decomp_lines_for_address(0x1004) == [2]
+    assert service._attribution_cache[42] is mapping
+    sdk.v3_get_ai_decompilation_line_attributions.assert_called_once_with(function_id=42)
+    core_sdk.get_function_blocks_0.assert_called_once_with(function_id=42)
+
+
+def test_attribution_phase_serves_the_cache_without_refetching(service, sdk, core_sdk):
+    sdk.get_ai_decompilation.return_value = _dd(code="ok")
+    sdk.v3_get_ai_decompilation_line_attributions.return_value = _attributions({"0": [2]})
+
+    _start_attribution(service, MagicMock())
+    second = MagicMock()
+    _start_attribution(service, second)
+
+    second.assert_called_once()
+    assert sdk.v3_get_ai_decompilation_line_attributions.call_count == 1
+    assert core_sdk.get_function_blocks_0.call_count == 1
+
+
+def test_an_empty_correspondence_skips_the_blocks_request(service, sdk, core_sdk):
+    sdk.get_ai_decompilation.return_value = _dd(code="ok")
+    sdk.v3_get_ai_decompilation_line_attributions.return_value = _attributions({})
+
+    on_attributions = MagicMock()
+    _start_attribution(service, on_attributions)
+
+    on_attributions.assert_not_called()
+    core_sdk.get_function_blocks_0.assert_not_called()
+    assert service._attribution_cache[42].is_empty()
+
+
+def test_a_failed_attribution_fetch_is_quiet(service, sdk, core_sdk):
+    sdk.get_ai_decompilation.return_value = _dd(code="ok")
+    sdk.v3_get_ai_decompilation_line_attributions.side_effect = ApiException(status=404)
+
+    on_attributions = MagicMock()
+    _start_attribution(service, on_attributions)
+
+    on_attributions.assert_not_called()
+    core_sdk.get_function_blocks_0.assert_not_called()
+    assert 42 not in service._attribution_cache
+
+
+def test_a_failed_blocks_fetch_leaves_no_half_built_map(service, sdk, core_sdk):
+    sdk.get_ai_decompilation.return_value = _dd(code="ok")
+    sdk.v3_get_ai_decompilation_line_attributions.return_value = _attributions({"0": [2]})
+    core_sdk.get_function_blocks_0.side_effect = ApiException(status=500)
+
+    on_attributions = MagicMock()
+    _start_attribution(service, on_attributions)
+
+    on_attributions.assert_not_called()
+    assert 42 not in service._attribution_cache
+
+
+def test_attribution_phase_skipped_when_no_callback(service, sdk, core_sdk):
+    sdk.get_ai_decompilation.return_value = _dd(code="ok")
+    _run(service)
+
+    sdk.v3_get_ai_decompilation_line_attributions.assert_not_called()
+    core_sdk.get_function_blocks_0.assert_not_called()
+
+
+def test_invalidate_drops_the_cached_attribution_map(service, sdk, core_sdk):
+    sdk.get_ai_decompilation.return_value = _dd(code="ok")
+    sdk.v3_get_ai_decompilation_line_attributions.return_value = _attributions({"0": [2]})
+
+    _start_attribution(service, MagicMock())
+    service.invalidate_ea(4096)
+
+    assert 42 not in service._attribution_cache
+
+
 def test_apply_overrides_sends_body_refetches_and_caches(service, sdk):
     sdk.v3_upsert_ai_decompilation_overrides.return_value = MagicMock()
     sdk.get_ai_decompilation.return_value = _dd(code="renamed")
@@ -741,7 +853,7 @@ def test_streaming_never_dispatches_on_the_main_thread(service, sdk, monkeypatch
     assert all(t is not threading.main_thread() for t in threads)
 
 
-@pytest.mark.parametrize("callback", ["_on_stream", "_on_progress"])
+@pytest.mark.parametrize("callback", ["_on_stream", "_on_progress", "_on_attributions"])
 def test_view_writing_callbacks_stay_marshalled_onto_the_ui_thread(callback):
     source = pathlib.Path(
         "reai_toolkit/app/coordinators/ai_decomp_coordinator.py"

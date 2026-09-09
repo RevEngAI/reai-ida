@@ -9,6 +9,7 @@ from revengai import (
     Configuration,
     FunctionMapping,
     FunctionsAIDecompilationApi,
+    FunctionsCoreApi,
 )
 from revengai.models.ai_decompilation_rating import AiDecompilationRating
 from revengai.models.comments_data import CommentsData
@@ -28,6 +29,11 @@ from reai_toolkit.app.core.netstore_service import SimpleNetStore
 from reai_toolkit.app.core.shared_schema import GenericApiReturn
 from reai_toolkit.app.core.utils import parse_exception
 from reai_toolkit.app.interfaces.thread_service import IThreadService
+from reai_toolkit.app.services.ai_decomp.attribution import (
+    AttributionMap,
+    asm_row_addresses,
+    invert_attributions,
+)
 from reai_toolkit.app.services.ai_decomp.stream import StreamState, iter_stream_events
 
 
@@ -47,6 +53,7 @@ class AiDecompService(IThreadService):
         self._summary_cache: dict[int, SummaryData] = {}
         self._comments_cache: dict[int, CommentsData] = {}
         self._tokenised_cache: dict[int, GetTokensResponse] = {}
+        self._attribution_cache: dict[int, AttributionMap] = {}
         self._inflight: dict[int, threading.Event] = {}
         self._inflight_lock = threading.Lock()
         self._active_streams: dict[int, urllib3.HTTPResponse] = {}
@@ -70,6 +77,7 @@ class AiDecompService(IThreadService):
         self._summary_cache.clear()
         self._comments_cache.clear()
         self._tokenised_cache.clear()
+        self._attribution_cache.clear()
 
     def peek_decomp(self, ea: int) -> DecompilationData | None:
         function_id = self._get_function_id(start_ea=ea)
@@ -85,6 +93,7 @@ class AiDecompService(IThreadService):
         self._summary_cache.pop(function_id, None)
         self._comments_cache.pop(function_id, None)
         self._tokenised_cache.pop(function_id, None)
+        self._attribution_cache.pop(function_id, None)
         with self._inflight_lock:
             evt = self._inflight.pop(function_id, None)
         if evt is not None:
@@ -105,6 +114,7 @@ class AiDecompService(IThreadService):
         on_tokenised: Callable[[GenericApiReturn[GetTokensResponse]], None] | None = None,
         on_progress: Callable[[WorkflowProgress], None] | None = None,
         on_stream: Callable[[StreamState], None] | None = None,
+        on_attributions: Callable[[AttributionMap], None] | None = None,
     ) -> None:
         function_id = self._get_function_id(start_ea=ea)
         if function_id is None:
@@ -128,6 +138,7 @@ class AiDecompService(IThreadService):
                 on_tokenised,
                 on_progress,
                 on_stream,
+                on_attributions,
             ),
             name=f"reai-aidecomp-{function_id}",
             daemon=True,
@@ -375,6 +386,7 @@ class AiDecompService(IThreadService):
         on_tokenised: Callable[[GenericApiReturn[GetTokensResponse]], None] | None = None,
         on_progress: Callable[[WorkflowProgress], None] | None = None,
         on_stream: Callable[[StreamState], None] | None = None,
+        on_attributions: Callable[[AttributionMap], None] | None = None,
     ) -> None:
         try:
             if stop_event.is_set():
@@ -388,6 +400,8 @@ class AiDecompService(IThreadService):
             self._run_comments_phase(function_id, stop_event, on_comments)
             if on_tokenised is not None:
                 self._run_tokenised_phase(function_id, stop_event, on_tokenised)
+            if on_attributions is not None:
+                self._run_attribution_phase(function_id, stop_event, on_attributions)
         except Exception as e:
             logger.error(f"RevEng.AI: AI decompilation task crashed for {function_id}: {e}")
         finally:
@@ -926,6 +940,72 @@ class AiDecompService(IThreadService):
                     success=False, error_message="Tokenised data not ready."
                 ),
             )
+
+    def _fetch_line_attributions(self, function_id: int) -> tuple[Any, str | None]:
+        try:
+            with self.yield_api_client(sdk_config=self.sdk_config) as api_client:
+                data = FunctionsAIDecompilationApi(
+                    api_client
+                ).v3_get_ai_decompilation_line_attributions(function_id=function_id)
+            return data, None
+        except ApiException as e:
+            return None, _format_api_error(e)
+        except Exception as e:
+            return None, f"Unexpected error fetching line attributions: {e}"
+
+    def _fetch_blocks(self, function_id: int) -> tuple[Any, str | None]:
+        try:
+            with self.yield_api_client(sdk_config=self.sdk_config) as api_client:
+                data = FunctionsCoreApi(api_client).get_function_blocks_0(
+                    function_id=function_id
+                )
+            return data, None
+        except ApiException as e:
+            return None, _format_api_error(e)
+        except Exception as e:
+            return None, f"Unexpected error fetching function blocks: {e}"
+
+    def _run_attribution_phase(
+        self,
+        function_id: int,
+        stop_event: threading.Event,
+        on_attributions: Callable[[AttributionMap], None],
+    ) -> None:
+        cached = self._attribution_cache.get(function_id)
+        if cached is not None:
+            self._safe_dispatch(stop_event, on_attributions, cached)
+            return
+
+        data, err = self._fetch_line_attributions(function_id)
+        if data is None:
+            logger.debug(
+                f"RevEng.AI: no line attributions for function {function_id}: {err}"
+            )
+            return
+
+        attributions = invert_attributions(
+            getattr(
+                data,
+                "disassembly_line_number_to_ai_decompilation_line_numbers",
+                None,
+            )
+        )
+        if attributions.is_empty() or stop_event.is_set():
+            self._attribution_cache[function_id] = AttributionMap()
+            return
+
+        blocks, blocks_err = self._fetch_blocks(function_id)
+        if blocks is None:
+            logger.debug(
+                f"RevEng.AI: no disassembly blocks for function {function_id}: {blocks_err}"
+            )
+            return
+
+        mapping = AttributionMap(
+            attributions, asm_row_addresses(getattr(blocks, "basic_blocks", None))
+        )
+        self._attribution_cache[function_id] = mapping
+        self._safe_dispatch(stop_event, on_attributions, mapping)
 
     def _poll_workflow(
         self,

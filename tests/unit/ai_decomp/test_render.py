@@ -17,6 +17,7 @@ from reai_toolkit.app.coordinators.ai_decomp_render import (
     RENAME_NOT_DECOMP_LINE,
     RENAME_NOT_ON_LINE,
     RENAME_UNRESOLVED,
+    display_rows_for_source_lines,
     effective_values,
     find_token,
     index_of_identifier,
@@ -27,6 +28,7 @@ from reai_toolkit.app.coordinators.ai_decomp_render import (
     render_view_with_map,
     resolve_rename_target,
     resolve_token,
+    source_line_at,
 )
 from reai_toolkit.app.services.ai_decomp.stream import PROSE_TAIL, StreamState
 
@@ -287,6 +289,51 @@ def test_every_declined_rename_carries_a_reason():
     ]
 
     assert all(t.placeholder is None and t.reason for t in declines)
+
+
+def test_source_line_at_maps_a_code_row_back_to_its_decompilation_line():
+    model = _model(summary=_summary("S."), comments=_comments([(2, "note")]))
+
+    assert source_line_at(model, 3) == 1
+    assert source_line_at(model, 5) == 2
+
+
+@pytest.mark.parametrize("row", [-1, 0, 4, 99])
+def test_source_line_at_declines_rows_that_are_not_code(row):
+    model = _model(summary=_summary("S."), comments=_comments([(2, "note")]))
+
+    assert source_line_at(model, row) is None
+
+
+def test_display_rows_finds_the_code_rows_for_source_lines():
+    model = _model(summary=_summary("S."), comments=_comments([(2, "note")]))
+
+    assert display_rows_for_source_lines(model, [1, 2]) == [3, 5]
+
+
+def test_display_rows_skips_the_comment_row_that_shares_a_source_line():
+    model = _model(comments=_comments([(2, "note")]))
+    rows = display_rows_for_source_lines(model, [2])
+
+    assert rows == [2]
+    assert model.display_is_code[1] is False
+    assert model.display_source[1] == 2
+
+
+def test_display_rows_of_nothing_is_nothing():
+    model = _model()
+
+    assert display_rows_for_source_lines(model, []) == []
+    assert display_rows_for_source_lines(model, [99]) == []
+
+
+def test_source_line_and_display_rows_round_trip():
+    model = _model(summary=_summary("S."), comments=_comments([(2, "note")]))
+    rows = [row for row, code in enumerate(model.display_is_code) if code]
+
+    for row in rows:
+        source = source_line_at(model, row)
+        assert display_rows_for_source_lines(model, [source]) == [row]
 
 
 def _pm(text, level="INFO", step="DECOMPILING", timestamp=None):

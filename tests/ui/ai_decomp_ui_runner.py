@@ -51,6 +51,10 @@ def _run(report: dict) -> None:
     )
     from reai_toolkit.app.core.qt_compat import QtWidgets
     from reai_toolkit.app.core.shared_schema import GenericApiReturn
+    from reai_toolkit.app.services.ai_decomp.attribution import (
+        AttributionMap,
+        invert_attributions,
+    )
 
     answers = {"str": "count", "text": "hello"}
     ida_kernwin.ask_str = lambda default, hist, prompt: answers["str"]
@@ -255,6 +259,41 @@ def _run(report: dict) -> None:
             service.remove_comment.call_args.kwargs.get("line") == 2
         )
 
+    seed_plain()
+    coord._current_attributions = AttributionMap(
+        invert_attributions({"0": [1]}), [ea + 1, ea, ea + 2]
+    )
+    highlighted: list = []
+    coord._attribution_hooks = SimpleNamespace(
+        set_addresses=lambda addrs: highlighted.append(sorted(addrs)),
+        has_addresses=lambda: bool(highlighted and highlighted[-1]),
+    )
+
+    coord.focus_decomp_line(code_line_row("int v5"))
+    pump()
+    report["decomp_line_lights_its_disassembly"] = highlighted[-1:] == [[ea]]
+
+    coord.focus_decomp_line(code_line_row("return v5"))
+    pump()
+    report["a_line_with_no_counterpart_lights_nothing"] = highlighted[-1:] == [[]]
+
+    coord.on_disassembly_ea(ea)
+    pump()
+    report["disassembly_ea_lights_its_decomp_line"] = (
+        len(view._editor.extraSelections()) == 1
+        and view._editor.extraSelections()[0].cursor.blockNumber()
+        == code_line_row("int v5")
+    )
+
+    coord.on_disassembly_ea(0xDEAD)
+    pump()
+    report["an_unattributed_address_lights_nothing"] = (
+        view._editor.extraSelections() == []
+    )
+
+    coord._attribution_hooks = None
+    coord._current_attributions = None
+
     service.reset_mock()
     service.peek_decomp.return_value = None
     view._refresh_btn.click()
@@ -290,6 +329,10 @@ def main() -> None:
         "comment_edit_empty_removes": False,
         "comment_remove_deletes": False,
         "comment_remove_args_correct": False,
+        "decomp_line_lights_its_disassembly": False,
+        "a_line_with_no_counterpart_lights_nothing": False,
+        "disassembly_ea_lights_its_decomp_line": False,
+        "an_unattributed_address_lights_nothing": False,
         "refresh_button_invalidates": False,
     }
     ida_auto.auto_wait()
