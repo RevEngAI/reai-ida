@@ -27,16 +27,21 @@ EVENT_TYPE_NAMES: dict[int, str] = {
     14: "RUN_CANCELLED",
     15: "CONTEXT_COMPACTED",
     16: "TOOL_CONFIRMATION_REQUIRED",
-    17: "TOOL_CALL_PROGRESS",
+    17: "QUESTION_ASKED",
+    18: "USER_ANSWERED",
+    19: "TOOL_CALL_PROGRESS",
 }
 
 TERMINAL_EVENTS: frozenset[str] = frozenset(
     {"RUN_FINISHED", "RUN_ERROR", "RUN_CANCELLED"}
 )
 
+ROLE_UNSPECIFIED = 0
+ROLE_SYSTEM = 1
 ROLE_USER = 2
-ROLE_SYSTEM = 3
+ROLE_ASSISTANT = 3
 ROLE_TOOL = 4
+ROLE_DEVELOPER = 5
 
 
 @dataclass
@@ -133,14 +138,20 @@ def _parse_entity_updates(raw: Any) -> Optional[list[EntityUpdate]]:
     return out or None
 
 
-def normalize_event(type_field: Any, leaf: Optional[dict]) -> Optional[ChatEvent]:
+def normalize_event(
+    type_field: Any,
+    leaf: Optional[dict],
+    event_name: Optional[str] = None,
+) -> Optional[ChatEvent]:
     """Normalize a raw SSE ``{type, data}`` frame into a :class:`ChatEvent`.
 
     ``leaf`` is the nested ``data`` object holding snake_case leaf fields.
+    ``event_name`` is the SSE ``event:`` field, used when the envelope carries no
+    resolvable ``type`` — a named event, or a numeric one this table predates.
     Returns ``None`` for unknown/undecodable event types (mirrors the FE's
     ``parseApiEvent`` returning null on parse failure).
     """
-    etype = resolve_type(type_field)
+    etype = resolve_type(type_field) or (event_name or None)
     if etype is None:
         return None
     data: dict = leaf if isinstance(leaf, dict) else {}

@@ -108,9 +108,9 @@ def test_get_conversation_replays_events(service, api):
         SimpleNamespace(type=6, role=2, data={"message_id": "u1"}, event_id=1),
         SimpleNamespace(type=7, role=2, data={"delta": "why?"}, event_id=2),
         SimpleNamespace(type=8, role=2, data={}, event_id=3),
-        SimpleNamespace(type=6, role=1, data={"message_id": "a1"}, event_id=4),
-        SimpleNamespace(type=7, role=1, data={"delta": "because"}, event_id=5),
-        SimpleNamespace(type=8, role=1, data={}, event_id=6),
+        SimpleNamespace(type=6, role=3, data={"message_id": "a1"}, event_id=4),
+        SimpleNamespace(type=7, role=3, data={"delta": "because"}, event_id=5),
+        SimpleNamespace(type=8, role=3, data={}, event_id=6),
     ]
     api.get_conversation.return_value = SimpleNamespace(
         conversation_uuid="cid", title="T", events=events

@@ -1,9 +1,9 @@
 """Pure Server-Sent-Events frame parsing for the Agent Chat stream.
 
-Ports the SSE read loop of ``Dashboard/utils/v2/agent/agentApi.ts::streamEvents``:
-line-based framing, only ``data:`` frames, buffering across chunk boundaries,
-``[DONE]`` handling and stopping on terminal events. No Qt / IDA / SDK imports,
-so it is unit-testable against a fake byte-chunk iterator.
+Reads blank-line delimited frames, so both the envelope's ``type`` and the SSE
+``event:`` name are available — the backend transmits both, and omits ``event:``
+only for the default ``message`` name. No Qt / IDA / SDK imports, so it is
+unit-testable against a fake byte-chunk iterator.
 """
 
 from __future__ import annotations
@@ -16,30 +16,23 @@ from reai_toolkit.app.services.chat.schema import (
     ChatEvent,
     normalize_event,
 )
+from reai_toolkit.app.services.sse import iter_sse_frames
 
 
-def parse_sse_data_line(line: str) -> Optional[dict]:
-    """Decode a single SSE line into its JSON object, or ``None``.
-
-    Only ``data:`` lines carry payloads; ``event:`` / ``id:`` / comment (``:``)
-    lines and the ``[DONE]`` sentinel are ignored.
-    """
-    line = line.strip()
-    if not line.startswith("data:"):
-        return None
-    payload = line[len("data:"):].strip()
-    if not payload or payload == "[DONE]":
+def parse_sse_data(data: str) -> Optional[dict]:
+    data = data.strip()
+    if not data or data == "[DONE]":
         return None
     try:
-        obj = json.loads(payload)
+        obj = json.loads(data)
     except (ValueError, TypeError):
         return None
     return obj if isinstance(obj, dict) else None
 
 
-def event_from_frame(obj: dict) -> Optional[ChatEvent]:
+def event_from_frame(obj: dict, event_name: Optional[str] = None) -> Optional[ChatEvent]:
     """Turn a decoded ``{type, event_id, data}`` envelope into a ChatEvent."""
-    ev = normalize_event(obj.get("type"), obj.get("data"))
+    ev = normalize_event(obj.get("type"), obj.get("data"), event_name)
     if ev is None:
         return None
     eid = obj.get("event_id")
@@ -57,23 +50,13 @@ def iter_sse_events(
     ``stop`` is polled between chunks for cooperative cancellation. Iteration
     stops after a terminal event (RUN_FINISHED / RUN_ERROR / RUN_CANCELLED).
     """
-    buf = b""
-    for chunk in chunks:
-        if stop is not None and stop():
-            return
-        if not chunk:
+    for event_name, data in iter_sse_frames(chunks, stop=stop):
+        obj = parse_sse_data(data)
+        if obj is None:
             continue
-        buf += chunk
-        parts = buf.split(b"\n")
-        buf = parts.pop()
-        for raw in parts:
-            line = raw.rstrip(b"\r").decode("utf-8", "replace")
-            obj = parse_sse_data_line(line)
-            if obj is None:
-                continue
-            ev = event_from_frame(obj)
-            if ev is None:
-                continue
-            yield ev
-            if ev.type in TERMINAL_EVENTS:
-                return
+        ev = event_from_frame(obj, event_name)
+        if ev is None:
+            continue
+        yield ev
+        if ev.type in TERMINAL_EVENTS:
+            return
