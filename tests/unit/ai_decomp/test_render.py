@@ -15,10 +15,12 @@ from reai_toolkit.app.coordinators.ai_decomp_render import (
     index_of_identifier,
     names_token,
     render_progress,
+    render_stream,
     render_view,
     render_view_with_map,
     resolve_token,
 )
+from reai_toolkit.app.services.ai_decomp.stream import PROSE_TAIL, StreamState
 
 
 CODE = "int f(int a1) {\n    int v5 = a1;\n    return v5;\n}"
@@ -233,6 +235,57 @@ def test_render_progress_lists_messages_as_comment_lines():
     assert "// [INFO] fetching bytes" in text
     assert "// [WARN] done" in text
     assert all(line.startswith("//") for line in text.split("\n"))
+
+
+def _state(**kw):
+    return StreamState(**kw)
+
+
+def test_render_stream_shows_the_source_as_it_arrives():
+    text = render_stream(_state(attempt=1, source="int main(void) {"))
+
+    assert text.startswith("// RevEng.AI — decompiling…")
+    assert text.endswith("int main(void) {")
+
+
+def test_render_stream_shows_prose_only_until_source_starts():
+    with_prose = _state(attempt=1, prose=["reading the bytes", "spotting a loop"])
+    assert "// spotting a loop" in render_stream(with_prose)
+
+    with_source = _state(attempt=1, prose=["reading the bytes"], source="int x;")
+    assert "reading the bytes" not in render_stream(with_source)
+
+
+def test_render_stream_caps_the_prose_it_shows():
+    state = _state(attempt=1, prose=[f"line {i}" for i in range(20)])
+
+    body = [line for line in render_stream(state).split("\n") if line.startswith("// line")]
+    assert len(body) == PROSE_TAIL
+
+
+def test_render_stream_names_the_post_decompilation_naming_stage():
+    text = render_stream(_state(attempt=1, source="int x;", decomp_finished=True))
+
+    assert "naming identifiers" in text
+
+
+def test_render_stream_shows_the_attempt_only_after_a_retry():
+    assert "attempt" not in render_stream(_state(attempt=1))
+    assert "(attempt 2)" in render_stream(_state(attempt=2))
+
+
+def test_render_stream_reports_failure_with_its_error():
+    text = render_stream(_state(failed=True, error="model unavailable"))
+
+    assert "failed" in text
+    assert "// model unavailable" in text
+
+
+def test_render_stream_of_a_finished_run_keeps_the_source():
+    text = render_stream(_state(finished=True, source="int main(void) {}"))
+
+    assert "complete" in text
+    assert text.endswith("int main(void) {}")
 
 
 def test_render_progress_without_steps_falls_back_to_status():

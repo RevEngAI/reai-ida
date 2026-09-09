@@ -227,13 +227,16 @@ class AIDecompView(kw.PluginForm):
 
     # --- public API ------------------------------------------------
     @execute_ui
-    def update_view_content(self, code: str) -> None:
+    def update_view_content(self, code: str, follow_tail: bool = False) -> None:
         if not self._editor:
             return
 
         self._editor.blockSignals(True)
         try:
             self._editor.setPlainText(code)
+            if follow_tail:
+                bar = self._editor.verticalScrollBar()
+                bar.setValue(bar.maximum())
         finally:
             self._editor.blockSignals(False)
 

@@ -1,3 +1,5 @@
+import json
+import pathlib
 import threading
 import time
 from unittest.mock import MagicMock
@@ -581,3 +583,170 @@ def test_function_id_for_and_invalidate_ea(service):
     service._decomp_cache[42] = object()
     service.invalidate_ea(4096)
     assert 42 not in service._decomp_cache
+
+
+def _sse(event_type, **payload):
+    body = {"type": event_type, "attempt": 1, "seq": payload.pop("seq", 0)}
+    body.update(payload)
+    return f"event: {event_type}\ndata: {json.dumps(body)}\n\n".encode()
+
+
+def _stream_response(chunks):
+    resp = MagicMock()
+    resp.stream.return_value = iter(chunks)
+    return resp
+
+
+def _start_streaming(service, on_stream, on_decomp=None):
+    service.start_ai_decomp_task(
+        ea=4096,
+        on_decomp=on_decomp or MagicMock(),
+        on_summary=MagicMock(),
+        on_comments=MagicMock(),
+        on_stream=on_stream,
+    )
+    _wait(service)
+
+
+def test_streaming_replaces_polling_and_reports_the_growing_source(service, sdk, monkeypatch):
+    monkeypatch.setattr(svc_mod, "STREAM_DISPATCH_INTERVAL", 0.0)
+    sdk.get_ai_decompilation.side_effect = [_dd(status=TaskStatus.RUNNING.value, code=None), _dd(code="final")]
+    sdk.stream_ai_decompilation_without_preload_content.return_value = _stream_response(
+        [
+            _sse("source_delta", content="int main"),
+            _sse("source_delta", content="(void) {}"),
+            _sse("decomp_finished"),
+            _sse("names_finished", applied=2),
+        ]
+    )
+
+    on_stream, on_decomp = MagicMock(), MagicMock()
+    _start_streaming(service, on_stream, on_decomp)
+
+    sdk.get_ai_decompilation_status.assert_not_called()
+    sources = [call[0][0].source for call in on_stream.call_args_list]
+    assert sources[-1] == "int main(void) {}"
+    assert on_stream.call_args[0][0].finished is True
+    assert on_decomp.call_args[0][0].data.decompilation == "final"
+
+
+def test_each_dispatched_state_is_an_independent_snapshot(service, sdk, monkeypatch):
+    monkeypatch.setattr(svc_mod, "STREAM_DISPATCH_INTERVAL", 0.0)
+    sdk.get_ai_decompilation.side_effect = [_dd(status=TaskStatus.RUNNING.value, code=None), _dd(code="final")]
+    sdk.stream_ai_decompilation_without_preload_content.return_value = _stream_response(
+        [
+            _sse("source_delta", content="a"),
+            _sse("source_delta", content="b"),
+            _sse("names_finished", applied=0),
+        ]
+    )
+
+    on_stream = MagicMock()
+    _start_streaming(service, on_stream)
+
+    states = [call[0][0] for call in on_stream.call_args_list]
+    assert [s.source for s in states] == ["a", "ab", "ab"]
+
+
+def test_a_stream_that_ends_without_a_terminal_event_falls_back_to_polling(service, sdk):
+    sdk.get_ai_decompilation.side_effect = [_dd(status=TaskStatus.RUNNING.value, code=None), _dd(code="polled")]
+    sdk.stream_ai_decompilation_without_preload_content.return_value = _stream_response(
+        [_sse("source_delta", content="partial")]
+    )
+    sdk.get_ai_decompilation_status.return_value = _wp(TaskStatus.COMPLETED)
+
+    on_decomp = MagicMock()
+    _start_streaming(service, MagicMock(), on_decomp)
+
+    sdk.get_ai_decompilation_status.assert_called()
+    assert on_decomp.call_args[0][0].data.decompilation == "polled"
+
+
+def test_a_stream_that_raises_falls_back_to_polling(service, sdk):
+    sdk.get_ai_decompilation.side_effect = [_dd(status=TaskStatus.RUNNING.value, code=None), _dd(code="polled")]
+    sdk.stream_ai_decompilation_without_preload_content.side_effect = ApiException(
+        status=502, reason="bad gateway"
+    )
+    sdk.get_ai_decompilation_status.return_value = _wp(TaskStatus.COMPLETED)
+
+    on_decomp = MagicMock()
+    _start_streaming(service, MagicMock(), on_decomp)
+
+    sdk.get_ai_decompilation_status.assert_called()
+    assert on_decomp.call_args[0][0].data.decompilation == "polled"
+
+
+def test_decomp_failed_surfaces_the_error_without_polling(service, sdk):
+    sdk.get_ai_decompilation.return_value = _dd(status=TaskStatus.RUNNING.value, code=None)
+    sdk.stream_ai_decompilation_without_preload_content.return_value = _stream_response(
+        [_sse("decomp_failed", error="model unavailable", error_code="MODEL_GONE")]
+    )
+
+    on_decomp = MagicMock()
+    _start_streaming(service, MagicMock(), on_decomp)
+
+    sdk.get_ai_decompilation_status.assert_not_called()
+    payload = on_decomp.call_args[0][0]
+    assert payload.success is False
+    assert payload.error_message == "model unavailable"
+
+
+def test_no_stream_callback_keeps_the_polling_path(service, sdk):
+    sdk.get_ai_decompilation.side_effect = [_dd(status=TaskStatus.RUNNING.value, code=None), _dd(code="polled")]
+    sdk.get_ai_decompilation_status.return_value = _wp(TaskStatus.COMPLETED)
+
+    _run(service)
+
+    sdk.stream_ai_decompilation_without_preload_content.assert_not_called()
+    sdk.get_ai_decompilation_status.assert_called()
+
+
+def test_dispatches_are_throttled_between_terminal_events(service, sdk, monkeypatch):
+    monkeypatch.setattr(svc_mod, "STREAM_DISPATCH_INTERVAL", 60.0)
+    sdk.get_ai_decompilation.side_effect = [_dd(status=TaskStatus.RUNNING.value, code=None), _dd(code="final")]
+    sdk.stream_ai_decompilation_without_preload_content.return_value = _stream_response(
+        [_sse("source_delta", content=str(i)) for i in range(10)]
+        + [_sse("names_finished", applied=0)]
+    )
+
+    on_stream = MagicMock()
+    _start_streaming(service, on_stream)
+
+    assert on_stream.call_count == 2
+    assert on_stream.call_args[0][0].finished is True
+
+
+def test_invalidate_closes_a_live_stream(service):
+    resp = MagicMock()
+    service._active_streams[42] = resp
+
+    service.invalidate(42)
+
+    resp.close.assert_called_once()
+    assert 42 not in service._active_streams
+
+
+def test_streaming_never_dispatches_on_the_main_thread(service, sdk, monkeypatch):
+    monkeypatch.setattr(svc_mod, "STREAM_DISPATCH_INTERVAL", 0.0)
+    sdk.get_ai_decompilation.side_effect = [_dd(status=TaskStatus.RUNNING.value, code=None), _dd(code="final")]
+    sdk.stream_ai_decompilation_without_preload_content.return_value = _stream_response(
+        [_sse("source_delta", content="x"), _sse("names_finished", applied=0)]
+    )
+
+    threads: list = []
+    _start_streaming(service, lambda state: threads.append(threading.current_thread()))
+
+    assert threads
+    assert all(t is not threading.main_thread() for t in threads)
+
+
+@pytest.mark.parametrize("callback", ["_on_stream", "_on_progress"])
+def test_view_writing_callbacks_stay_marshalled_onto_the_ui_thread(callback):
+    source = pathlib.Path(
+        "reai_toolkit/app/coordinators/ai_decomp_coordinator.py"
+    ).read_text()
+
+    assert f"    @execute_ui\n    def {callback}(" in source, (
+        f"{callback} writes to the Qt view from a stream/poll worker thread, "
+        "so it must keep @execute_ui"
+    )

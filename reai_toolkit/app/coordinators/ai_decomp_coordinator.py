@@ -16,6 +16,7 @@ from reai_toolkit.app.coordinators.ai_decomp_render import (
     RenderModel,
     index_of_identifier,
     render_progress,
+    render_stream,
     render_view_with_map,
     resolve_token,
 )
@@ -23,6 +24,7 @@ from reai_toolkit.app.coordinators.base_coordinator import BaseCoordinator
 from reai_toolkit.app.core.shared_schema import GenericApiReturn
 from reai_toolkit.app.factory import DialogFactory
 from reai_toolkit.app.services.ai_decomp.ai_decomp_service import AiDecompService
+from reai_toolkit.app.services.ai_decomp.stream import StreamState
 from reai_toolkit.hooks.reactive import AiDecompFunctionViewHooks
 
 
@@ -123,8 +125,10 @@ class AiDecompCoordinator(BaseCoordinator):
             on_comments=lambda response: self._on_comments_complete(ea, response),
             on_tokenised=lambda response: self._on_tokenised_complete(ea, response),
             on_progress=lambda progress: self._on_progress(ea, progress),
+            on_stream=lambda state: self._on_stream(ea, state),
         )
 
+    @execute_ui
     def _on_progress(self, ea: int, progress: WorkflowProgress) -> None:
         if ea != self._current_func_vaddr:
             return
@@ -133,6 +137,16 @@ class AiDecompCoordinator(BaseCoordinator):
         if self._decomp_view is None:
             return
         self._decomp_view.update_view_content(render_progress(progress))
+
+    @execute_ui
+    def _on_stream(self, ea: int, state: StreamState) -> None:
+        if ea != self._current_func_vaddr:
+            return
+        if self._current_decomp is not None:
+            return
+        if self._decomp_view is None:
+            return
+        self._decomp_view.update_view_content(render_stream(state), follow_tail=True)
 
     def _on_decomp_complete(
         self, ea: int, response: GenericApiReturn[DecompilationData]

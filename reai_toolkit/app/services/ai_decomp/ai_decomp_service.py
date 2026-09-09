@@ -1,6 +1,8 @@
 import threading
+import time
 from typing import Any, Callable
 
+import urllib3
 from loguru import logger
 from revengai import (
     ApiException,
@@ -26,10 +28,16 @@ from reai_toolkit.app.core.netstore_service import SimpleNetStore
 from reai_toolkit.app.core.shared_schema import GenericApiReturn
 from reai_toolkit.app.core.utils import parse_exception
 from reai_toolkit.app.interfaces.thread_service import IThreadService
+from reai_toolkit.app.services.ai_decomp.stream import StreamState, iter_stream_events
 
 
 POLL_INTERVAL_SECONDS: float = 1.5
 MAX_REQUEUE_ATTEMPTS = 2
+
+STREAM_CONNECT_TIMEOUT: float = 10.0
+STREAM_READ_TIMEOUT: float = 300.0
+STREAM_CHUNK_BYTES = 1024
+STREAM_DISPATCH_INTERVAL: float = 0.1
 
 
 class AiDecompService(IThreadService):
@@ -41,6 +49,7 @@ class AiDecompService(IThreadService):
         self._tokenised_cache: dict[int, GetTokensResponse] = {}
         self._inflight: dict[int, threading.Event] = {}
         self._inflight_lock = threading.Lock()
+        self._active_streams: dict[int, urllib3.HTTPResponse] = {}
 
     def thread_in_progress(self) -> bool:
         return self.is_worker_running()
@@ -55,6 +64,8 @@ class AiDecompService(IThreadService):
             self._inflight.clear()
         for evt in events:
             evt.set()
+        for function_id in list(self._active_streams):
+            self._close_stream(function_id)
         self._decomp_cache.clear()
         self._summary_cache.clear()
         self._comments_cache.clear()
@@ -78,6 +89,7 @@ class AiDecompService(IThreadService):
             evt = self._inflight.pop(function_id, None)
         if evt is not None:
             evt.set()
+        self._close_stream(function_id)
 
     def invalidate_ea(self, ea: int) -> None:
         function_id = self._get_function_id(start_ea=ea)
@@ -92,6 +104,7 @@ class AiDecompService(IThreadService):
         on_comments: Callable[[GenericApiReturn[CommentsData]], None],
         on_tokenised: Callable[[GenericApiReturn[GetTokensResponse]], None] | None = None,
         on_progress: Callable[[WorkflowProgress], None] | None = None,
+        on_stream: Callable[[StreamState], None] | None = None,
     ) -> None:
         function_id = self._get_function_id(start_ea=ea)
         if function_id is None:
@@ -114,6 +127,7 @@ class AiDecompService(IThreadService):
                 on_comments,
                 on_tokenised,
                 on_progress,
+                on_stream,
             ),
             name=f"reai-aidecomp-{function_id}",
             daemon=True,
@@ -360,12 +374,13 @@ class AiDecompService(IThreadService):
         on_comments: Callable[[GenericApiReturn[CommentsData]], None],
         on_tokenised: Callable[[GenericApiReturn[GetTokensResponse]], None] | None = None,
         on_progress: Callable[[WorkflowProgress], None] | None = None,
+        on_stream: Callable[[StreamState], None] | None = None,
     ) -> None:
         try:
             if stop_event.is_set():
                 return
             decomp = self._run_decomp_phase(
-                function_id, stop_event, on_decomp, on_progress
+                function_id, stop_event, on_decomp, on_progress, on_stream
             )
             if decomp is None:
                 return
@@ -448,6 +463,7 @@ class AiDecompService(IThreadService):
         stop_event: threading.Event,
         on_decomp: Callable[[GenericApiReturn[DecompilationData]], None],
         on_progress: Callable[[WorkflowProgress], None] | None = None,
+        on_stream: Callable[[StreamState], None] | None = None,
     ) -> DecompilationData | None:
         cached = self._decomp_cache.get(function_id)
         if cached is not None:
@@ -490,24 +506,42 @@ class AiDecompService(IThreadService):
                 )
                 return None
 
-        polled_ok, poll_err = self._poll_workflow(
-            function_id=function_id,
-            stop_event=stop_event,
-            status_fn=self._fetch_decomp_status,
-            requeue_fn=self._queue_decompilation,
-            label="AI Decompilation",
-            on_progress=on_progress,
+        streamed = (
+            self._stream_decomp(function_id, stop_event, on_stream)
+            if on_stream is not None and not stop_event.is_set()
+            else None
         )
-        if not polled_ok:
-            if poll_err is not None:
-                self._safe_dispatch(
-                    stop_event,
-                    on_decomp,
-                    GenericApiReturn[DecompilationData](
-                        success=False, error_message=poll_err
-                    ),
-                )
+
+        if streamed is not None and streamed.failed:
+            self._safe_dispatch(
+                stop_event,
+                on_decomp,
+                GenericApiReturn[DecompilationData](
+                    success=False,
+                    error_message=streamed.error or "AI decompilation failed.",
+                ),
+            )
             return None
+
+        if streamed is None:
+            polled_ok, poll_err = self._poll_workflow(
+                function_id=function_id,
+                stop_event=stop_event,
+                status_fn=self._fetch_decomp_status,
+                requeue_fn=self._queue_decompilation,
+                label="AI Decompilation",
+                on_progress=on_progress,
+            )
+            if not polled_ok:
+                if poll_err is not None:
+                    self._safe_dispatch(
+                        stop_event,
+                        on_decomp,
+                        GenericApiReturn[DecompilationData](
+                            success=False, error_message=poll_err
+                        ),
+                    )
+                return None
 
         final, final_err = self._fetch_decompilation(function_id)
         if final is None or not final.decompilation:
@@ -528,6 +562,66 @@ class AiDecompService(IThreadService):
             GenericApiReturn[DecompilationData](success=True, data=final),
         )
         return final
+
+    def _close_stream(self, function_id: int) -> None:
+        resp = self._active_streams.pop(function_id, None)
+        if resp is None:
+            return
+        try:
+            resp.close()
+        except Exception:
+            pass
+
+    def _stream_decomp(
+        self,
+        function_id: int,
+        stop_event: threading.Event,
+        on_stream: Callable[[StreamState], None],
+    ) -> StreamState | None:
+        state = StreamState()
+        last_dispatch = 0.0
+        try:
+            with self.yield_api_client(sdk_config=self.sdk_config) as api_client:
+                resp = FunctionsAIDecompilationApi(
+                    api_client
+                ).stream_ai_decompilation_without_preload_content(
+                    function_id=function_id,
+                    _request_timeout=(STREAM_CONNECT_TIMEOUT, STREAM_READ_TIMEOUT),
+                )
+                self._active_streams[function_id] = resp
+                try:
+                    events = iter_stream_events(
+                        resp.stream(STREAM_CHUNK_BYTES, decode_content=True),
+                        stop=stop_event.is_set,
+                    )
+                    for event in events:
+                        state.apply(event)
+                        due = time.monotonic() - last_dispatch >= STREAM_DISPATCH_INTERVAL
+                        if state.is_terminal or due:
+                            self._safe_dispatch(stop_event, on_stream, state.snapshot())
+                            last_dispatch = time.monotonic()
+                finally:
+                    self._active_streams.pop(function_id, None)
+                    try:
+                        resp.release_conn()
+                    except Exception:
+                        pass
+        except (ApiException, urllib3.exceptions.HTTPError, OSError) as e:
+            logger.debug(
+                f"RevEng.AI: AI decompilation stream for function {function_id} ended: {e}"
+            )
+        except Exception as e:
+            logger.debug(
+                f"RevEng.AI: AI decompilation stream for function {function_id} failed: {e}"
+            )
+
+        if state.is_terminal:
+            return state
+        logger.debug(
+            f"RevEng.AI: AI decompilation stream for function {function_id} "
+            "ended before a terminal event; falling back to polling"
+        )
+        return None
 
     def _queue_summary(self, function_id: int) -> tuple[bool, str | None]:
         try:

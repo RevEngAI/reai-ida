@@ -4,6 +4,8 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
+from reai_toolkit.app.services.ai_decomp.stream import PROSE_TAIL
+
 if TYPE_CHECKING:
     from revengai.models.comments_data import CommentsData
     from revengai.models.decompilation_data import DecompilationData
@@ -12,6 +14,8 @@ if TYPE_CHECKING:
     from revengai.models.rendered_token import RenderedToken
     from revengai.models.summary_data import SummaryData
     from revengai.models.workflow_progress import WorkflowProgress
+
+    from reai_toolkit.app.services.ai_decomp.stream import StreamState
 
 
 _IDENT_RE = re.compile(r"[A-Za-z_]\w*")
@@ -112,6 +116,32 @@ def render_progress(progress: "WorkflowProgress") -> str:
             lines.append(f"// {_format_progress_message(message)}")
 
     return "\n".join(lines)
+
+
+def render_stream(state: "StreamState") -> str:
+    lines: list[str] = []
+
+    if state.failed:
+        lines.append("// RevEng.AI — AI decompilation failed")
+        if state.error:
+            lines.append(f"// {state.error}")
+    elif state.finished:
+        lines.append("// RevEng.AI — AI decompilation complete")
+    else:
+        attempt = f" (attempt {state.attempt})" if state.attempt > 1 else ""
+        stage = "naming identifiers" if state.decomp_finished else "decompiling"
+        lines.append(f"// RevEng.AI — {stage}…{attempt}")
+
+    if state.prose and not state.source:
+        lines.append("//")
+        for text in state.prose[-PROSE_TAIL:]:
+            for part in text.split("\n"):
+                lines.append(f"// {part}")
+
+    header = "\n".join(lines)
+    if not state.source:
+        return header
+    return f"{header}\n\n{state.source}"
 
 
 def _format_progress_message(message: "ProgressMessage") -> str:
