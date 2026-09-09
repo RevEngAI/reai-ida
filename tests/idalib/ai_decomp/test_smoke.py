@@ -9,7 +9,8 @@ from revengai.models.decompilation_data import DecompilationData
 from revengai.models.inline_comment import InlineComment
 from revengai.models.summary_data import SummaryData
 from revengai.models.task_status import TaskStatus
-from revengai.models.tokenised_data import TokenisedData
+from revengai.models.get_tokens_response import GetTokensResponse
+from revengai.models.rendered_token import RenderedToken
 
 from reai_toolkit.app.services.ai_decomp import ai_decomp_service as svc_mod
 from reai_toolkit.app.services.ai_decomp.ai_decomp_service import AiDecompService
@@ -75,11 +76,20 @@ def test_mutations_and_refresh_under_idalib(loaded_binary, mocker):
     api_inst.get_ai_decompilation.return_value = DecompilationData.model_construct(
         status=TaskStatus.COMPLETED.value, decompilation="int sub(int v1) { return v1; }"
     )
-    api_inst.get_ai_decompilation_tokenised.return_value = TokenisedData.model_construct(
-        status=TaskStatus.COMPLETED.value,
-        tokenised_decompilation="int @@F@@(int @@V@@) { return @@V@@; }",
-        predicted_function_name="sub",
-        function_mapping=MagicMock(),
+    api_inst.v3_get_ai_decompilation_tokens.return_value = GetTokensResponse.model_construct(
+        ai_decomp="int @@F@@(int @@V@@) { return @@V@@; }",
+        analysis_id=1,
+        placeholder_to_rendered_token={
+            "@@V@@": RenderedToken.model_construct(
+                value="v1",
+                kind="param",
+                vaddr=None,
+                data_type_id=None,
+                function_id=None,
+                imported_function_id=None,
+            )
+        },
+        placeholder_to_user_override={},
     )
     api_inst.patch_ai_decompilation_inline_comment.return_value = (
         CommentsData.model_construct(
@@ -103,7 +113,7 @@ def test_mutations_and_refresh_under_idalib(loaded_binary, mocker):
     )
     _wait_mock(on_decomp)
     _wait_mock(on_tok)
-    api_inst.upsert_ai_decompilation_overrides.assert_called_once()
+    api_inst.v3_upsert_ai_decompilation_overrides.assert_called_once()
     assert on_decomp.call_args[0][0].success is True
     assert service._tokenised_cache[7] is not None
 

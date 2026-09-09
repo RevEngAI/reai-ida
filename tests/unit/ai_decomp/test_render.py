@@ -1,15 +1,19 @@
-from revengai.models.ai_decomp_function_mapping import AIDecompFunctionMapping
+import pytest
 from revengai.models.comments_data import CommentsData
 from revengai.models.decompilation_data import DecompilationData
+from revengai.models.get_tokens_response import GetTokensResponse
 from revengai.models.inline_comment import InlineComment
 from revengai.models.progress_message import ProgressMessage
-from revengai.models.replacement_value import ReplacementValue
+from revengai.models.rendered_token import RenderedToken
 from revengai.models.summary_data import SummaryData
-from revengai.models.tokenised_data import TokenisedData
+from revengai.models.token import Token
 from revengai.models.workflow_progress import WorkflowProgress
 
 from reai_toolkit.app.coordinators.ai_decomp_render import (
+    effective_values,
+    find_token,
     index_of_identifier,
+    names_token,
     render_progress,
     render_view,
     render_view_with_map,
@@ -34,38 +38,30 @@ def _comments(pairs):
     return CommentsData.model_construct(inline_comments=items, task_status="COMPLETED")
 
 
-def _mapping(**cats):
-    base = dict(
-        fields={},
-        inverse_function_map={},
-        inverse_string_map={},
-        unmatched_custom_function_pointers={},
-        unmatched_custom_types={},
-        unmatched_enums={},
-        unmatched_external_vars={},
-        unmatched_functions={},
-        unmatched_global_vars={},
-        unmatched_go_to_labels={},
-        unmatched_strings={},
-        unmatched_variadic_lists={},
-        unmatched_vars={},
-        user_override_mappings={},
+def _rt(value, kind="local", **ids):
+    return RenderedToken.model_construct(
+        value=value,
+        kind=kind,
+        vaddr=None,
+        data_type_id=ids.get("data_type_id"),
+        function_id=ids.get("function_id"),
+        imported_function_id=ids.get("imported_function_id"),
     )
-    base.update(cats)
-    return AIDecompFunctionMapping.model_construct(**base)
 
 
-def _rv(value):
-    return ReplacementValue.model_construct(value=value)
-
-
-def _tokenised(tok=TOK, mapping=None):
-    return TokenisedData.model_construct(
-        status="COMPLETED",
-        tokenised_decompilation=tok,
-        predicted_function_name="f",
-        function_mapping=mapping if mapping is not None else _mapping(),
+def _tokens(tok=TOK, rendered=None, overrides=None):
+    return GetTokensResponse.model_construct(
+        ai_decomp=tok,
+        analysis_id=1,
+        placeholder_to_rendered_token=rendered if rendered is not None else {},
+        placeholder_to_user_override={
+            placeholder: Token.model_construct(value=value)
+            for placeholder, value in (overrides or {}).items()
+        },
     )
+
+
+_VARS = {"@@V_v5@@": _rt("v5"), "@@V_a1@@": _rt("a1", kind="param")}
 
 
 def test_render_matches_legacy_and_builds_model():
@@ -128,33 +124,85 @@ def test_index_of_identifier():
 
 
 def test_resolve_token_positional_variable():
-    tokd = _tokenised(mapping=_mapping(unmatched_vars={"@@V_v5@@": _rv("v5"), "@@V_a1@@": _rv("a1")}))
-    assert resolve_token(tokd, 1, 1, "v5") == ("@@V_v5@@", "variable")
+    assert resolve_token(_tokens(rendered=_VARS), 1, 1, "v5") == ("@@V_v5@@", "local")
 
 
-def test_resolve_token_type_category():
-    tok = "@@T_S@@ *x = 0;"
-    tokd = _tokenised(tok=tok, mapping=_mapping(unmatched_custom_types={"@@T_S@@": _rv("Foo")}))
-    assert resolve_token(tokd, 0, 0, "Foo") == ("@@T_S@@", "type")
+def test_resolve_token_picks_the_placeholder_at_that_position_not_a_same_valued_twin():
+    rendered = {"@@V_a@@": _rt("dup"), "@@V_b@@": _rt("dup")}
+    tokens = _tokens(tok="int @@V_a@@ = @@V_b@@;", rendered=rendered)
+
+    assert resolve_token(tokens, 0, 2, "dup") == ("@@V_b@@", "local")
 
 
 def test_resolve_token_honours_user_override():
-    mapping = _mapping(
-        unmatched_vars={"@@V_v5@@": _rv("v5")},
-        user_override_mappings={"@@V_v5@@": "tmp"},
-    )
-    tokd = _tokenised(mapping=mapping)
-    assert resolve_token(tokd, 1, 1, "tmp") == ("@@V_v5@@", "variable")
+    tokens = _tokens(rendered=_VARS, overrides={"@@V_v5@@": "tmp"})
+
+    assert resolve_token(tokens, 1, 1, "tmp") == ("@@V_v5@@", "local")
+    assert resolve_token(tokens, 1, 1, "v5") is None
+
+
+def test_effective_values_merge_overrides_over_rendered():
+    tokens = _tokens(rendered=_VARS, overrides={"@@V_v5@@": "tmp"})
+
+    assert effective_values(tokens) == {"@@V_v5@@": "tmp", "@@V_a1@@": "a1"}
 
 
 def test_resolve_token_unknown_returns_none():
-    tokd = _tokenised(mapping=_mapping(unmatched_vars={"@@V_v5@@": _rv("v5")}))
-    assert resolve_token(tokd, 1, 1, "not_a_var") is None
+    assert resolve_token(_tokens(rendered=_VARS), 1, 1, "not_a_var") is None
 
 
 def test_resolve_token_value_fallback_when_line_unaligned():
-    tokd = _tokenised(tok="", mapping=_mapping(unmatched_vars={"@@V_v5@@": _rv("v5")}))
-    assert resolve_token(tokd, 1, 1, "v5") == ("@@V_v5@@", "variable")
+    tokens = _tokens(tok="", rendered={"@@V_v5@@": _rt("v5")})
+
+    assert resolve_token(tokens, 1, 1, "v5") == ("@@V_v5@@", "local")
+
+
+def test_resolve_token_ambiguous_value_fallback_resolves_to_nothing():
+    rendered = {"@@V_a@@": _rt("dup"), "@@V_b@@": _rt("dup")}
+
+    assert resolve_token(_tokens(tok="", rendered=rendered), 0, 0, "dup") is None
+
+
+def test_resolve_token_empty_token_map_returns_none():
+    assert resolve_token(_tokens(rendered={}), 1, 1, "v5") is None
+
+
+@pytest.mark.parametrize(
+    "value,ident",
+    [("lang_start<()>", "lang_start"), ("Foo::bar", "bar"), ("Foo::bar", "Foo")],
+)
+def test_identifier_inside_a_qualified_rendered_value_still_resolves(value, ident):
+    tokens = _tokens(tok="@@F@@();", rendered={"@@F@@": _rt(value)})
+
+    assert names_token(ident, value)
+    assert resolve_token(tokens, 0, 0, ident) == ("@@F@@", "local")
+
+
+@pytest.mark.parametrize(
+    "field", ["data_type_id", "function_id", "imported_function_id"]
+)
+def test_tokens_renamed_elsewhere_are_declined(field):
+    rendered = {"@@X@@": _rt("Foo", kind="type", **{field: 12})}
+
+    assert resolve_token(_tokens(tok="@@X@@ *x;", rendered=rendered), 0, 0, "Foo") is None
+
+
+@pytest.mark.parametrize(
+    "field", ["data_type_id", "function_id", "imported_function_id"]
+)
+def test_id_zero_is_a_real_id_and_still_declines(field):
+    rendered = {"@@X@@": _rt("Foo", kind="type", **{field: 0})}
+
+    assert resolve_token(_tokens(tok="@@X@@ *x;", rendered=rendered), 0, 0, "Foo") is None
+
+
+def test_find_token_returns_tokens_renamed_elsewhere_even_though_resolve_declines():
+    rendered = {"@@X@@": _rt("Foo", kind="type", data_type_id=12)}
+    tokens = _tokens(tok="@@X@@ *x;", rendered=rendered)
+
+    placeholder, token = find_token(tokens, 0, 0, "Foo")
+    assert placeholder == "@@X@@"
+    assert token.data_type_id == 12
 
 
 def _pm(text, level="INFO", step="DECOMPILING", timestamp=None):

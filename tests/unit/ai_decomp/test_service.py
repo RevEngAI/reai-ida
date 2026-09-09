@@ -10,10 +10,11 @@ from revengai.models.decompilation_data import DecompilationData
 from revengai.models.inline_comment import InlineComment
 from revengai.models.summary_data import SummaryData
 from revengai.models.task_status import TaskStatus
-from revengai.models.tokenised_data import TokenisedData
+from revengai.models.get_tokens_response import GetTokensResponse
+from revengai.models.rendered_token import RenderedToken
+from revengai.models.token import Token
 from revengai.models.workflow_progress import WorkflowProgress
 
-from reai_toolkit.app.core.shared_schema import GenericApiReturn
 from reai_toolkit.app.services.ai_decomp import ai_decomp_service as svc_mod
 from reai_toolkit.app.services.ai_decomp.ai_decomp_service import AiDecompService
 
@@ -72,12 +73,21 @@ def _comments(items=None, status=TaskStatus.COMPLETED.value) -> CommentsData:
     return CommentsData.model_construct(inline_comments=items or [], task_status=status)
 
 
-def _tokd(status=TaskStatus.COMPLETED.value) -> TokenisedData:
-    return TokenisedData.model_construct(
-        status=status,
-        tokenised_decompilation="int @@F@@(void) {}",
-        predicted_function_name="f",
-        function_mapping=MagicMock(),
+def _tokd(source="int @@F@@(void) {}") -> GetTokensResponse:
+    return GetTokensResponse.model_construct(
+        ai_decomp=source,
+        analysis_id=1,
+        placeholder_to_rendered_token={
+            "@@F@@": RenderedToken.model_construct(
+                value="f",
+                kind="own_function",
+                vaddr=None,
+                data_type_id=None,
+                function_id=None,
+                imported_function_id=None,
+            )
+        },
+        placeholder_to_user_override={},
     )
 
 
@@ -369,7 +379,7 @@ def test_stop_mid_poll_drops_callback(service, sdk):
 
 def test_tokenised_phase_caches_and_dispatches_on_completed(service, sdk):
     sdk.get_ai_decompilation.return_value = _dd(code="ok")
-    sdk.get_ai_decompilation_tokenised.return_value = _tokd()
+    sdk.v3_get_ai_decompilation_tokens.return_value = _tokd()
 
     on_tokenised = MagicMock()
     service.start_ai_decomp_task(
@@ -383,19 +393,42 @@ def test_tokenised_phase_caches_and_dispatches_on_completed(service, sdk):
 
     on_tokenised.assert_called_once()
     assert on_tokenised.call_args[0][0].success is True
-    assert service._tokenised_cache[42] is sdk.get_ai_decompilation_tokenised.return_value
+    assert service._tokenised_cache[42] is sdk.v3_get_ai_decompilation_tokens.return_value
+
+
+def test_tokenised_phase_treats_an_empty_source_as_not_ready(service, sdk):
+    sdk.get_ai_decompilation.return_value = _dd(code="ok")
+    sdk.v3_get_ai_decompilation_tokens.return_value = GetTokensResponse.model_construct(
+        ai_decomp="",
+        analysis_id=1,
+        placeholder_to_rendered_token={},
+        placeholder_to_user_override={},
+    )
+
+    on_tokenised = MagicMock()
+    service.start_ai_decomp_task(
+        ea=4096,
+        on_decomp=MagicMock(),
+        on_summary=MagicMock(),
+        on_comments=MagicMock(),
+        on_tokenised=on_tokenised,
+    )
+    _wait(service)
+
+    assert on_tokenised.call_args[0][0].success is False
+    assert 42 not in service._tokenised_cache
 
 
 def test_tokenised_phase_skipped_when_no_callback(service, sdk):
     sdk.get_ai_decompilation.return_value = _dd(code="ok")
     _run(service)
-    sdk.get_ai_decompilation_tokenised.assert_not_called()
+    sdk.v3_get_ai_decompilation_tokens.assert_not_called()
 
 
 def test_apply_overrides_sends_body_refetches_and_caches(service, sdk):
-    sdk.upsert_ai_decompilation_overrides.return_value = MagicMock()
+    sdk.v3_upsert_ai_decompilation_overrides.return_value = MagicMock()
     sdk.get_ai_decompilation.return_value = _dd(code="renamed")
-    sdk.get_ai_decompilation_tokenised.return_value = _tokd()
+    sdk.v3_get_ai_decompilation_tokens.return_value = _tokd()
 
     on_decomp, on_tokenised = MagicMock(), MagicMock()
     service.apply_overrides(
@@ -407,19 +440,19 @@ def test_apply_overrides_sends_body_refetches_and_caches(service, sdk):
     _wait_mock(on_decomp)
     _wait_mock(on_tokenised)
 
-    _, kwargs = sdk.upsert_ai_decompilation_overrides.call_args
+    _, kwargs = sdk.v3_upsert_ai_decompilation_overrides.call_args
     assert kwargs["function_id"] == 42
-    assert kwargs["upsert_overrides_input_body"].overrides == {"@@V_v5@@": "buf"}
+    assert kwargs["upsert_overrides_input_body"].overrides == {"@@V_v5@@": Token(value="buf")}
 
     payload = on_decomp.call_args[0][0]
     assert payload.success is True
     assert payload.data.decompilation == "renamed"
     assert service._decomp_cache[42].decompilation == "renamed"
-    assert service._tokenised_cache[42] is sdk.get_ai_decompilation_tokenised.return_value
+    assert service._tokenised_cache[42] is sdk.v3_get_ai_decompilation_tokens.return_value
 
 
 def test_apply_overrides_api_error_surfaces(service, sdk):
-    sdk.upsert_ai_decompilation_overrides.side_effect = ApiException(status=500, reason="x")
+    sdk.v3_upsert_ai_decompilation_overrides.side_effect = ApiException(status=500, reason="x")
 
     on_decomp, on_tokenised = MagicMock(), MagicMock()
     service.apply_overrides(

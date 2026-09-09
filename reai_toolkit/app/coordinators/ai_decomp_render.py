@@ -5,22 +5,17 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from revengai.models.ai_decomp_function_mapping import AIDecompFunctionMapping
     from revengai.models.comments_data import CommentsData
     from revengai.models.decompilation_data import DecompilationData
+    from revengai.models.get_tokens_response import GetTokensResponse
     from revengai.models.progress_message import ProgressMessage
+    from revengai.models.rendered_token import RenderedToken
     from revengai.models.summary_data import SummaryData
-    from revengai.models.tokenised_data import TokenisedData
     from revengai.models.workflow_progress import WorkflowProgress
 
 
 _IDENT_RE = re.compile(r"[A-Za-z_]\w*")
-_VARIABLE_CATEGORIES = (
-    "unmatched_vars",
-    "unmatched_global_vars",
-    "unmatched_external_vars",
-)
-_TYPE_CATEGORIES = ("unmatched_custom_types", "unmatched_enums")
+_RENAMED_ELSEWHERE_FIELDS = ("data_type_id", "function_id", "imported_function_id")
 
 
 @dataclass
@@ -170,53 +165,65 @@ def index_of_identifier(line: str, word: str) -> int:
     return idents.index(word) if word in idents else -1
 
 
+def effective_values(tokens: "GetTokensResponse") -> dict[str, str]:
+    rendered = tokens.placeholder_to_rendered_token or {}
+    overrides = tokens.placeholder_to_user_override or {}
+    values: dict[str, str] = {}
+    for placeholder, token in rendered.items():
+        override = overrides.get(placeholder)
+        values[placeholder] = override.value if override is not None else token.value
+    return values
+
+
+def names_token(ident: str, rendered_value: str) -> bool:
+    return ident == rendered_value or ident in _IDENT_RE.findall(rendered_value)
+
+
+def _unit_re(placeholders) -> re.Pattern:
+    parts = [re.escape(p) for p in sorted(placeholders, key=len, reverse=True)]
+    parts.append(_IDENT_RE.pattern)
+    return re.compile("|".join(parts))
+
+
+def find_token(
+    tokens: "GetTokensResponse",
+    source_index: int,
+    ident_index: int,
+    old_ident: str,
+) -> Optional[tuple[str, "RenderedToken"]]:
+    rendered = tokens.placeholder_to_rendered_token or {}
+    if not rendered:
+        return None
+    values = effective_values(tokens)
+
+    tok_lines = (tokens.ai_decomp or "").split("\n")
+    if 0 <= source_index < len(tok_lines):
+        units = _unit_re(rendered).findall(tok_lines[source_index])
+        if 0 <= ident_index < len(units):
+            unit = units[ident_index]
+            if unit in rendered and names_token(old_ident, values[unit]):
+                return unit, rendered[unit]
+
+    matches = [p for p, value in values.items() if names_token(old_ident, value)]
+    if len(matches) == 1:
+        return matches[0], rendered[matches[0]]
+    return None
+
+
+def is_renameable(token: "RenderedToken") -> bool:
+    return all(getattr(token, name, None) is None for name in _RENAMED_ELSEWHERE_FIELDS)
+
+
 def resolve_token(
-    tokenised: "TokenisedData",
+    tokens: "GetTokensResponse",
     source_index: int,
     ident_index: int,
     old_ident: str,
 ) -> Optional[tuple[str, str]]:
-    mapping = tokenised.function_mapping
-    if mapping is None:
+    found = find_token(tokens, source_index, ident_index, old_ident)
+    if found is None:
         return None
-
-    tok_lines = (tokenised.tokenised_decompilation or "").split("\n")
-    if 0 <= source_index < len(tok_lines):
-        tok_idents = _IDENT_RE.findall(tok_lines[source_index])
-        if 0 <= ident_index < len(tok_idents):
-            candidate = tok_idents[ident_index]
-            cat, eff = _category_of_token(mapping, candidate)
-            if cat is not None and eff == old_ident:
-                return candidate, cat
-
-    matches = [
-        (token, cat)
-        for token, rv, cat in _iter_category_tokens(mapping)
-        if _effective_value(mapping, token, rv) == old_ident
-    ]
-    if len(matches) == 1:
-        return matches[0]
-    return None
-
-
-def _iter_category_tokens(mapping: "AIDecompFunctionMapping"):
-    for cat in _VARIABLE_CATEGORIES:
-        for token, rv in (getattr(mapping, cat, None) or {}).items():
-            yield token, rv, "variable"
-    for cat in _TYPE_CATEGORIES:
-        for token, rv in (getattr(mapping, cat, None) or {}).items():
-            yield token, rv, "type"
-
-
-def _category_of_token(
-    mapping: "AIDecompFunctionMapping", token: str
-) -> tuple[Optional[str], Optional[str]]:
-    for t, rv, cat in _iter_category_tokens(mapping):
-        if t == token:
-            return cat, _effective_value(mapping, t, rv)
-    return None, None
-
-
-def _effective_value(mapping: "AIDecompFunctionMapping", token: str, replacement) -> str:
-    overrides = mapping.user_override_mappings or {}
-    return overrides.get(token, replacement.value)
+    placeholder, token = found
+    if not is_renameable(token):
+        return None
+    return placeholder, token.kind

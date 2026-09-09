@@ -11,10 +11,11 @@ from revengai import (
 from revengai.models.ai_decompilation_rating import AiDecompilationRating
 from revengai.models.comments_data import CommentsData
 from revengai.models.decompilation_data import DecompilationData
+from revengai.models.get_tokens_response import GetTokensResponse
 from revengai.models.patch_comment_body import PatchCommentBody
 from revengai.models.summary_data import SummaryData
 from revengai.models.task_status import TaskStatus
-from revengai.models.tokenised_data import TokenisedData
+from revengai.models.token import Token
 from revengai.models.upsert_ai_decomplation_rating_request import (
     UpsertAiDecomplationRatingRequest,
 )
@@ -37,7 +38,7 @@ class AiDecompService(IThreadService):
         self._decomp_cache: dict[int, DecompilationData] = {}
         self._summary_cache: dict[int, SummaryData] = {}
         self._comments_cache: dict[int, CommentsData] = {}
-        self._tokenised_cache: dict[int, TokenisedData] = {}
+        self._tokenised_cache: dict[int, GetTokensResponse] = {}
         self._inflight: dict[int, threading.Event] = {}
         self._inflight_lock = threading.Lock()
 
@@ -89,7 +90,7 @@ class AiDecompService(IThreadService):
         on_decomp: Callable[[GenericApiReturn[DecompilationData]], None],
         on_summary: Callable[[GenericApiReturn[SummaryData]], None],
         on_comments: Callable[[GenericApiReturn[CommentsData]], None],
-        on_tokenised: Callable[[GenericApiReturn[TokenisedData]], None] | None = None,
+        on_tokenised: Callable[[GenericApiReturn[GetTokensResponse]], None] | None = None,
         on_progress: Callable[[WorkflowProgress], None] | None = None,
     ) -> None:
         function_id = self._get_function_id(start_ea=ea)
@@ -124,7 +125,7 @@ class AiDecompService(IThreadService):
         ea: int,
         overrides: dict[str, str],
         on_decomp: Callable[[GenericApiReturn[DecompilationData]], None],
-        on_tokenised: Callable[[GenericApiReturn[TokenisedData]], None],
+        on_tokenised: Callable[[GenericApiReturn[GetTokensResponse]], None],
     ) -> None:
         function_id = self._get_function_id(start_ea=ea)
         if function_id is None:
@@ -240,14 +241,17 @@ class AiDecompService(IThreadService):
         function_id: int,
         overrides: dict[str, str],
         on_decomp: Callable[[GenericApiReturn[DecompilationData]], None],
-        on_tokenised: Callable[[GenericApiReturn[TokenisedData]], None],
+        on_tokenised: Callable[[GenericApiReturn[GetTokensResponse]], None],
     ) -> None:
         try:
             with self.yield_api_client(sdk_config=self.sdk_config) as api_client:
-                FunctionsAIDecompilationApi(api_client).upsert_ai_decompilation_overrides(
+                FunctionsAIDecompilationApi(api_client).v3_upsert_ai_decompilation_overrides(
                     function_id=function_id,
                     upsert_overrides_input_body=UpsertOverridesInputBody(
-                        overrides=overrides
+                        overrides={
+                            placeholder: Token(value=value)
+                            for placeholder, value in overrides.items()
+                        }
                     ),
                 )
         except ApiException as e:
@@ -280,13 +284,9 @@ class AiDecompService(IThreadService):
             )
 
         tokenised, _terr = self._fetch_tokenised(function_id)
-        if (
-            tokenised is not None
-            and str(tokenised.status) == TaskStatus.COMPLETED.value
-            and tokenised.function_mapping is not None
-        ):
+        if tokenised is not None and _tokens_ready(tokenised):
             self._tokenised_cache[function_id] = tokenised
-            on_tokenised(GenericApiReturn[TokenisedData](success=True, data=tokenised))
+            on_tokenised(GenericApiReturn[GetTokensResponse](success=True, data=tokenised))
 
     def _run_set_comment(
         self,
@@ -358,7 +358,7 @@ class AiDecompService(IThreadService):
         on_decomp: Callable[[GenericApiReturn[DecompilationData]], None],
         on_summary: Callable[[GenericApiReturn[SummaryData]], None],
         on_comments: Callable[[GenericApiReturn[CommentsData]], None],
-        on_tokenised: Callable[[GenericApiReturn[TokenisedData]], None] | None = None,
+        on_tokenised: Callable[[GenericApiReturn[GetTokensResponse]], None] | None = None,
         on_progress: Callable[[WorkflowProgress], None] | None = None,
     ) -> None:
         try:
@@ -781,12 +781,12 @@ class AiDecompService(IThreadService):
 
     def _fetch_tokenised(
         self, function_id: int
-    ) -> tuple[TokenisedData | None, str | None]:
+    ) -> tuple[GetTokensResponse | None, str | None]:
         try:
             with self.yield_api_client(sdk_config=self.sdk_config) as api_client:
                 tokenised = FunctionsAIDecompilationApi(
                     api_client
-                ).get_ai_decompilation_tokenised(function_id=function_id)
+                ).v3_get_ai_decompilation_tokens(function_id=function_id)
             return tokenised, None
         except ApiException as e:
             return None, _format_api_error(e)
@@ -797,14 +797,14 @@ class AiDecompService(IThreadService):
         self,
         function_id: int,
         stop_event: threading.Event,
-        on_tokenised: Callable[[GenericApiReturn[TokenisedData]], None],
+        on_tokenised: Callable[[GenericApiReturn[GetTokensResponse]], None],
     ) -> None:
         cached = self._tokenised_cache.get(function_id)
         if cached is not None:
             self._safe_dispatch(
                 stop_event,
                 on_tokenised,
-                GenericApiReturn[TokenisedData](success=True, data=cached),
+                GenericApiReturn[GetTokensResponse](success=True, data=cached),
             )
             return
 
@@ -813,25 +813,22 @@ class AiDecompService(IThreadService):
             self._safe_dispatch(
                 stop_event,
                 on_tokenised,
-                GenericApiReturn[TokenisedData](success=False, error_message=err),
+                GenericApiReturn[GetTokensResponse](success=False, error_message=err),
             )
             return
 
-        if (
-            str(tokenised.status) == TaskStatus.COMPLETED.value
-            and tokenised.function_mapping is not None
-        ):
+        if _tokens_ready(tokenised):
             self._tokenised_cache[function_id] = tokenised
             self._safe_dispatch(
                 stop_event,
                 on_tokenised,
-                GenericApiReturn[TokenisedData](success=True, data=tokenised),
+                GenericApiReturn[GetTokensResponse](success=True, data=tokenised),
             )
         else:
             self._safe_dispatch(
                 stop_event,
                 on_tokenised,
-                GenericApiReturn[TokenisedData](
+                GenericApiReturn[GetTokensResponse](
                     success=False, error_message="Tokenised data not ready."
                 ),
             )
@@ -881,6 +878,10 @@ class AiDecompService(IThreadService):
                 return False, None
 
         return False, None
+
+
+def _tokens_ready(tokens: GetTokensResponse) -> bool:
+    return bool(tokens.ai_decomp) and bool(tokens.placeholder_to_rendered_token)
 
 
 def _format_api_error(e: ApiException) -> str:

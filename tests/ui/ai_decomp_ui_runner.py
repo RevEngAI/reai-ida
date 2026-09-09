@@ -34,12 +34,11 @@ def _run(report: dict) -> None:
     import ida_kernwin
     import idautils
 
-    from revengai.models.ai_decomp_function_mapping import AIDecompFunctionMapping
     from revengai.models.comments_data import CommentsData
     from revengai.models.decompilation_data import DecompilationData
+    from revengai.models.get_tokens_response import GetTokensResponse
     from revengai.models.inline_comment import InlineComment
-    from revengai.models.replacement_value import ReplacementValue
-    from revengai.models.tokenised_data import TokenisedData
+    from revengai.models.rendered_token import RenderedToken
 
     from reai_toolkit.app.components.tabs.ai_decomp_tab import AIDecompView
     from reai_toolkit.app.coordinators.ai_decomp_coordinator import AiDecompCoordinator
@@ -53,18 +52,24 @@ def _run(report: dict) -> None:
     ea = next(iter(idautils.Functions()), 0x1000)
 
     decomp = DecompilationData.model_construct(status="COMPLETED", decompilation=CODE)
-    mapping = AIDecompFunctionMapping.model_construct(
-        unmatched_vars={
-            "@@A@@": ReplacementValue.model_construct(value="a1"),
-            "@@V@@": ReplacementValue.model_construct(value="v5"),
+    def _rt(value, kind):
+        return RenderedToken.model_construct(
+            value=value,
+            kind=kind,
+            vaddr=None,
+            data_type_id=None,
+            function_id=None,
+            imported_function_id=None,
+        )
+
+    tokenised = GetTokensResponse.model_construct(
+        ai_decomp=TOK,
+        analysis_id=1,
+        placeholder_to_rendered_token={
+            "@@A@@": _rt("a1", "param"),
+            "@@V@@": _rt("v5", "local"),
         },
-        user_override_mappings={},
-    )
-    tokenised = TokenisedData.model_construct(
-        status="COMPLETED",
-        tokenised_decompilation=TOK,
-        predicted_function_name="f",
-        function_mapping=mapping,
+        placeholder_to_user_override={},
     )
 
     service = MagicMock()

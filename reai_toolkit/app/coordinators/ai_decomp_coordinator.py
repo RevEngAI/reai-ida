@@ -7,7 +7,7 @@ from revengai.models.ai_decompilation_rating import AiDecompilationRating
 from revengai.models.comments_data import CommentsData
 from revengai.models.decompilation_data import DecompilationData
 from revengai.models.summary_data import SummaryData
-from revengai.models.tokenised_data import TokenisedData
+from revengai.models.get_tokens_response import GetTokensResponse
 from revengai.models.workflow_progress import WorkflowProgress
 
 from reai_toolkit.app.app import App
@@ -43,7 +43,7 @@ class AiDecompCoordinator(BaseCoordinator):
         self._current_decomp: DecompilationData | None = None
         self._current_summary: SummaryData | None = None
         self._current_comments: CommentsData | None = None
-        self._current_tokenised: TokenisedData | None = None
+        self._current_tokenised: GetTokensResponse | None = None
         self._baseline: RenderModel | None = None
 
     def enable_function_tracking(self) -> None:
@@ -192,7 +192,7 @@ class AiDecompCoordinator(BaseCoordinator):
         self._rerender()
 
     def _on_tokenised_complete(
-        self, ea: int, response: GenericApiReturn[TokenisedData]
+        self, ea: int, response: GenericApiReturn[GetTokensResponse]
     ) -> None:
         if ea != self._current_func_vaddr:
             return
