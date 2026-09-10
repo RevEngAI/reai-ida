@@ -9,38 +9,32 @@ import pytest
 pytestmark = pytest.mark.ida_ui
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-RUNNER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_decomp_ui_runner.py")
+RUNNER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chat_ui_runner.py")
 HELLO_ELF = os.path.join(ROOT, "tests", "fixtures", "hello.elf")
 
 CHECKS = [
-    "view_created",
-    "editor_read_only",
-    "only_identifiers_offer_rename",
-    "render_shows_code",
-    "rename_double_click_overrides",
-    "rename_overrides_correct",
-    "rename_non_token_info",
-    "rename_non_token_reason",
-    "rename_comment_line_reason",
-    "rename_data_type_reason",
-    "predicted_hidden_without_a_prediction",
-    "predicted_shown_with_a_prediction",
-    "predicted_button_renames",
-    "predicted_hidden_when_cleared",
-    "comment_add_sets",
-    "comment_add_args_correct",
-    "comment_edit_empty_removes",
-    "comment_remove_deletes",
-    "comment_remove_args_correct",
-    "decomp_line_lights_its_disassembly",
-    "a_line_with_no_counterpart_lights_nothing",
-    "disassembly_ea_lights_its_decomp_line",
-    "an_unattributed_address_lights_nothing",
-    "rendering_hook_runs_on_repaint",
-    "rendering_hook_sees_the_disassembly",
-    "attributed_addresses_paint",
-    "unattributed_lines_are_left_alone",
-    "refresh_button_invalidates",
+    "panel_created",
+    "bridge_is_a_qobject",
+    "relay_is_a_qobject",
+    "relay_lives_on_the_ui_thread",
+    "send_button_routes_through_the_bridge",
+    "send_clears_the_input",
+    "stop_button_routes_through_the_bridge",
+    "blank_input_sends_nothing",
+    "enter_submits_through_the_bridge",
+    "render_is_deferred_to_the_timer",
+    "timer_flush_reaches_the_transcript",
+    "timer_flush_updates_the_title",
+    "confirmation_shows_its_bar",
+    "approve_routes_with_the_pending_id",
+    "worker_reports_streaming",
+    "every_streamed_event_arrives",
+    "stream_callbacks_run_on_the_ui_thread",
+    "conversation_id_reaches_the_panel",
+    "stream_finish_clears_streaming",
+    "stop_returns_promptly",
+    "stop_closes_the_active_stream",
+    "stop_leaves_no_zombie_thread",
 ]
 
 
@@ -69,7 +63,7 @@ def _headless_env() -> dict[str, str]:
     os.environ.get("REAI_UI_TESTS") != "1",
     reason="GUI IDA test; set REAI_UI_TESTS=1 to enable",
 )
-def test_ai_decomp_editing_flow_in_gui(tmp_path):
+def test_agent_chat_panel_in_gui(tmp_path):
     ida = _ida_gui_binary()
     if ida is None:
         pytest.skip("IDADIR not set or ida binary missing")

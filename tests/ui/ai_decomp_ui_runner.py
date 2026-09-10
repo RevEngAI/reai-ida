@@ -32,6 +32,7 @@ def _run(report: dict) -> None:
     from unittest.mock import MagicMock
 
     import ida_kernwin
+    import idaapi
     import idautils
 
     from revengai.models.comments_data import CommentsData
@@ -279,11 +280,10 @@ def _run(report: dict) -> None:
 
     coord.on_disassembly_ea(ea)
     pump()
-    report["disassembly_ea_lights_its_decomp_line"] = (
-        len(view._editor.extraSelections()) == 1
-        and view._editor.extraSelections()[0].cursor.blockNumber()
-        == code_line_row("int v5")
-    )
+    selections = view._editor.extraSelections()
+    report["disassembly_ea_lights_its_decomp_line"] = [
+        sel.cursor.blockNumber() for sel in selections
+    ] == [code_line_row("int v5")]
 
     coord.on_disassembly_ea(0xDEAD)
     pump()
@@ -293,6 +293,62 @@ def _run(report: dict) -> None:
 
     coord._attribution_hooks = None
     coord._current_attributions = None
+
+    from reai_toolkit.hooks.reactive import LineAttributionHooks
+
+    class _CountingHooks(LineAttributionHooks):
+        def __init__(self, coordinator):
+            super().__init__(coordinator)
+            self.calls = 0
+            self.painted = 0
+            self.offered = []
+            self.widget_types = []
+
+        def reset(self):
+            self.calls = 0
+            self.painted = 0
+            self.offered = []
+
+        def get_lines_rendering_info(self, out, widget, rin):
+            self.calls += 1
+            self.widget_types.append(ida_kernwin.get_widget_type(widget))
+            for section in rin.sections_lines:
+                for line in section:
+                    self.offered.append(line.at.toea())
+            before = out.entries.size()
+            super().get_lines_rendering_info(out, widget, rin)
+            self.painted += out.entries.size() - before
+
+    def repaint(target=None):
+        if target is not None:
+            ida_kernwin.jumpto(target)
+        ida_kernwin.refresh_idaview_anyway()
+        pump()
+
+    wanted = []
+    for func in list(idautils.Functions())[:40]:
+        wanted.extend(idautils.FuncItems(func))
+    wanted_set = set(wanted)
+
+    probe = _CountingHooks(coord)
+    probe.set_addresses(wanted)
+    probe.hook()
+    repaint(next(iter(idautils.Functions()), ea))
+
+    offered = [a for a in probe.offered if a != idaapi.BADADDR]
+    expected = sum(1 for a in offered if a in wanted_set)
+
+    report["diag_offered"] = len(offered)
+    report["diag_expected"] = expected
+    report["diag_painted"] = probe.painted
+
+    report["rendering_hook_runs_on_repaint"] = probe.calls > 0
+    report["rendering_hook_sees_the_disassembly"] = bool(probe.widget_types) and set(
+        probe.widget_types
+    ) == {ida_kernwin.BWN_DISASM}
+    report["attributed_addresses_paint"] = expected > 0 and probe.painted == expected
+    report["unattributed_lines_are_left_alone"] = probe.painted < len(offered)
+    probe.unhook()
 
     service.reset_mock()
     service.peek_decomp.return_value = None
@@ -333,6 +389,10 @@ def main() -> None:
         "a_line_with_no_counterpart_lights_nothing": False,
         "disassembly_ea_lights_its_decomp_line": False,
         "an_unattributed_address_lights_nothing": False,
+        "rendering_hook_runs_on_repaint": False,
+        "rendering_hook_sees_the_disassembly": False,
+        "attributed_addresses_paint": False,
+        "unattributed_lines_are_left_alone": False,
         "refresh_button_invalidates": False,
     }
     ida_auto.auto_wait()

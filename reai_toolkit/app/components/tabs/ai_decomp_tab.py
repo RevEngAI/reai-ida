@@ -6,7 +6,7 @@ from loguru import logger
 import ida_kernwin as kw
 from libbs.decompilers.ida.compat import execute_ui
 
-from reai_toolkit.app.core.qt_compat import QtCore, QtGui, QtWidgets, Signal
+from reai_toolkit.app.core.qt_compat import QtCore, QtGui, QtWidgets, Signal, Slot
 
 
 _WORD_UNDER_CURSOR = getattr(
@@ -77,6 +77,44 @@ class _DecompEditor(QtWidgets.QPlainTextEdit):
             self.commentRemoveRequested.emit(line)
 
 
+class _ViewBridge(QtCore.QObject):
+    def __init__(self, view: "AIDecompView") -> None:
+        super().__init__()
+        self._view = view
+
+    @Slot()
+    def refresh(self) -> None:
+        self._view._on_refresh_clicked()
+
+    @Slot()
+    def rate_up(self) -> None:
+        self._view._on_rate_up_clicked()
+
+    @Slot()
+    def rate_down(self) -> None:
+        self._view._on_rate_down_clicked()
+
+    @Slot()
+    def use_predicted_name(self) -> None:
+        self._view._on_use_predicted_name_clicked()
+
+    @Slot(int, str)
+    def rename(self, line: int, word: str) -> None:
+        self._view._on_rename_requested(line, word)
+
+    @Slot(int)
+    def edit_comment(self, line: int) -> None:
+        self._view._on_edit_comment_requested(line)
+
+    @Slot(int)
+    def remove_comment(self, line: int) -> None:
+        self._view._on_remove_comment_requested(line)
+
+    @Slot()
+    def cursor_moved(self) -> None:
+        self._view._on_cursor_moved()
+
+
 class AIDecompView(kw.PluginForm):
     """
     Dockable tab using Qt editor + QSyntaxHighlighter.
@@ -108,6 +146,7 @@ class AIDecompView(kw.PluginForm):
         self._predicted_label: QtWidgets.QLabel | None = None
         self._predicted_btn: QtWidgets.QPushButton | None = None
         self._predicted_name: str | None = None
+        self._bridge: _ViewBridge | None = None
         self._highlighter: CppHighlighter | None = None
 
     def Create(self, title: Any) -> Any:
@@ -132,6 +171,8 @@ class AIDecompView(kw.PluginForm):
         """Called by IDA when the form is created; build our Qt UI here."""
         self._parent_window = self.FormToPyQtWidget(form)
 
+        self._bridge = _ViewBridge(self)
+
         # Layout root
         layout = QtWidgets.QVBoxLayout(self._parent_window)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -150,7 +191,7 @@ class AIDecompView(kw.PluginForm):
         )
         self._predicted_btn.setToolTip("Rename this function to the predicted name")
         self._predicted_btn.setVisible(False)
-        self._predicted_btn.clicked.connect(self._on_use_predicted_name_clicked)
+        self._predicted_btn.clicked.connect(self._bridge.use_predicted_name)
         header.addWidget(self._predicted_btn)
 
         header.addStretch(1)
@@ -164,7 +205,7 @@ class AIDecompView(kw.PluginForm):
             self._rate_up_btn.setText("\U0001f44d")
         self._rate_up_btn.setCheckable(True)
         self._rate_up_btn.setToolTip("Rate this AI decompilation as good")
-        self._rate_up_btn.clicked.connect(self._on_rate_up_clicked)
+        self._rate_up_btn.clicked.connect(self._bridge.rate_up)
         header.addWidget(self._rate_up_btn)
 
         down_icon = _thumb_icon(up=False)
@@ -176,11 +217,11 @@ class AIDecompView(kw.PluginForm):
             self._rate_down_btn.setText("\U0001f44e")
         self._rate_down_btn.setCheckable(True)
         self._rate_down_btn.setToolTip("Rate this AI decompilation as poor")
-        self._rate_down_btn.clicked.connect(self._on_rate_down_clicked)
+        self._rate_down_btn.clicked.connect(self._bridge.rate_down)
         header.addWidget(self._rate_down_btn)
 
         self._refresh_btn = QtWidgets.QPushButton("Refresh", self._parent_window)
-        self._refresh_btn.clicked.connect(self._on_refresh_clicked)
+        self._refresh_btn.clicked.connect(self._bridge.refresh)
         header.addWidget(self._refresh_btn)
         layout.addLayout(header)
 
@@ -188,10 +229,10 @@ class AIDecompView(kw.PluginForm):
         self._editor = _DecompEditor(self._parent_window)
         self._editor.setReadOnly(True)
         self._editor.setLineWrapMode(QtWidgets.QPlainTextEdit.NoWrap)
-        self._editor.renameRequested.connect(self._on_rename_requested)
-        self._editor.commentEditRequested.connect(self._on_edit_comment_requested)
-        self._editor.commentRemoveRequested.connect(self._on_remove_comment_requested)
-        self._editor.cursorPositionChanged.connect(self._on_cursor_moved)
+        self._editor.renameRequested.connect(self._bridge.rename)
+        self._editor.commentEditRequested.connect(self._bridge.edit_comment)
+        self._editor.commentRemoveRequested.connect(self._bridge.remove_comment)
+        self._editor.cursorPositionChanged.connect(self._bridge.cursor_moved)
 
         # Monospace font tuned for IDA
         font = QtGui.QFont(
@@ -225,6 +266,7 @@ class AIDecompView(kw.PluginForm):
         self._predicted_label = None
         self._predicted_btn = None
         self._predicted_name = None
+        self._bridge = None
         self._parent_window = None
 
     def _on_refresh_clicked(self) -> None:
