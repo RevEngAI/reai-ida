@@ -55,11 +55,13 @@ class AuthService:
             self.sdk_config = Configuration(
                 host=self.config_service.api_url,
                 api_key={"APIKey": self.config_service.api_key},
+                access_token=self.config_service.api_key,
             )
         # Other calls must reassign values - do not create new object (mutate existing one, all holders share ref)
         else:
             self.sdk_config.host = self.config_service.api_url
             self.sdk_config.api_key = {"APIKey": self.config_service.api_key}
+            self.sdk_config.access_token = self.config_service.api_key
 
         self.sdk_config.user_agent = (
             f"IDA/{self._ida_version} RevEng.AI_Plugin/{self._plugin_version}"

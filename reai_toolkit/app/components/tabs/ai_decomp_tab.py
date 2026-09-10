@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 from typing import Any, Callable, Optional
 from loguru import logger
@@ -5,12 +6,24 @@ from loguru import logger
 import ida_kernwin as kw
 from libbs.decompilers.ida.compat import execute_ui
 
-from reai_toolkit.app.core.qt_compat import QtCore, QtGui, QtWidgets, Signal
+from reai_toolkit.app.core.qt_compat import QtCore, QtGui, QtWidgets, Signal, Slot
 
 
 _WORD_UNDER_CURSOR = getattr(
     getattr(QtGui.QTextCursor, "SelectionType", QtGui.QTextCursor), "WordUnderCursor"
 )
+
+_IDENTIFIER_RE = re.compile(r"[A-Za-z_]\w*\Z")
+
+_FULL_WIDTH_SELECTION = getattr(
+    getattr(QtGui.QTextFormat, "Property", QtGui.QTextFormat), "FullWidthSelection"
+)
+
+ATTRIBUTION_HIGHLIGHT_RGB = "#3d4a63"
+
+
+def _is_identifier(word: str) -> bool:
+    return bool(word) and _IDENTIFIER_RE.match(word) is not None
 
 
 def _thumb_icon(up: bool) -> Optional[QtGui.QIcon]:
@@ -38,7 +51,7 @@ class _DecompEditor(QtWidgets.QPlainTextEdit):
         super().mouseDoubleClickEvent(event)
         cursor = self.textCursor()
         word = cursor.selectedText()
-        if word:
+        if _is_identifier(word):
             self.renameRequested.emit(cursor.blockNumber(), word)
 
     def contextMenuEvent(self, event) -> None:
@@ -49,7 +62,7 @@ class _DecompEditor(QtWidgets.QPlainTextEdit):
 
         menu = self.createStandardContextMenu()
         menu.addSeparator()
-        act_rename = menu.addAction(f"Rename '{word}'…") if word else None
+        act_rename = menu.addAction(f"Rename '{word}'…") if _is_identifier(word) else None
         act_comment = menu.addAction("Add / edit comment…")
         act_remove = menu.addAction("Remove comment")
 
@@ -62,6 +75,44 @@ class _DecompEditor(QtWidgets.QPlainTextEdit):
             self.commentEditRequested.emit(line)
         elif chosen == act_remove:
             self.commentRemoveRequested.emit(line)
+
+
+class _ViewBridge(QtCore.QObject):
+    def __init__(self, view: "AIDecompView") -> None:
+        super().__init__()
+        self._view = view
+
+    @Slot()
+    def refresh(self) -> None:
+        self._view._on_refresh_clicked()
+
+    @Slot()
+    def rate_up(self) -> None:
+        self._view._on_rate_up_clicked()
+
+    @Slot()
+    def rate_down(self) -> None:
+        self._view._on_rate_down_clicked()
+
+    @Slot()
+    def use_predicted_name(self) -> None:
+        self._view._on_use_predicted_name_clicked()
+
+    @Slot(int, str)
+    def rename(self, line: int, word: str) -> None:
+        self._view._on_rename_requested(line, word)
+
+    @Slot(int)
+    def edit_comment(self, line: int) -> None:
+        self._view._on_edit_comment_requested(line)
+
+    @Slot(int)
+    def remove_comment(self, line: int) -> None:
+        self._view._on_remove_comment_requested(line)
+
+    @Slot()
+    def cursor_moved(self) -> None:
+        self._view._on_cursor_moved()
 
 
 class AIDecompView(kw.PluginForm):
@@ -85,11 +136,17 @@ class AIDecompView(kw.PluginForm):
         self.on_remove_comment: Callable[[int], None] | None = None
         self.on_rate_up: Callable[[], None] | None = None
         self.on_rate_down: Callable[[], None] | None = None
+        self.on_use_predicted_name: Callable[[str], None] | None = None
+        self.on_line_focus: Callable[[int], None] | None = None
         self._parent_window: QtWidgets.QWidget | None = None
         self._editor: _DecompEditor | None = None
         self._refresh_btn: QtWidgets.QPushButton | None = None
         self._rate_up_btn: QtWidgets.QPushButton | None = None
         self._rate_down_btn: QtWidgets.QPushButton | None = None
+        self._predicted_label: QtWidgets.QLabel | None = None
+        self._predicted_btn: QtWidgets.QPushButton | None = None
+        self._predicted_name: str | None = None
+        self._bridge: _ViewBridge | None = None
         self._highlighter: CppHighlighter | None = None
 
     def Create(self, title: Any) -> Any:
@@ -114,6 +171,8 @@ class AIDecompView(kw.PluginForm):
         """Called by IDA when the form is created; build our Qt UI here."""
         self._parent_window = self.FormToPyQtWidget(form)
 
+        self._bridge = _ViewBridge(self)
+
         # Layout root
         layout = QtWidgets.QVBoxLayout(self._parent_window)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -122,6 +181,19 @@ class AIDecompView(kw.PluginForm):
         header = QtWidgets.QHBoxLayout()
         title = QtWidgets.QLabel("RevEng.AI — AI Decomp", self._parent_window)
         header.addWidget(title)
+
+        self._predicted_label = QtWidgets.QLabel("", self._parent_window)
+        self._predicted_label.setVisible(False)
+        header.addWidget(self._predicted_label)
+
+        self._predicted_btn = QtWidgets.QPushButton(
+            "Use Predicted Name", self._parent_window
+        )
+        self._predicted_btn.setToolTip("Rename this function to the predicted name")
+        self._predicted_btn.setVisible(False)
+        self._predicted_btn.clicked.connect(self._bridge.use_predicted_name)
+        header.addWidget(self._predicted_btn)
+
         header.addStretch(1)
 
         up_icon = _thumb_icon(up=True)
@@ -133,7 +205,7 @@ class AIDecompView(kw.PluginForm):
             self._rate_up_btn.setText("\U0001f44d")
         self._rate_up_btn.setCheckable(True)
         self._rate_up_btn.setToolTip("Rate this AI decompilation as good")
-        self._rate_up_btn.clicked.connect(self._on_rate_up_clicked)
+        self._rate_up_btn.clicked.connect(self._bridge.rate_up)
         header.addWidget(self._rate_up_btn)
 
         down_icon = _thumb_icon(up=False)
@@ -145,11 +217,11 @@ class AIDecompView(kw.PluginForm):
             self._rate_down_btn.setText("\U0001f44e")
         self._rate_down_btn.setCheckable(True)
         self._rate_down_btn.setToolTip("Rate this AI decompilation as poor")
-        self._rate_down_btn.clicked.connect(self._on_rate_down_clicked)
+        self._rate_down_btn.clicked.connect(self._bridge.rate_down)
         header.addWidget(self._rate_down_btn)
 
         self._refresh_btn = QtWidgets.QPushButton("Refresh", self._parent_window)
-        self._refresh_btn.clicked.connect(self._on_refresh_clicked)
+        self._refresh_btn.clicked.connect(self._bridge.refresh)
         header.addWidget(self._refresh_btn)
         layout.addLayout(header)
 
@@ -157,9 +229,10 @@ class AIDecompView(kw.PluginForm):
         self._editor = _DecompEditor(self._parent_window)
         self._editor.setReadOnly(True)
         self._editor.setLineWrapMode(QtWidgets.QPlainTextEdit.NoWrap)
-        self._editor.renameRequested.connect(self._on_rename_requested)
-        self._editor.commentEditRequested.connect(self._on_edit_comment_requested)
-        self._editor.commentRemoveRequested.connect(self._on_remove_comment_requested)
+        self._editor.renameRequested.connect(self._bridge.rename)
+        self._editor.commentEditRequested.connect(self._bridge.edit_comment)
+        self._editor.commentRemoveRequested.connect(self._bridge.remove_comment)
+        self._editor.cursorPositionChanged.connect(self._bridge.cursor_moved)
 
         # Monospace font tuned for IDA
         font = QtGui.QFont(
@@ -190,6 +263,10 @@ class AIDecompView(kw.PluginForm):
         self._refresh_btn = None
         self._rate_up_btn = None
         self._rate_down_btn = None
+        self._predicted_label = None
+        self._predicted_btn = None
+        self._predicted_name = None
+        self._bridge = None
         self._parent_window = None
 
     def _on_refresh_clicked(self) -> None:
@@ -206,12 +283,28 @@ class AIDecompView(kw.PluginForm):
         if self.on_rate_down:
             self.on_rate_down()
 
+    def _on_use_predicted_name_clicked(self) -> None:
+        if self._predicted_name and self.on_use_predicted_name:
+            self.on_use_predicted_name(self._predicted_name)
+
     @execute_ui
     def set_rating(self, rating: Optional[str]) -> None:
         if self._rate_up_btn:
             self._rate_up_btn.setChecked(rating == "up")
         if self._rate_down_btn:
             self._rate_down_btn.setChecked(rating == "down")
+
+    @execute_ui
+    def set_predicted_name(self, name: Optional[str]) -> None:
+        self._predicted_name = name or None
+        has_name = self._predicted_name is not None
+        if self._predicted_label:
+            self._predicted_label.setText(
+                f"Predicted name: {self._predicted_name}" if has_name else ""
+            )
+            self._predicted_label.setVisible(has_name)
+        if self._predicted_btn:
+            self._predicted_btn.setVisible(has_name)
 
     def _on_rename_requested(self, line: int, word: str) -> None:
         if self.on_rename:
@@ -225,15 +318,46 @@ class AIDecompView(kw.PluginForm):
         if self.on_remove_comment:
             self.on_remove_comment(line)
 
+    def _on_cursor_moved(self) -> None:
+        if self._editor and self.on_line_focus:
+            self.on_line_focus(self._editor.textCursor().blockNumber())
+
+    @execute_ui
+    def set_highlighted_lines(self, lines) -> None:
+        if not self._editor:
+            return
+
+        fmt = QtGui.QTextCharFormat()
+        fmt.setBackground(QtGui.QColor(ATTRIBUTION_HIGHLIGHT_RGB))
+        fmt.setProperty(_FULL_WIDTH_SELECTION, True)
+
+        document = self._editor.document()
+        selections = []
+        for line in sorted(lines):
+            block = document.findBlockByNumber(line)
+            if not block.isValid():
+                continue
+            selection = QtWidgets.QTextEdit.ExtraSelection()
+            selection.format = fmt
+            cursor = QtGui.QTextCursor(block)
+            cursor.clearSelection()
+            selection.cursor = cursor
+            selections.append(selection)
+
+        self._editor.setExtraSelections(selections)
+
     # --- public API ------------------------------------------------
     @execute_ui
-    def update_view_content(self, code: str) -> None:
+    def update_view_content(self, code: str, follow_tail: bool = False) -> None:
         if not self._editor:
             return
 
         self._editor.blockSignals(True)
         try:
             self._editor.setPlainText(code)
+            if follow_tail:
+                bar = self._editor.verticalScrollBar()
+                bar.setValue(bar.maximum())
         finally:
             self._editor.blockSignals(False)
 

@@ -49,6 +49,7 @@ def test_build_sdk_config_sets_host_key_and_user_agent(service):
 
     assert cfg.host == "https://api.reveng.ai"
     assert cfg.api_key == {"APIKey": "secret-key"}
+    assert cfg.access_token == "secret-key"
     assert cfg.user_agent == "IDA/9.3 RevEng.AI_Plugin/1.2.3"
 
 
@@ -62,6 +63,7 @@ def test_get_sdk_config_builds_once_and_mutates_in_place(service):
     assert first is second
     assert second.host == "https://other.host"
     assert second.api_key == {"APIKey": "new-key"}
+    assert second.access_token == "new-key"
 
 
 def test_verify_success(service, config_api):
@@ -169,3 +171,24 @@ def test_verify_success_warms_user_cache(service, config_api, iam_api):
     assert ok is True
     iam_api.get_me.assert_called_once()
     assert service.is_enthusiast() is True
+
+
+def test_both_auth_schemes_are_configured(service):
+    schemes = service.build_sdk_config().auth_settings()
+
+    assert set(schemes) == {"APIKey", "bearerAuth"}
+
+
+def test_bearer_only_endpoints_still_receive_an_authorization_header(service):
+    from revengai.api_client import ApiClient
+
+    client = ApiClient(configuration=service.build_sdk_config())
+    headers: dict = {}
+    client.update_params_for_auth(
+        headers, [], ["bearerAuth"], "/v2/iam/me", "GET", None
+    )
+
+    assert headers["Authorization"] == "Bearer secret-key", (
+        "/v2/iam/me accepts bearerAuth only; without access_token the request "
+        "goes out unauthenticated and the server answers 401"
+    )

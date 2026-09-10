@@ -15,6 +15,7 @@ from reai_toolkit.app.services.existing_analyses.existing_analyses_service impor
 from reai_toolkit.app.services.matching.matching_service import MatchingService
 from reai_toolkit.app.services.rename.rename_service import RenameService
 from reai_toolkit.app.services.upload.upload_service import UploadService
+from reai_toolkit.app.services.data_types.analysis_catalogue import AnalysisDataTypesService
 from reai_toolkit.app.services.data_types.data_types_service import ImportDataTypesService
 from reai_toolkit.app.services.variable_sync.variable_sync_service import VariableSyncService
 
@@ -52,8 +53,13 @@ class App:
         self.rename_service = RenameService(
             netstore_service=self.netstore_service, sdk_config=sdk_config
         )
-        self.variable_sync_service = VariableSyncService(
+        self.data_types_catalogue = AnalysisDataTypesService(
             netstore_service=self.netstore_service, sdk_config=sdk_config
+        )
+        self.variable_sync_service = VariableSyncService(
+            netstore_service=self.netstore_service,
+            sdk_config=sdk_config,
+            data_types_catalogue=self.data_types_catalogue,
         )
         self.analysis_sync_service = AnalysisSyncService(
             data_types_service=self.data_types_service,

@@ -66,6 +66,63 @@ class ChatContextHooks(kw.UI_Hooks):
             logger.error(f"[ChatContextHooks] context update failed: {e}")
 
 
+ATTRIBUTION_BG_COLOR = 0xFF000000 | 0x63_4A_3D
+
+
+class LineAttributionHooks(kw.UI_Hooks):
+    """
+    Paints the disassembly lines a decompiled line was attributed to, and
+    reports cursor movement in the disassembly so the panel can light the
+    matching decompilation lines.
+
+    Rendering is transient: nothing is written to the IDB.
+    """
+
+    def __init__(self, coordinator):
+        super().__init__()
+        self.coordinator = coordinator
+        self._addresses: frozenset[int] = frozenset()
+        self._is_hooked = False
+
+    def hook(self) -> bool:
+        if self._is_hooked:
+            return False
+        self._is_hooked = super().hook()
+        return self._is_hooked
+
+    def unhook(self) -> None:
+        if self._is_hooked:
+            super().unhook()
+            self._is_hooked = False
+        self._addresses = frozenset()
+
+    def set_addresses(self, addresses) -> None:
+        self._addresses = frozenset(addresses)
+
+    def has_addresses(self) -> bool:
+        return bool(self._addresses)
+
+    def get_lines_rendering_info(self, out, widget, rin) -> None:
+        if not self._addresses:
+            return
+        if kw.get_widget_type(widget) != idaapi.BWN_DISASM:
+            return
+        for section in rin.sections_lines:
+            for line in section:
+                if line.at.toea() in self._addresses:
+                    out.entries.push_back(
+                        kw.line_rendering_output_entry_t(
+                            line, kw.LROEF_FULL_LINE, ATTRIBUTION_BG_COLOR
+                        )
+                    )
+
+    def screen_ea_changed(self, ea: int, prev_ea: int) -> None:
+        try:
+            self.coordinator.on_disassembly_ea(ea)
+        except Exception as e:
+            logger.debug(f"[LineAttributionHooks] reverse highlight failed: {e}")
+
+
 class AiDecompFunctionViewHooks(kw.UI_Hooks):
     """
     Hook that tracks when the screen EA changes (user moves between functions),

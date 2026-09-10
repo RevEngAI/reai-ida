@@ -1,20 +1,24 @@
 import threading
+import time
 from typing import Any, Callable
 
+import urllib3
 from loguru import logger
 from revengai import (
     ApiException,
     Configuration,
     FunctionMapping,
     FunctionsAIDecompilationApi,
+    FunctionsCoreApi,
 )
 from revengai.models.ai_decompilation_rating import AiDecompilationRating
 from revengai.models.comments_data import CommentsData
 from revengai.models.decompilation_data import DecompilationData
+from revengai.models.get_tokens_response import GetTokensResponse
 from revengai.models.patch_comment_body import PatchCommentBody
 from revengai.models.summary_data import SummaryData
 from revengai.models.task_status import TaskStatus
-from revengai.models.tokenised_data import TokenisedData
+from revengai.models.token import Token
 from revengai.models.upsert_ai_decomplation_rating_request import (
     UpsertAiDecomplationRatingRequest,
 )
@@ -25,10 +29,21 @@ from reai_toolkit.app.core.netstore_service import SimpleNetStore
 from reai_toolkit.app.core.shared_schema import GenericApiReturn
 from reai_toolkit.app.core.utils import parse_exception
 from reai_toolkit.app.interfaces.thread_service import IThreadService
+from reai_toolkit.app.services.ai_decomp.attribution import (
+    AttributionMap,
+    asm_row_addresses,
+    invert_attributions,
+)
+from reai_toolkit.app.services.ai_decomp.stream import StreamState, iter_stream_events
 
 
 POLL_INTERVAL_SECONDS: float = 1.5
 MAX_REQUEUE_ATTEMPTS = 2
+
+STREAM_CONNECT_TIMEOUT: float = 10.0
+STREAM_READ_TIMEOUT: float = 300.0
+STREAM_CHUNK_BYTES = 1024
+STREAM_DISPATCH_INTERVAL: float = 0.1
 
 
 class AiDecompService(IThreadService):
@@ -37,9 +52,11 @@ class AiDecompService(IThreadService):
         self._decomp_cache: dict[int, DecompilationData] = {}
         self._summary_cache: dict[int, SummaryData] = {}
         self._comments_cache: dict[int, CommentsData] = {}
-        self._tokenised_cache: dict[int, TokenisedData] = {}
+        self._tokenised_cache: dict[int, GetTokensResponse] = {}
+        self._attribution_cache: dict[int, AttributionMap] = {}
         self._inflight: dict[int, threading.Event] = {}
         self._inflight_lock = threading.Lock()
+        self._active_streams: dict[int, urllib3.HTTPResponse] = {}
 
     def thread_in_progress(self) -> bool:
         return self.is_worker_running()
@@ -54,10 +71,13 @@ class AiDecompService(IThreadService):
             self._inflight.clear()
         for evt in events:
             evt.set()
+        for function_id in list(self._active_streams):
+            self._close_stream(function_id)
         self._decomp_cache.clear()
         self._summary_cache.clear()
         self._comments_cache.clear()
         self._tokenised_cache.clear()
+        self._attribution_cache.clear()
 
     def peek_decomp(self, ea: int) -> DecompilationData | None:
         function_id = self._get_function_id(start_ea=ea)
@@ -73,10 +93,12 @@ class AiDecompService(IThreadService):
         self._summary_cache.pop(function_id, None)
         self._comments_cache.pop(function_id, None)
         self._tokenised_cache.pop(function_id, None)
+        self._attribution_cache.pop(function_id, None)
         with self._inflight_lock:
             evt = self._inflight.pop(function_id, None)
         if evt is not None:
             evt.set()
+        self._close_stream(function_id)
 
     def invalidate_ea(self, ea: int) -> None:
         function_id = self._get_function_id(start_ea=ea)
@@ -89,8 +111,10 @@ class AiDecompService(IThreadService):
         on_decomp: Callable[[GenericApiReturn[DecompilationData]], None],
         on_summary: Callable[[GenericApiReturn[SummaryData]], None],
         on_comments: Callable[[GenericApiReturn[CommentsData]], None],
-        on_tokenised: Callable[[GenericApiReturn[TokenisedData]], None] | None = None,
+        on_tokenised: Callable[[GenericApiReturn[GetTokensResponse]], None] | None = None,
         on_progress: Callable[[WorkflowProgress], None] | None = None,
+        on_stream: Callable[[StreamState], None] | None = None,
+        on_attributions: Callable[[AttributionMap], None] | None = None,
     ) -> None:
         function_id = self._get_function_id(start_ea=ea)
         if function_id is None:
@@ -113,6 +137,8 @@ class AiDecompService(IThreadService):
                 on_comments,
                 on_tokenised,
                 on_progress,
+                on_stream,
+                on_attributions,
             ),
             name=f"reai-aidecomp-{function_id}",
             daemon=True,
@@ -124,7 +150,7 @@ class AiDecompService(IThreadService):
         ea: int,
         overrides: dict[str, str],
         on_decomp: Callable[[GenericApiReturn[DecompilationData]], None],
-        on_tokenised: Callable[[GenericApiReturn[TokenisedData]], None],
+        on_tokenised: Callable[[GenericApiReturn[GetTokensResponse]], None],
     ) -> None:
         function_id = self._get_function_id(start_ea=ea)
         if function_id is None:
@@ -240,14 +266,17 @@ class AiDecompService(IThreadService):
         function_id: int,
         overrides: dict[str, str],
         on_decomp: Callable[[GenericApiReturn[DecompilationData]], None],
-        on_tokenised: Callable[[GenericApiReturn[TokenisedData]], None],
+        on_tokenised: Callable[[GenericApiReturn[GetTokensResponse]], None],
     ) -> None:
         try:
             with self.yield_api_client(sdk_config=self.sdk_config) as api_client:
-                FunctionsAIDecompilationApi(api_client).upsert_ai_decompilation_overrides(
+                FunctionsAIDecompilationApi(api_client).v3_upsert_ai_decompilation_overrides(
                     function_id=function_id,
                     upsert_overrides_input_body=UpsertOverridesInputBody(
-                        overrides=overrides
+                        overrides={
+                            placeholder: Token(value=value)
+                            for placeholder, value in overrides.items()
+                        }
                     ),
                 )
         except ApiException as e:
@@ -280,13 +309,9 @@ class AiDecompService(IThreadService):
             )
 
         tokenised, _terr = self._fetch_tokenised(function_id)
-        if (
-            tokenised is not None
-            and str(tokenised.status) == TaskStatus.COMPLETED.value
-            and tokenised.function_mapping is not None
-        ):
+        if tokenised is not None and _tokens_ready(tokenised):
             self._tokenised_cache[function_id] = tokenised
-            on_tokenised(GenericApiReturn[TokenisedData](success=True, data=tokenised))
+            on_tokenised(GenericApiReturn[GetTokensResponse](success=True, data=tokenised))
 
     def _run_set_comment(
         self,
@@ -358,14 +383,16 @@ class AiDecompService(IThreadService):
         on_decomp: Callable[[GenericApiReturn[DecompilationData]], None],
         on_summary: Callable[[GenericApiReturn[SummaryData]], None],
         on_comments: Callable[[GenericApiReturn[CommentsData]], None],
-        on_tokenised: Callable[[GenericApiReturn[TokenisedData]], None] | None = None,
+        on_tokenised: Callable[[GenericApiReturn[GetTokensResponse]], None] | None = None,
         on_progress: Callable[[WorkflowProgress], None] | None = None,
+        on_stream: Callable[[StreamState], None] | None = None,
+        on_attributions: Callable[[AttributionMap], None] | None = None,
     ) -> None:
         try:
             if stop_event.is_set():
                 return
             decomp = self._run_decomp_phase(
-                function_id, stop_event, on_decomp, on_progress
+                function_id, stop_event, on_decomp, on_progress, on_stream
             )
             if decomp is None:
                 return
@@ -373,6 +400,8 @@ class AiDecompService(IThreadService):
             self._run_comments_phase(function_id, stop_event, on_comments)
             if on_tokenised is not None:
                 self._run_tokenised_phase(function_id, stop_event, on_tokenised)
+            if on_attributions is not None:
+                self._run_attribution_phase(function_id, stop_event, on_attributions)
         except Exception as e:
             logger.error(f"RevEng.AI: AI decompilation task crashed for {function_id}: {e}")
         finally:
@@ -448,6 +477,7 @@ class AiDecompService(IThreadService):
         stop_event: threading.Event,
         on_decomp: Callable[[GenericApiReturn[DecompilationData]], None],
         on_progress: Callable[[WorkflowProgress], None] | None = None,
+        on_stream: Callable[[StreamState], None] | None = None,
     ) -> DecompilationData | None:
         cached = self._decomp_cache.get(function_id)
         if cached is not None:
@@ -490,24 +520,42 @@ class AiDecompService(IThreadService):
                 )
                 return None
 
-        polled_ok, poll_err = self._poll_workflow(
-            function_id=function_id,
-            stop_event=stop_event,
-            status_fn=self._fetch_decomp_status,
-            requeue_fn=self._queue_decompilation,
-            label="AI Decompilation",
-            on_progress=on_progress,
+        streamed = (
+            self._stream_decomp(function_id, stop_event, on_stream)
+            if on_stream is not None and not stop_event.is_set()
+            else None
         )
-        if not polled_ok:
-            if poll_err is not None:
-                self._safe_dispatch(
-                    stop_event,
-                    on_decomp,
-                    GenericApiReturn[DecompilationData](
-                        success=False, error_message=poll_err
-                    ),
-                )
+
+        if streamed is not None and streamed.failed:
+            self._safe_dispatch(
+                stop_event,
+                on_decomp,
+                GenericApiReturn[DecompilationData](
+                    success=False,
+                    error_message=streamed.error or "AI decompilation failed.",
+                ),
+            )
             return None
+
+        if streamed is None:
+            polled_ok, poll_err = self._poll_workflow(
+                function_id=function_id,
+                stop_event=stop_event,
+                status_fn=self._fetch_decomp_status,
+                requeue_fn=self._queue_decompilation,
+                label="AI Decompilation",
+                on_progress=on_progress,
+            )
+            if not polled_ok:
+                if poll_err is not None:
+                    self._safe_dispatch(
+                        stop_event,
+                        on_decomp,
+                        GenericApiReturn[DecompilationData](
+                            success=False, error_message=poll_err
+                        ),
+                    )
+                return None
 
         final, final_err = self._fetch_decompilation(function_id)
         if final is None or not final.decompilation:
@@ -528,6 +576,66 @@ class AiDecompService(IThreadService):
             GenericApiReturn[DecompilationData](success=True, data=final),
         )
         return final
+
+    def _close_stream(self, function_id: int) -> None:
+        resp = self._active_streams.pop(function_id, None)
+        if resp is None:
+            return
+        try:
+            resp.close()
+        except Exception:
+            pass
+
+    def _stream_decomp(
+        self,
+        function_id: int,
+        stop_event: threading.Event,
+        on_stream: Callable[[StreamState], None],
+    ) -> StreamState | None:
+        state = StreamState()
+        last_dispatch = 0.0
+        try:
+            with self.yield_api_client(sdk_config=self.sdk_config) as api_client:
+                resp = FunctionsAIDecompilationApi(
+                    api_client
+                ).stream_ai_decompilation_without_preload_content(
+                    function_id=function_id,
+                    _request_timeout=(STREAM_CONNECT_TIMEOUT, STREAM_READ_TIMEOUT),
+                )
+                self._active_streams[function_id] = resp
+                try:
+                    events = iter_stream_events(
+                        resp.stream(STREAM_CHUNK_BYTES, decode_content=True),
+                        stop=stop_event.is_set,
+                    )
+                    for event in events:
+                        state.apply(event)
+                        due = time.monotonic() - last_dispatch >= STREAM_DISPATCH_INTERVAL
+                        if state.is_terminal or due:
+                            self._safe_dispatch(stop_event, on_stream, state.snapshot())
+                            last_dispatch = time.monotonic()
+                finally:
+                    self._active_streams.pop(function_id, None)
+                    try:
+                        resp.release_conn()
+                    except Exception:
+                        pass
+        except (ApiException, urllib3.exceptions.HTTPError, OSError) as e:
+            logger.debug(
+                f"RevEng.AI: AI decompilation stream for function {function_id} ended: {e}"
+            )
+        except Exception as e:
+            logger.debug(
+                f"RevEng.AI: AI decompilation stream for function {function_id} failed: {e}"
+            )
+
+        if state.is_terminal:
+            return state
+        logger.debug(
+            f"RevEng.AI: AI decompilation stream for function {function_id} "
+            "ended before a terminal event; falling back to polling"
+        )
+        return None
 
     def _queue_summary(self, function_id: int) -> tuple[bool, str | None]:
         try:
@@ -781,12 +889,12 @@ class AiDecompService(IThreadService):
 
     def _fetch_tokenised(
         self, function_id: int
-    ) -> tuple[TokenisedData | None, str | None]:
+    ) -> tuple[GetTokensResponse | None, str | None]:
         try:
             with self.yield_api_client(sdk_config=self.sdk_config) as api_client:
                 tokenised = FunctionsAIDecompilationApi(
                     api_client
-                ).get_ai_decompilation_tokenised(function_id=function_id)
+                ).v3_get_ai_decompilation_tokens(function_id=function_id)
             return tokenised, None
         except ApiException as e:
             return None, _format_api_error(e)
@@ -797,14 +905,14 @@ class AiDecompService(IThreadService):
         self,
         function_id: int,
         stop_event: threading.Event,
-        on_tokenised: Callable[[GenericApiReturn[TokenisedData]], None],
+        on_tokenised: Callable[[GenericApiReturn[GetTokensResponse]], None],
     ) -> None:
         cached = self._tokenised_cache.get(function_id)
         if cached is not None:
             self._safe_dispatch(
                 stop_event,
                 on_tokenised,
-                GenericApiReturn[TokenisedData](success=True, data=cached),
+                GenericApiReturn[GetTokensResponse](success=True, data=cached),
             )
             return
 
@@ -813,28 +921,91 @@ class AiDecompService(IThreadService):
             self._safe_dispatch(
                 stop_event,
                 on_tokenised,
-                GenericApiReturn[TokenisedData](success=False, error_message=err),
+                GenericApiReturn[GetTokensResponse](success=False, error_message=err),
             )
             return
 
-        if (
-            str(tokenised.status) == TaskStatus.COMPLETED.value
-            and tokenised.function_mapping is not None
-        ):
+        if _tokens_ready(tokenised):
             self._tokenised_cache[function_id] = tokenised
             self._safe_dispatch(
                 stop_event,
                 on_tokenised,
-                GenericApiReturn[TokenisedData](success=True, data=tokenised),
+                GenericApiReturn[GetTokensResponse](success=True, data=tokenised),
             )
         else:
             self._safe_dispatch(
                 stop_event,
                 on_tokenised,
-                GenericApiReturn[TokenisedData](
+                GenericApiReturn[GetTokensResponse](
                     success=False, error_message="Tokenised data not ready."
                 ),
             )
+
+    def _fetch_line_attributions(self, function_id: int) -> tuple[Any, str | None]:
+        try:
+            with self.yield_api_client(sdk_config=self.sdk_config) as api_client:
+                data = FunctionsAIDecompilationApi(
+                    api_client
+                ).v3_get_ai_decompilation_line_attributions(function_id=function_id)
+            return data, None
+        except ApiException as e:
+            return None, _format_api_error(e)
+        except Exception as e:
+            return None, f"Unexpected error fetching line attributions: {e}"
+
+    def _fetch_blocks(self, function_id: int) -> tuple[Any, str | None]:
+        try:
+            with self.yield_api_client(sdk_config=self.sdk_config) as api_client:
+                data = FunctionsCoreApi(api_client).get_function_blocks_0(
+                    function_id=function_id
+                )
+            return data, None
+        except ApiException as e:
+            return None, _format_api_error(e)
+        except Exception as e:
+            return None, f"Unexpected error fetching function blocks: {e}"
+
+    def _run_attribution_phase(
+        self,
+        function_id: int,
+        stop_event: threading.Event,
+        on_attributions: Callable[[AttributionMap], None],
+    ) -> None:
+        cached = self._attribution_cache.get(function_id)
+        if cached is not None:
+            self._safe_dispatch(stop_event, on_attributions, cached)
+            return
+
+        data, err = self._fetch_line_attributions(function_id)
+        if data is None:
+            logger.debug(
+                f"RevEng.AI: no line attributions for function {function_id}: {err}"
+            )
+            return
+
+        attributions = invert_attributions(
+            getattr(
+                data,
+                "disassembly_line_number_to_ai_decompilation_line_numbers",
+                None,
+            )
+        )
+        if attributions.is_empty() or stop_event.is_set():
+            self._attribution_cache[function_id] = AttributionMap()
+            return
+
+        blocks, blocks_err = self._fetch_blocks(function_id)
+        if blocks is None:
+            logger.debug(
+                f"RevEng.AI: no disassembly blocks for function {function_id}: {blocks_err}"
+            )
+            return
+
+        mapping = AttributionMap(
+            attributions, asm_row_addresses(getattr(blocks, "basic_blocks", None))
+        )
+        self._attribution_cache[function_id] = mapping
+        self._safe_dispatch(stop_event, on_attributions, mapping)
 
     def _poll_workflow(
         self,
@@ -881,6 +1052,10 @@ class AiDecompService(IThreadService):
                 return False, None
 
         return False, None
+
+
+def _tokens_ready(tokens: GetTokensResponse) -> bool:
+    return bool(tokens.ai_decomp) and bool(tokens.placeholder_to_rendered_token)
 
 
 def _format_api_error(e: ApiException) -> str:

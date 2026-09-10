@@ -4,23 +4,42 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
+from reai_toolkit.app.services.ai_decomp.stream import PROSE_TAIL
+
 if TYPE_CHECKING:
-    from revengai.models.ai_decomp_function_mapping import AIDecompFunctionMapping
     from revengai.models.comments_data import CommentsData
     from revengai.models.decompilation_data import DecompilationData
+    from revengai.models.get_tokens_response import GetTokensResponse
     from revengai.models.progress_message import ProgressMessage
+    from revengai.models.rendered_token import RenderedToken
     from revengai.models.summary_data import SummaryData
-    from revengai.models.tokenised_data import TokenisedData
     from revengai.models.workflow_progress import WorkflowProgress
+
+    from reai_toolkit.app.services.ai_decomp.stream import StreamState
 
 
 _IDENT_RE = re.compile(r"[A-Za-z_]\w*")
-_VARIABLE_CATEGORIES = (
-    "unmatched_vars",
-    "unmatched_global_vars",
-    "unmatched_external_vars",
+
+RENAME_NOT_READY = "The AI decompilation is still loading — try again once it finishes."
+RENAME_NOT_DECOMP_LINE = "This line is not part of the AI decompilation."
+RENAME_NOT_CODE_LINE = (
+    "Only identifiers in the decompiled code can be renamed, not comments."
 )
-_TYPE_CATEGORIES = ("unmatched_custom_types", "unmatched_enums")
+RENAME_NOT_ON_LINE = "'{word}' is not an identifier on this line."
+RENAME_IS_DATA_TYPE = (
+    "'{word}' is a data type — rename the type itself, not the AI decompilation."
+)
+RENAME_IS_FUNCTION = (
+    "'{word}' is a function — rename it in the disassembly and it will sync."
+)
+RENAME_IS_IMPORTED_FUNCTION = "'{word}' is an imported function and cannot be renamed."
+RENAME_UNRESOLVED = "'{word}' is not a renameable variable or type."
+
+_RENAMED_ELSEWHERE: tuple[tuple[str, str], ...] = (
+    ("data_type_id", RENAME_IS_DATA_TYPE),
+    ("function_id", RENAME_IS_FUNCTION),
+    ("imported_function_id", RENAME_IS_IMPORTED_FUNCTION),
+)
 
 
 @dataclass
@@ -30,6 +49,13 @@ class RenderModel:
     comment_by_source: dict[int, str]
     display_source: list[Optional[int]]
     display_is_code: list[bool]
+
+
+@dataclass
+class RenameTarget:
+    placeholder: Optional[str] = None
+    kind: Optional[str] = None
+    reason: Optional[str] = None
 
 
 def render_view(
@@ -119,6 +145,32 @@ def render_progress(progress: "WorkflowProgress") -> str:
     return "\n".join(lines)
 
 
+def render_stream(state: "StreamState") -> str:
+    lines: list[str] = []
+
+    if state.failed:
+        lines.append("// RevEng.AI — AI decompilation failed")
+        if state.error:
+            lines.append(f"// {state.error}")
+    elif state.finished:
+        lines.append("// RevEng.AI — AI decompilation complete")
+    else:
+        attempt = f" (attempt {state.attempt})" if state.attempt > 1 else ""
+        stage = "naming identifiers" if state.decomp_finished else "decompiling"
+        lines.append(f"// RevEng.AI — {stage}…{attempt}")
+
+    if state.prose and not state.source:
+        lines.append("//")
+        for text in state.prose[-PROSE_TAIL:]:
+            for part in text.split("\n"):
+                lines.append(f"// {part}")
+
+    header = "\n".join(lines)
+    if not state.source:
+        return header
+    return f"{header}\n\n{state.source}"
+
+
 def _format_progress_message(message: "ProgressMessage") -> str:
     stamp = _format_progress_time(getattr(message, "timestamp", None))
     prefix = f"{stamp} " if stamp else ""
@@ -170,53 +222,122 @@ def index_of_identifier(line: str, word: str) -> int:
     return idents.index(word) if word in idents else -1
 
 
+def source_line_at(model: RenderModel, display_line: int) -> Optional[int]:
+    if not (0 <= display_line < len(model.display_source)):
+        return None
+    if not model.display_is_code[display_line]:
+        return None
+    return model.display_source[display_line]
+
+
+def display_rows_for_source_lines(model: RenderModel, source_lines) -> list[int]:
+    wanted = set(source_lines)
+    if not wanted:
+        return []
+    return [
+        row
+        for row, source in enumerate(model.display_source)
+        if source in wanted and model.display_is_code[row]
+    ]
+
+
+def effective_values(tokens: "GetTokensResponse") -> dict[str, str]:
+    rendered = tokens.placeholder_to_rendered_token or {}
+    overrides = tokens.placeholder_to_user_override or {}
+    values: dict[str, str] = {}
+    for placeholder, token in rendered.items():
+        override = overrides.get(placeholder)
+        values[placeholder] = override.value if override is not None else token.value
+    return values
+
+
+def names_token(ident: str, rendered_value: str) -> bool:
+    return ident == rendered_value or ident in _IDENT_RE.findall(rendered_value)
+
+
+def _unit_re(placeholders) -> re.Pattern:
+    parts = [re.escape(p) for p in sorted(placeholders, key=len, reverse=True)]
+    parts.append(_IDENT_RE.pattern)
+    return re.compile("|".join(parts))
+
+
+def find_token(
+    tokens: "GetTokensResponse",
+    source_index: int,
+    ident_index: int,
+    old_ident: str,
+) -> Optional[tuple[str, "RenderedToken"]]:
+    rendered = tokens.placeholder_to_rendered_token or {}
+    if not rendered:
+        return None
+    values = effective_values(tokens)
+
+    tok_lines = (tokens.ai_decomp or "").split("\n")
+    if 0 <= source_index < len(tok_lines):
+        units = _unit_re(rendered).findall(tok_lines[source_index])
+        if 0 <= ident_index < len(units):
+            unit = units[ident_index]
+            if unit in rendered and names_token(old_ident, values[unit]):
+                return unit, rendered[unit]
+
+    matches = [p for p, value in values.items() if names_token(old_ident, value)]
+    if len(matches) == 1:
+        return matches[0], rendered[matches[0]]
+    return None
+
+
+def renamed_elsewhere_reason(token: "RenderedToken", word: str) -> Optional[str]:
+    for name, reason in _RENAMED_ELSEWHERE:
+        if getattr(token, name, None) is not None:
+            return reason.format(word=word)
+    return None
+
+
+def is_renameable(token: "RenderedToken") -> bool:
+    return all(getattr(token, name, None) is None for name, _ in _RENAMED_ELSEWHERE)
+
+
 def resolve_token(
-    tokenised: "TokenisedData",
+    tokens: "GetTokensResponse",
     source_index: int,
     ident_index: int,
     old_ident: str,
 ) -> Optional[tuple[str, str]]:
-    mapping = tokenised.function_mapping
-    if mapping is None:
+    found = find_token(tokens, source_index, ident_index, old_ident)
+    if found is None:
         return None
-
-    tok_lines = (tokenised.tokenised_decompilation or "").split("\n")
-    if 0 <= source_index < len(tok_lines):
-        tok_idents = _IDENT_RE.findall(tok_lines[source_index])
-        if 0 <= ident_index < len(tok_idents):
-            candidate = tok_idents[ident_index]
-            cat, eff = _category_of_token(mapping, candidate)
-            if cat is not None and eff == old_ident:
-                return candidate, cat
-
-    matches = [
-        (token, cat)
-        for token, rv, cat in _iter_category_tokens(mapping)
-        if _effective_value(mapping, token, rv) == old_ident
-    ]
-    if len(matches) == 1:
-        return matches[0]
-    return None
+    placeholder, token = found
+    if not is_renameable(token):
+        return None
+    return placeholder, token.kind
 
 
-def _iter_category_tokens(mapping: "AIDecompFunctionMapping"):
-    for cat in _VARIABLE_CATEGORIES:
-        for token, rv in (getattr(mapping, cat, None) or {}).items():
-            yield token, rv, "variable"
-    for cat in _TYPE_CATEGORIES:
-        for token, rv in (getattr(mapping, cat, None) or {}).items():
-            yield token, rv, "type"
+def resolve_rename_target(
+    model: RenderModel,
+    tokens: "GetTokensResponse",
+    display_line: int,
+    word: str,
+) -> RenameTarget:
+    if not (0 <= display_line < len(model.display_is_code)):
+        return RenameTarget(reason=RENAME_NOT_DECOMP_LINE)
+    if not model.display_is_code[display_line]:
+        return RenameTarget(reason=RENAME_NOT_CODE_LINE)
 
+    source_line = model.display_source[display_line]
+    if source_line is None:
+        return RenameTarget(reason=RENAME_NOT_DECOMP_LINE)
 
-def _category_of_token(
-    mapping: "AIDecompFunctionMapping", token: str
-) -> tuple[Optional[str], Optional[str]]:
-    for t, rv, cat in _iter_category_tokens(mapping):
-        if t == token:
-            return cat, _effective_value(mapping, t, rv)
-    return None, None
+    source_index = source_line - 1
+    ident_index = index_of_identifier(model.code_lines[source_index], word)
+    if ident_index < 0:
+        return RenameTarget(reason=RENAME_NOT_ON_LINE.format(word=word))
 
+    found = find_token(tokens, source_index, ident_index, word)
+    if found is None:
+        return RenameTarget(reason=RENAME_UNRESOLVED.format(word=word))
 
-def _effective_value(mapping: "AIDecompFunctionMapping", token: str, replacement) -> str:
-    overrides = mapping.user_override_mappings or {}
-    return overrides.get(token, replacement.value)
+    placeholder, token = found
+    reason = renamed_elsewhere_reason(token, word)
+    if reason is not None:
+        return RenameTarget(reason=reason)
+    return RenameTarget(placeholder=placeholder, kind=token.kind)

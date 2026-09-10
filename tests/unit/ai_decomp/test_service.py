@@ -1,5 +1,9 @@
+import ast
+import json
+import pathlib
 import threading
 import time
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -10,10 +14,11 @@ from revengai.models.decompilation_data import DecompilationData
 from revengai.models.inline_comment import InlineComment
 from revengai.models.summary_data import SummaryData
 from revengai.models.task_status import TaskStatus
-from revengai.models.tokenised_data import TokenisedData
+from revengai.models.get_tokens_response import GetTokensResponse
+from revengai.models.rendered_token import RenderedToken
+from revengai.models.token import Token
 from revengai.models.workflow_progress import WorkflowProgress
 
-from reai_toolkit.app.core.shared_schema import GenericApiReturn
 from reai_toolkit.app.services.ai_decomp import ai_decomp_service as svc_mod
 from reai_toolkit.app.services.ai_decomp.ai_decomp_service import AiDecompService
 
@@ -72,12 +77,21 @@ def _comments(items=None, status=TaskStatus.COMPLETED.value) -> CommentsData:
     return CommentsData.model_construct(inline_comments=items or [], task_status=status)
 
 
-def _tokd(status=TaskStatus.COMPLETED.value) -> TokenisedData:
-    return TokenisedData.model_construct(
-        status=status,
-        tokenised_decompilation="int @@F@@(void) {}",
-        predicted_function_name="f",
-        function_mapping=MagicMock(),
+def _tokd(source="int @@F@@(void) {}") -> GetTokensResponse:
+    return GetTokensResponse.model_construct(
+        ai_decomp=source,
+        analysis_id=1,
+        placeholder_to_rendered_token={
+            "@@F@@": RenderedToken.model_construct(
+                value="f",
+                kind="own_function",
+                vaddr=None,
+                data_type_id=None,
+                function_id=None,
+                imported_function_id=None,
+            )
+        },
+        placeholder_to_user_override={},
     )
 
 
@@ -369,7 +383,7 @@ def test_stop_mid_poll_drops_callback(service, sdk):
 
 def test_tokenised_phase_caches_and_dispatches_on_completed(service, sdk):
     sdk.get_ai_decompilation.return_value = _dd(code="ok")
-    sdk.get_ai_decompilation_tokenised.return_value = _tokd()
+    sdk.v3_get_ai_decompilation_tokens.return_value = _tokd()
 
     on_tokenised = MagicMock()
     service.start_ai_decomp_task(
@@ -383,19 +397,153 @@ def test_tokenised_phase_caches_and_dispatches_on_completed(service, sdk):
 
     on_tokenised.assert_called_once()
     assert on_tokenised.call_args[0][0].success is True
-    assert service._tokenised_cache[42] is sdk.get_ai_decompilation_tokenised.return_value
+    assert service._tokenised_cache[42] is sdk.v3_get_ai_decompilation_tokens.return_value
+
+
+def test_tokenised_phase_treats_an_empty_source_as_not_ready(service, sdk):
+    sdk.get_ai_decompilation.return_value = _dd(code="ok")
+    sdk.v3_get_ai_decompilation_tokens.return_value = GetTokensResponse.model_construct(
+        ai_decomp="",
+        analysis_id=1,
+        placeholder_to_rendered_token={},
+        placeholder_to_user_override={},
+    )
+
+    on_tokenised = MagicMock()
+    service.start_ai_decomp_task(
+        ea=4096,
+        on_decomp=MagicMock(),
+        on_summary=MagicMock(),
+        on_comments=MagicMock(),
+        on_tokenised=on_tokenised,
+    )
+    _wait(service)
+
+    assert on_tokenised.call_args[0][0].success is False
+    assert 42 not in service._tokenised_cache
 
 
 def test_tokenised_phase_skipped_when_no_callback(service, sdk):
     sdk.get_ai_decompilation.return_value = _dd(code="ok")
     _run(service)
-    sdk.get_ai_decompilation_tokenised.assert_not_called()
+    sdk.v3_get_ai_decompilation_tokens.assert_not_called()
+
+
+@pytest.fixture
+def core_sdk(mocker):
+    api_class = mocker.patch.object(svc_mod, "FunctionsCoreApi")
+    api_inst = MagicMock()
+    api_class.return_value = api_inst
+    api_inst.get_function_blocks_0.return_value = SimpleNamespace(
+        basic_blocks=[{"min_addr": 0x1000, "asm": ["0x1000 push rbp", "0x1004 ret"]}]
+    )
+    return api_inst
+
+
+def _attributions(forward):
+    return SimpleNamespace(
+        disassembly_line_number_to_ai_decompilation_line_numbers=forward
+    )
+
+
+def _start_attribution(service, on_attributions):
+    service.start_ai_decomp_task(
+        ea=4096,
+        on_decomp=MagicMock(),
+        on_summary=MagicMock(),
+        on_comments=MagicMock(),
+        on_attributions=on_attributions,
+    )
+    _wait(service)
+
+
+def test_attribution_phase_builds_and_caches_the_map(service, sdk, core_sdk):
+    sdk.get_ai_decompilation.return_value = _dd(code="ok")
+    sdk.v3_get_ai_decompilation_line_attributions.return_value = _attributions({"0": [2]})
+
+    on_attributions = MagicMock()
+    _start_attribution(service, on_attributions)
+
+    on_attributions.assert_called_once()
+    mapping = on_attributions.call_args[0][0]
+    assert mapping.addresses_for_decomp_line(2) == [0x1004]
+    assert mapping.decomp_lines_for_address(0x1004) == [2]
+    assert service._attribution_cache[42] is mapping
+    sdk.v3_get_ai_decompilation_line_attributions.assert_called_once_with(function_id=42)
+    core_sdk.get_function_blocks_0.assert_called_once_with(function_id=42)
+
+
+def test_attribution_phase_serves_the_cache_without_refetching(service, sdk, core_sdk):
+    sdk.get_ai_decompilation.return_value = _dd(code="ok")
+    sdk.v3_get_ai_decompilation_line_attributions.return_value = _attributions({"0": [2]})
+
+    _start_attribution(service, MagicMock())
+    second = MagicMock()
+    _start_attribution(service, second)
+
+    second.assert_called_once()
+    assert sdk.v3_get_ai_decompilation_line_attributions.call_count == 1
+    assert core_sdk.get_function_blocks_0.call_count == 1
+
+
+def test_an_empty_correspondence_skips_the_blocks_request(service, sdk, core_sdk):
+    sdk.get_ai_decompilation.return_value = _dd(code="ok")
+    sdk.v3_get_ai_decompilation_line_attributions.return_value = _attributions({})
+
+    on_attributions = MagicMock()
+    _start_attribution(service, on_attributions)
+
+    on_attributions.assert_not_called()
+    core_sdk.get_function_blocks_0.assert_not_called()
+    assert service._attribution_cache[42].is_empty()
+
+
+def test_a_failed_attribution_fetch_is_quiet(service, sdk, core_sdk):
+    sdk.get_ai_decompilation.return_value = _dd(code="ok")
+    sdk.v3_get_ai_decompilation_line_attributions.side_effect = ApiException(status=404)
+
+    on_attributions = MagicMock()
+    _start_attribution(service, on_attributions)
+
+    on_attributions.assert_not_called()
+    core_sdk.get_function_blocks_0.assert_not_called()
+    assert 42 not in service._attribution_cache
+
+
+def test_a_failed_blocks_fetch_leaves_no_half_built_map(service, sdk, core_sdk):
+    sdk.get_ai_decompilation.return_value = _dd(code="ok")
+    sdk.v3_get_ai_decompilation_line_attributions.return_value = _attributions({"0": [2]})
+    core_sdk.get_function_blocks_0.side_effect = ApiException(status=500)
+
+    on_attributions = MagicMock()
+    _start_attribution(service, on_attributions)
+
+    on_attributions.assert_not_called()
+    assert 42 not in service._attribution_cache
+
+
+def test_attribution_phase_skipped_when_no_callback(service, sdk, core_sdk):
+    sdk.get_ai_decompilation.return_value = _dd(code="ok")
+    _run(service)
+
+    sdk.v3_get_ai_decompilation_line_attributions.assert_not_called()
+    core_sdk.get_function_blocks_0.assert_not_called()
+
+
+def test_invalidate_drops_the_cached_attribution_map(service, sdk, core_sdk):
+    sdk.get_ai_decompilation.return_value = _dd(code="ok")
+    sdk.v3_get_ai_decompilation_line_attributions.return_value = _attributions({"0": [2]})
+
+    _start_attribution(service, MagicMock())
+    service.invalidate_ea(4096)
+
+    assert 42 not in service._attribution_cache
 
 
 def test_apply_overrides_sends_body_refetches_and_caches(service, sdk):
-    sdk.upsert_ai_decompilation_overrides.return_value = MagicMock()
+    sdk.v3_upsert_ai_decompilation_overrides.return_value = MagicMock()
     sdk.get_ai_decompilation.return_value = _dd(code="renamed")
-    sdk.get_ai_decompilation_tokenised.return_value = _tokd()
+    sdk.v3_get_ai_decompilation_tokens.return_value = _tokd()
 
     on_decomp, on_tokenised = MagicMock(), MagicMock()
     service.apply_overrides(
@@ -407,19 +555,19 @@ def test_apply_overrides_sends_body_refetches_and_caches(service, sdk):
     _wait_mock(on_decomp)
     _wait_mock(on_tokenised)
 
-    _, kwargs = sdk.upsert_ai_decompilation_overrides.call_args
+    _, kwargs = sdk.v3_upsert_ai_decompilation_overrides.call_args
     assert kwargs["function_id"] == 42
-    assert kwargs["upsert_overrides_input_body"].overrides == {"@@V_v5@@": "buf"}
+    assert kwargs["upsert_overrides_input_body"].overrides == {"@@V_v5@@": Token(value="buf")}
 
     payload = on_decomp.call_args[0][0]
     assert payload.success is True
     assert payload.data.decompilation == "renamed"
     assert service._decomp_cache[42].decompilation == "renamed"
-    assert service._tokenised_cache[42] is sdk.get_ai_decompilation_tokenised.return_value
+    assert service._tokenised_cache[42] is sdk.v3_get_ai_decompilation_tokens.return_value
 
 
 def test_apply_overrides_api_error_surfaces(service, sdk):
-    sdk.upsert_ai_decompilation_overrides.side_effect = ApiException(status=500, reason="x")
+    sdk.v3_upsert_ai_decompilation_overrides.side_effect = ApiException(status=500, reason="x")
 
     on_decomp, on_tokenised = MagicMock(), MagicMock()
     service.apply_overrides(
@@ -548,3 +696,205 @@ def test_function_id_for_and_invalidate_ea(service):
     service._decomp_cache[42] = object()
     service.invalidate_ea(4096)
     assert 42 not in service._decomp_cache
+
+
+def _sse(event_type, **payload):
+    body = {"type": event_type, "attempt": 1, "seq": payload.pop("seq", 0)}
+    body.update(payload)
+    return f"event: {event_type}\ndata: {json.dumps(body)}\n\n".encode()
+
+
+def _stream_response(chunks):
+    resp = MagicMock()
+    resp.stream.return_value = iter(chunks)
+    return resp
+
+
+def _start_streaming(service, on_stream, on_decomp=None):
+    service.start_ai_decomp_task(
+        ea=4096,
+        on_decomp=on_decomp or MagicMock(),
+        on_summary=MagicMock(),
+        on_comments=MagicMock(),
+        on_stream=on_stream,
+    )
+    _wait(service)
+
+
+def test_streaming_replaces_polling_and_reports_the_growing_source(service, sdk, monkeypatch):
+    monkeypatch.setattr(svc_mod, "STREAM_DISPATCH_INTERVAL", 0.0)
+    sdk.get_ai_decompilation.side_effect = [_dd(status=TaskStatus.RUNNING.value, code=None), _dd(code="final")]
+    sdk.stream_ai_decompilation_without_preload_content.return_value = _stream_response(
+        [
+            _sse("source_delta", content="int main"),
+            _sse("source_delta", content="(void) {}"),
+            _sse("decomp_finished"),
+            _sse("names_finished", applied=2),
+        ]
+    )
+
+    on_stream, on_decomp = MagicMock(), MagicMock()
+    _start_streaming(service, on_stream, on_decomp)
+
+    sdk.get_ai_decompilation_status.assert_not_called()
+    sources = [call[0][0].source for call in on_stream.call_args_list]
+    assert sources[-1] == "int main(void) {}"
+    assert on_stream.call_args[0][0].finished is True
+    assert on_decomp.call_args[0][0].data.decompilation == "final"
+
+
+def test_each_dispatched_state_is_an_independent_snapshot(service, sdk, monkeypatch):
+    monkeypatch.setattr(svc_mod, "STREAM_DISPATCH_INTERVAL", 0.0)
+    sdk.get_ai_decompilation.side_effect = [_dd(status=TaskStatus.RUNNING.value, code=None), _dd(code="final")]
+    sdk.stream_ai_decompilation_without_preload_content.return_value = _stream_response(
+        [
+            _sse("source_delta", content="a"),
+            _sse("source_delta", content="b"),
+            _sse("names_finished", applied=0),
+        ]
+    )
+
+    on_stream = MagicMock()
+    _start_streaming(service, on_stream)
+
+    states = [call[0][0] for call in on_stream.call_args_list]
+    assert [s.source for s in states] == ["a", "ab", "ab"]
+
+
+def test_a_stream_that_ends_without_a_terminal_event_falls_back_to_polling(service, sdk):
+    sdk.get_ai_decompilation.side_effect = [_dd(status=TaskStatus.RUNNING.value, code=None), _dd(code="polled")]
+    sdk.stream_ai_decompilation_without_preload_content.return_value = _stream_response(
+        [_sse("source_delta", content="partial")]
+    )
+    sdk.get_ai_decompilation_status.return_value = _wp(TaskStatus.COMPLETED)
+
+    on_decomp = MagicMock()
+    _start_streaming(service, MagicMock(), on_decomp)
+
+    sdk.get_ai_decompilation_status.assert_called()
+    assert on_decomp.call_args[0][0].data.decompilation == "polled"
+
+
+def test_a_stream_that_raises_falls_back_to_polling(service, sdk):
+    sdk.get_ai_decompilation.side_effect = [_dd(status=TaskStatus.RUNNING.value, code=None), _dd(code="polled")]
+    sdk.stream_ai_decompilation_without_preload_content.side_effect = ApiException(
+        status=502, reason="bad gateway"
+    )
+    sdk.get_ai_decompilation_status.return_value = _wp(TaskStatus.COMPLETED)
+
+    on_decomp = MagicMock()
+    _start_streaming(service, MagicMock(), on_decomp)
+
+    sdk.get_ai_decompilation_status.assert_called()
+    assert on_decomp.call_args[0][0].data.decompilation == "polled"
+
+
+def test_decomp_failed_surfaces_the_error_without_polling(service, sdk):
+    sdk.get_ai_decompilation.return_value = _dd(status=TaskStatus.RUNNING.value, code=None)
+    sdk.stream_ai_decompilation_without_preload_content.return_value = _stream_response(
+        [_sse("decomp_failed", error="model unavailable", error_code="MODEL_GONE")]
+    )
+
+    on_decomp = MagicMock()
+    _start_streaming(service, MagicMock(), on_decomp)
+
+    sdk.get_ai_decompilation_status.assert_not_called()
+    payload = on_decomp.call_args[0][0]
+    assert payload.success is False
+    assert payload.error_message == "model unavailable"
+
+
+def test_no_stream_callback_keeps_the_polling_path(service, sdk):
+    sdk.get_ai_decompilation.side_effect = [_dd(status=TaskStatus.RUNNING.value, code=None), _dd(code="polled")]
+    sdk.get_ai_decompilation_status.return_value = _wp(TaskStatus.COMPLETED)
+
+    _run(service)
+
+    sdk.stream_ai_decompilation_without_preload_content.assert_not_called()
+    sdk.get_ai_decompilation_status.assert_called()
+
+
+def test_dispatches_are_throttled_between_terminal_events(service, sdk, monkeypatch):
+    monkeypatch.setattr(svc_mod, "STREAM_DISPATCH_INTERVAL", 60.0)
+    sdk.get_ai_decompilation.side_effect = [_dd(status=TaskStatus.RUNNING.value, code=None), _dd(code="final")]
+    sdk.stream_ai_decompilation_without_preload_content.return_value = _stream_response(
+        [_sse("source_delta", content=str(i)) for i in range(10)]
+        + [_sse("names_finished", applied=0)]
+    )
+
+    on_stream = MagicMock()
+    _start_streaming(service, on_stream)
+
+    assert on_stream.call_count == 2
+    assert on_stream.call_args[0][0].finished is True
+
+
+def test_invalidate_closes_a_live_stream(service):
+    resp = MagicMock()
+    service._active_streams[42] = resp
+
+    service.invalidate(42)
+
+    resp.close.assert_called_once()
+    assert 42 not in service._active_streams
+
+
+def test_streaming_never_dispatches_on_the_main_thread(service, sdk, monkeypatch):
+    monkeypatch.setattr(svc_mod, "STREAM_DISPATCH_INTERVAL", 0.0)
+    sdk.get_ai_decompilation.side_effect = [_dd(status=TaskStatus.RUNNING.value, code=None), _dd(code="final")]
+    sdk.stream_ai_decompilation_without_preload_content.return_value = _stream_response(
+        [_sse("source_delta", content="x"), _sse("names_finished", applied=0)]
+    )
+
+    threads: list = []
+    _start_streaming(service, lambda state: threads.append(threading.current_thread()))
+
+    assert threads
+    assert all(t is not threading.main_thread() for t in threads)
+
+
+@pytest.mark.parametrize("callback", ["_on_stream", "_on_progress", "_on_attributions"])
+def test_view_writing_callbacks_stay_marshalled_onto_the_ui_thread(callback):
+    source = pathlib.Path(
+        "reai_toolkit/app/coordinators/ai_decomp_coordinator.py"
+    ).read_text()
+
+    assert f"    @execute_ui\n    def {callback}(" in source, (
+        f"{callback} writes to the Qt view from a stream/poll worker thread, "
+        "so it must keep @execute_ui"
+    )
+
+
+def _keyword_calls(tree, func_name):
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        target = node.func
+        name = target.attr if isinstance(target, ast.Attribute) else getattr(target, "id", None)
+        if name == func_name:
+            yield node
+
+
+@pytest.mark.parametrize("dialog", ["show_info_dialog", "show_error_dialog"])
+def test_coordinators_name_dialog_arguments_the_way_base_coordinator_declares_them(dialog):
+    coordinators = pathlib.Path("reai_toolkit/app/coordinators")
+    base = ast.parse((coordinators / "base_coordinator.py").read_text())
+    declared = {
+        arg.arg
+        for node in ast.walk(base)
+        if isinstance(node, ast.FunctionDef) and node.name == dialog
+        for arg in node.args.args[1:]
+    }
+    assert declared
+
+    offenders = [
+        f"{path.name}:{call.lineno}"
+        for path in coordinators.glob("*.py")
+        for call in _keyword_calls(ast.parse(path.read_text()), dialog)
+        if any(kw.arg is not None and kw.arg not in declared for kw in call.keywords)
+    ]
+
+    assert offenders == [], (
+        f"BaseCoordinator.{dialog} takes {sorted(declared)}; any other keyword raises "
+        f"TypeError instead of showing the dialog: {offenders}"
+    )

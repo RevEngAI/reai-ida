@@ -7,23 +7,28 @@ from revengai.models.ai_decompilation_rating import AiDecompilationRating
 from revengai.models.comments_data import CommentsData
 from revengai.models.decompilation_data import DecompilationData
 from revengai.models.summary_data import SummaryData
-from revengai.models.tokenised_data import TokenisedData
+from revengai.models.get_tokens_response import GetTokensResponse
 from revengai.models.workflow_progress import WorkflowProgress
 
 from reai_toolkit.app.app import App
 from reai_toolkit.app.components.tabs.ai_decomp_tab import AIDecompView
 from reai_toolkit.app.coordinators.ai_decomp_render import (
+    RENAME_NOT_READY,
     RenderModel,
-    index_of_identifier,
+    display_rows_for_source_lines,
     render_progress,
+    render_stream,
     render_view_with_map,
-    resolve_token,
+    resolve_rename_target,
+    source_line_at,
 )
 from reai_toolkit.app.coordinators.base_coordinator import BaseCoordinator
 from reai_toolkit.app.core.shared_schema import GenericApiReturn
 from reai_toolkit.app.factory import DialogFactory
 from reai_toolkit.app.services.ai_decomp.ai_decomp_service import AiDecompService
-from reai_toolkit.hooks.reactive import AiDecompFunctionViewHooks
+from reai_toolkit.app.services.ai_decomp.attribution import AttributionMap
+from reai_toolkit.app.services.ai_decomp.stream import StreamState
+from reai_toolkit.hooks.reactive import AiDecompFunctionViewHooks, LineAttributionHooks
 
 
 class AiDecompCoordinator(BaseCoordinator):
@@ -43,7 +48,11 @@ class AiDecompCoordinator(BaseCoordinator):
         self._current_decomp: DecompilationData | None = None
         self._current_summary: SummaryData | None = None
         self._current_comments: CommentsData | None = None
-        self._current_tokenised: TokenisedData | None = None
+        self._current_tokenised: GetTokensResponse | None = None
+        self._current_attributions: AttributionMap | None = None
+        self._attribution_hooks: LineAttributionHooks | None = None
+        self._lit_addresses: frozenset[int] = frozenset()
+        self._lit_rows: tuple[int, ...] = ()
         self._baseline: RenderModel | None = None
 
     def enable_function_tracking(self) -> None:
@@ -73,21 +82,29 @@ class AiDecompCoordinator(BaseCoordinator):
             self._decomp_view.on_remove_comment = self.request_remove_comment
             self._decomp_view.on_rate_up = self.rate_up
             self._decomp_view.on_rate_down = self.rate_down
+            self._decomp_view.on_use_predicted_name = self.apply_predicted_name
+            self._decomp_view.on_line_focus = self.focus_decomp_line
             self._decomp_view.Create(self._decomp_view.TITLE)
+        if self._attribution_hooks is None:
+            self._attribution_hooks = LineAttributionHooks(self)
+            self._attribution_hooks.hook()
 
     def start_decompilation(self, ea: int) -> None:
         self._current_decomp = None
         self._current_summary = None
         self._current_comments = None
         self._current_tokenised = None
+        self._current_attributions = None
         self._baseline = None
         self._current_func_vaddr = ea
+        self._clear_attribution_highlights()
 
         self.run_dialog()
 
         cached = self.ai_decomp_service.peek_decomp(ea)
         if self._decomp_view is not None:
             self._decomp_view.set_rating(None)
+            self._decomp_view.set_predicted_name(None)
             if cached is not None and cached.decompilation:
                 self._current_decomp = cached
                 self._rerender()
@@ -123,8 +140,11 @@ class AiDecompCoordinator(BaseCoordinator):
             on_comments=lambda response: self._on_comments_complete(ea, response),
             on_tokenised=lambda response: self._on_tokenised_complete(ea, response),
             on_progress=lambda progress: self._on_progress(ea, progress),
+            on_stream=lambda state: self._on_stream(ea, state),
+            on_attributions=lambda mapping: self._on_attributions(ea, mapping),
         )
 
+    @execute_ui
     def _on_progress(self, ea: int, progress: WorkflowProgress) -> None:
         if ea != self._current_func_vaddr:
             return
@@ -133,6 +153,16 @@ class AiDecompCoordinator(BaseCoordinator):
         if self._decomp_view is None:
             return
         self._decomp_view.update_view_content(render_progress(progress))
+
+    @execute_ui
+    def _on_stream(self, ea: int, state: StreamState) -> None:
+        if ea != self._current_func_vaddr:
+            return
+        if self._current_decomp is not None:
+            return
+        if self._decomp_view is None:
+            return
+        self._decomp_view.update_view_content(render_stream(state), follow_tail=True)
 
     def _on_decomp_complete(
         self, ea: int, response: GenericApiReturn[DecompilationData]
@@ -176,6 +206,8 @@ class AiDecompCoordinator(BaseCoordinator):
         if response.data is None:
             return
         self._current_summary = response.data
+        if self._decomp_view is not None:
+            self._decomp_view.set_predicted_name(response.data.predicted_function_name)
         self._rerender()
 
     def _on_comments_complete(
@@ -192,13 +224,59 @@ class AiDecompCoordinator(BaseCoordinator):
         self._rerender()
 
     def _on_tokenised_complete(
-        self, ea: int, response: GenericApiReturn[TokenisedData]
+        self, ea: int, response: GenericApiReturn[GetTokensResponse]
     ) -> None:
         if ea != self._current_func_vaddr:
             return
         if not response.success or response.data is None:
             return
         self._current_tokenised = response.data
+
+    @execute_ui
+    def _on_attributions(self, ea: int, mapping: AttributionMap) -> None:
+        if ea != self._current_func_vaddr:
+            return
+        self._current_attributions = None if mapping.is_empty() else mapping
+
+    def focus_decomp_line(self, display_line: int) -> None:
+        if self._current_attributions is None or self._baseline is None:
+            return
+        source_line = source_line_at(self._baseline, display_line)
+        addresses = (
+            ()
+            if source_line is None
+            else self._current_attributions.addresses_for_decomp_line(source_line - 1)
+        )
+        self._light_disassembly(addresses)
+
+    def on_disassembly_ea(self, ea: int) -> None:
+        if self._current_attributions is None or self._baseline is None:
+            return
+        decomp_lines = self._current_attributions.decomp_lines_for_address(ea)
+        self._light_decomp(
+            display_rows_for_source_lines(
+                self._baseline, [line + 1 for line in decomp_lines]
+            )
+        )
+
+    def _light_disassembly(self, addresses) -> None:
+        wanted = frozenset(addresses)
+        if self._attribution_hooks is None or wanted == self._lit_addresses:
+            return
+        self._lit_addresses = wanted
+        self._attribution_hooks.set_addresses(wanted)
+        self.refresh_disassembly_view()
+
+    def _light_decomp(self, rows) -> None:
+        wanted = tuple(rows)
+        if self._decomp_view is None or wanted == self._lit_rows:
+            return
+        self._lit_rows = wanted
+        self._decomp_view.set_highlighted_lines(wanted)
+
+    def _clear_attribution_highlights(self) -> None:
+        self._light_disassembly(())
+        self._light_decomp(())
 
     def refresh_current(self) -> None:
         ea = self._current_func_vaddr
@@ -218,7 +296,7 @@ class AiDecompCoordinator(BaseCoordinator):
         if ea is None:
             return
         if self._current_decomp is None:
-            self.show_info_dialog(message="No AI decompilation to rate yet.")
+            self.show_info_dialog(msg="No AI decompilation to rate yet.")
             if self._decomp_view is not None:
                 self._decomp_view.set_rating(None)
             return
@@ -239,39 +317,45 @@ class AiDecompCoordinator(BaseCoordinator):
             if self._decomp_view is not None:
                 self._decomp_view.set_rating(None)
 
+    def apply_predicted_name(self, name: str) -> None:
+        ea = self._current_func_vaddr
+        if ea is None or not name:
+            return
+
+        if self.ai_decomp_service.update_function_name(ea, name):
+            self.ai_decomp_service.tag_function_as_renamed(name)
+            self.refresh_disassembly_view()
+            return
+
+        final = self.ai_decomp_service.apply_deduped_name(ea, name)
+        if final is None:
+            self.show_info_dialog(msg=f"Could not rename this function to '{name}'.")
+            return
+        self.ai_decomp_service.tag_function_as_renamed(final)
+        self.refresh_disassembly_view()
+
     def request_rename(self, display_line: int, word: str) -> None:
         ea = self._current_func_vaddr
-        if ea is None or self._baseline is None or self._current_tokenised is None:
+        if ea is None:
             return
-        if not (0 <= display_line < len(self._baseline.display_is_code)):
-            return
-        if not self._baseline.display_is_code[display_line]:
-            return
-
-        source_line = self._baseline.display_source[display_line]
-        if source_line is None:
-            return
-        source_index = source_line - 1
-        code_line = self._baseline.code_lines[source_index]
-        ident_index = index_of_identifier(code_line, word)
-        if ident_index < 0:
+        if self._baseline is None or self._current_tokenised is None:
+            self.show_info_dialog(msg=RENAME_NOT_READY)
             return
 
-        resolved = resolve_token(self._current_tokenised, source_index, ident_index, word)
-        if resolved is None:
-            self.show_info_dialog(
-                message=f"'{word}' is not a renameable variable or type."
-            )
+        target = resolve_rename_target(
+            self._baseline, self._current_tokenised, display_line, word
+        )
+        if target.placeholder is None:
+            self.show_info_dialog(msg=target.reason)
             return
 
-        token, _category = resolved
         new_name = ida_kernwin.ask_str(word, 0, f"Rename '{word}'")
         if not new_name or new_name == word:
             return
 
         self.ai_decomp_service.apply_overrides(
             ea=ea,
-            overrides={token: new_name},
+            overrides={target.placeholder: new_name},
             on_decomp=lambda response: self._on_decomp_complete(ea, response),
             on_tokenised=lambda response: self._on_tokenised_complete(ea, response),
         )
@@ -313,7 +397,7 @@ class AiDecompCoordinator(BaseCoordinator):
         if source_line is None:
             return
         if source_line not in self._baseline.comment_by_source:
-            self.show_info_dialog(message="No comment on this line.")
+            self.show_info_dialog(msg="No comment on this line.")
             return
         self.ai_decomp_service.remove_comment(
             ea=ea,
@@ -351,8 +435,16 @@ class AiDecompCoordinator(BaseCoordinator):
             comments=self._current_comments,
         )
         self._decomp_view.update_view_content(rendered)
+        self._lit_rows = ()
 
     def _on_pane_closed(self) -> None:
         self._decomp_view = None
+        if self._attribution_hooks is not None:
+            self._attribution_hooks.unhook()
+            self._attribution_hooks = None
+            self.refresh_disassembly_view()
+        self._current_attributions = None
+        self._lit_addresses = frozenset()
+        self._lit_rows = ()
         self.disable_function_tracking()
         self.log.debug("AI Decomp view closed, reference cleared.")
