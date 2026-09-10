@@ -67,10 +67,7 @@ jobs:
       - name: Build vendor dependencies
         run: |
           rm -rf screenshots
-          mkdir -p reai_toolkit/vendor
-          uv pip install . --target reai_toolkit/vendor --no-cache-dir
-          rm -rf reai_toolkit/vendor/reai_toolkit
-          rm -rf reai_toolkit/vendor/reai_toolkit-*.dist-info
+          bash scripts/build_vendor.sh
         shell: bash
 
       - name: Package plugin for release (cross-platform)
